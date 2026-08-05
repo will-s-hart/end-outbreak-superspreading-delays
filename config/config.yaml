@@ -79,3 +79,13 @@ analyses:
 # Latent-variable parameterisation, chosen by the Stage-3 sampler benchmark. Left null until
 # that benchmark has run; scripts must fail loudly rather than silently pick a default.
 latent_parameterisation: null
+
+# Days whose TOST-weighted onset sum lambda_t falls below this are dropped from the SSE-SO
+# latent block, with E_t set to 0. Needed because lambda_t > 0 on *every* inference day (the
+# index case contributes at every lag), giving 110 latents whose Gamma shapes k*lambda_t run
+# down to 2.2e-6 -- numerically pathological on PyMC's log scale. Truncating f_tost does not
+# help: at max_lag 40 there are still 98 latents with a smallest shape of 8.9e-6.
+#
+# The induced error is bounded by R_pre * sum(dropped lambda_t). Chosen and tested in Stage 3;
+# null until then so nothing silently approximates.
+negligible_latent_threshold: null

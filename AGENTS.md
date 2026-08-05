@@ -19,9 +19,20 @@ Five models are compared, all driven by the same onset-to-onset serial interval:
 | `sse_so` | symptom onsets | the transmission event | `λ̃_t`, ~85 |
 | `ssi_so` | symptom onsets | the individual | `Y_t`, 31 |
 
-The output quantity throughout is the **risk of additional cases (RAC)**: the probability of
-at least one further case after a given day, assuming `R` reverts to its pre-intervention
-value once interventions are relaxed.
+The output quantity throughout is the **risk of additional cases (RAC)**. It is a
+**retrospective reset posterior predictive**, not a filtering probability — the shorthand
+`P(· | data up to day t)` is misleading and the estimand is a procedure:
+
+> Fit parameters *and latents* to the complete record (days 0–110). For each day `t`, retain
+> the inferred state attached to the history through `t`, discard the realised trajectory
+> after `t`, reset `R` to `R_pre`, and simulate a counterfactual future. RAC(t) is the
+> posterior probability that this future contains at least one further case.
+
+The retained state is therefore **smoothed** — informed by data after day `t` — for the latent
+models. That is a deliberate decision, not an oversight. For the onset-anchored models the
+reset state must also reconstruct the **incubation pipeline** (infected before `t`, not yet
+symptomatic); restarting the recursion from observed onsets alone silently drops it and
+understates RAC.
 
 A companion quantity, the **risk of additional transmission (RAT)**, is the probability of at
 least one further *transmission event* after that day. Under the three naive models the two
@@ -81,13 +92,36 @@ distributions. Never hard-code the offset; use the constants in `delay_distribut
 `f_inc` must have **no mass at lag 0** — that is what makes the onset-anchored recursion well
 ordered. `f_tost` may. At most one of the two may be supported at lag 0.
 
+### The SSE-SO latent block — read before touching Stage 3
+
+Measured on the committed data with `max_lag = 110`, `k = 0.18`:
+
+- SSE-SO has **110** latents, not the ~85 an early draft assumed. `λ_t > 0` on every inference
+  day because the index case contributes `f_tost,t · D_0` at every lag.
+- Shapes `k λ_t` run from 0.383 down to **2.2 × 10⁻⁶**; 44 are below 10⁻², 20 below 10⁻⁴.
+- A `Gamma(2.2e-6)` sits at `E[log Y] ≈ −4.5 × 10⁵` with `SD ≈ 4.5 × 10⁵` on PyMC's internal
+  log scale. **The shapes, not the dimensionality, are the problem.**
+- Truncating `f_tost` does not fix it — at `max_lag = 40` there are still 98 latents with a
+  smallest shape of 8.9 × 10⁻⁶.
+
+The fix is `negligible_latent_threshold` in `config/config.yaml` (null until Stage 3 sets it):
+drop days whose `λ_t` is below it and set `E_t = 0`, with error bounded by
+`R_pre · Σ_dropped λ_t`. Benchmark on the **real** SSE-SO model, never a well-conditioned stub.
+
+Also note: mean-1 rescaling is an **initialisation** fix, not a reparameterisation — on the log
+scale it is a pure translation, leaving the Gamma shape and hence the geometry untouched. Do
+not implement "log-scale latents with a Jacobian"; it duplicates PyMC's default transform.
+
 ### Day indexing
 
 Day 0 is the first observed onset (5 April 2018). The ERT arrived on day 33 and withdrew on
 day 110; the analysis window is days 0–110 inclusive (111 rows). Day 0 is an initial condition
 in every model, so likelihoods run over days 1–110. `R` switches from `R_pre` to `R_post` on
-day 33 **in each model's own time index** — the resulting ~2-week timing asymmetry between the
-naive and onset-anchored models is a deliberate, reportable result, not a bug.
+day 33 **in each model's own time index**. The resulting timing asymmetry between the naive and
+onset-anchored models is a deliberate, reportable result, not a bug — and it is **~11 days**,
+the mean **incubation period**, because the two conventions differ by the gap between a
+transmission and the resulting onset. It is *not* the 15.3 d serial interval, which is the
+infector-onset to infectee-onset gap and does not separate the conventions.
 
 ### Module layout
 
@@ -117,6 +151,12 @@ model, named for the headline quantity.
 Per-analysis parameters live in `config/config.yaml`, keyed per analysis so that tweaking the
 `k` prior for the estimated-`k` analyses does not invalidate the fixed-`k` fits. Seeds live
 there too.
+
+**Any config value that changes a rule's output must appear in that rule's `params:`.** The
+default profile drops the `mtime` trigger, and the `input` trigger tracks the *set* of input
+files rather than their contents — so listing `config.yaml` under `input:` does **not** make a
+rule re-run when a value inside it changes. `analysis_params()` at the top of the `Snakefile`
+collects these; extend it when you add a config key that affects results.
 
 `results/` and `figures/` are committed. Git does not preserve mtimes, so the default profile
 (`config/snakemake_profile/`) drops the `mtime` rerun trigger; after a fresh clone,

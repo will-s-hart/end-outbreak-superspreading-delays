@@ -48,6 +48,25 @@ ANALYSES = config["analyses"]
 ONSETS_CSV = config["shared"]["data_file"]
 
 
+# Everything a rule's result depends on must appear in its `params:`. The default profile
+# drops the `mtime` rerun trigger (committed outputs lose their mtimes on clone), and the
+# `input` trigger tracks the *set* of input files rather than their contents -- so editing
+# config.yaml does NOT invalidate a rule unless the changed value is recorded here.
+def analysis_params(analysis):
+    """Config values that change what a fit for `analysis` produces."""
+    block = ANALYSES[analysis]
+    return {
+        "fixed_k": block.get("fixed_k"),
+        "k_prior": block.get("k_prior"),
+        "sampler": block["sampler"],
+        "latent_parameterisation": config.get("latent_parameterisation"),
+    }
+
+
+# Delay distributions, the analysis window and the R-switch day feed every tier.
+SHARED_PARAMS = config["shared"]
+
+
 wildcard_constraints:
     analysis="|".join(ANALYSES),
     model="[a-z0-9_]+",
@@ -99,8 +118,8 @@ rule fit:
     output:
         "results/{analysis}/{model}_posterior.nc",
     params:
-        sampler=lambda wildcards: ANALYSES[wildcards.analysis]["sampler"],
-        shared=config["shared"],
+        analysis=lambda wildcards: analysis_params(wildcards.analysis),
+        shared=SHARED_PARAMS,
     shell:
         "python {input.script} fit"
         " --model {wildcards.model}"
@@ -128,7 +147,8 @@ rule rac:
     output:
         "results/{analysis}/{model}_rac.csv",
     params:
-        shared=config["shared"],
+        analysis=lambda wildcards: analysis_params(wildcards.analysis),
+        shared=SHARED_PARAMS,
     shell:
         "python {input.script} rac"
         " --model {wildcards.model}"
@@ -148,7 +168,8 @@ rule evidence:
     output:
         "results/{analysis}/model_evidence.json",
     params:
-        shared=config["shared"],
+        analysis=lambda wildcards: analysis_params(wildcards.analysis),
+        shared=SHARED_PARAMS,
     shell:
         "python {input.script} evidence"
         " --posteriors {input.posteriors}"
@@ -174,6 +195,8 @@ rule figure:
     output:
         pdf="figures/{analysis}/{analysis}.pdf",
         png="figures/{analysis}/{analysis}.png",
+    params:
+        shared=SHARED_PARAMS,
     shell:
         "python {input.script}"
         " --results-dir results/{wildcards.analysis}"
