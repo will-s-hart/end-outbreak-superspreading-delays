@@ -39,9 +39,15 @@ made in earlier studies.
 
 ## Output quantity
 
-The **risk of additional transmission (RAT)**: the probability that at least one further case
-occurs after a given day, assuming the reproduction number reverts to its pre-intervention
-value once interventions are relaxed.
+The **risk of additional cases (RAC)**: the probability that at least one further case occurs
+after a given day, assuming the reproduction number reverts to its pre-intervention value once
+interventions are relaxed.
+
+A companion quantity, the **risk of additional transmission (RAT)**, asks instead for at least
+one further *transmission event*. The naive models identify the two by assumption; the
+onset-anchored models separate them, and the gap is the contribution of individuals already
+infected but not yet symptomatic. RAC is reported throughout; RAT appears in a supplementary
+analysis, where the gap between them quantifies the onset-vs-infection conflation directly.
 
 ## Getting started
 
@@ -64,7 +70,7 @@ fresh clone can look stale to Snakemake. The default profile
 ```
 config/            pipeline configuration, keyed per analysis, and the Snakemake profile
 data/              the padded daily onset series, with provenance in data/README.md
-end_of_outbreak/   the package: models, delays, inference, RAT, evidence
+end_of_outbreak/   the package: models, delays, inference, RAC/RAT, evidence
 scripts/           one compute-and-save script and one load-and-plot script per analysis
 results/           committed analysis outputs
 figures/           committed figures (PDF + PNG)

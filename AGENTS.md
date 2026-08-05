@@ -19,9 +19,17 @@ Five models are compared, all driven by the same onset-to-onset serial interval:
 | `sse_so` | symptom onsets | the transmission event | `λ̃_t`, ~85 |
 | `ssi_so` | symptom onsets | the individual | `Y_t`, 31 |
 
-The output quantity throughout is the **risk of additional transmission (RAT)**: the
-probability of at least one further case after a given day, assuming `R` reverts to its
-pre-intervention value once interventions are relaxed.
+The output quantity throughout is the **risk of additional cases (RAC)**: the probability of
+at least one further case after a given day, assuming `R` reverts to its pre-intervention
+value once interventions are relaxed.
+
+A companion quantity, the **risk of additional transmission (RAT)**, is the probability of at
+least one further *transmission event* after that day. Under the three naive models the two
+coincide by assumption — that identification is exactly the conflation this project is about
+— and they separate only under `sse_so`/`ssi_so`, where the gap is the contribution of the
+latent pipeline of already-infected but not-yet-symptomatic individuals. **Use RAC everywhere
+except the supplementary analysis that treats RAT explicitly, and the methodology supporting
+it.** `RAC(t) ≥ RAT(t)` always.
 
 `starter_docs/implementation_plan.md` is the **source of truth** for model definitions,
 conventions and the staged plan — read the relevant section before changing any analytic
@@ -96,11 +104,15 @@ Flat package `end_of_outbreak/` (no `src/`), with `scripts/` for analysis and pl
 
 ### Pipeline
 
-`Snakefile` drives everything in three tiers — `fit` (MCMC, minutes–hours), `rat`/`evidence`
+`Snakefile` drives everything in three tiers — `fit` (MCMC, minutes–hours), `rac`/`evidence`
 (seconds–minutes), `figure` (seconds) — so a change at one tier never re-runs the tiers above
 it. When adding a module, **add it to the right dependency list at the top of the `Snakefile`**
-(`FIT_CORE`, `RAT_CORE`, `EVIDENCE_CORE`, `PLOT_CORE`); Snakemake's `code` trigger hashes only
+(`FIT_CORE`, `RAC_CORE`, `EVIDENCE_CORE`, `PLOT_CORE`); Snakemake's `code` trigger hashes only
 a rule's own body and does not follow Python imports.
+
+The `rac` rule writes `results/<analysis>/<model>_rac.csv`. That file carries the
+supplementary **RAT** column too, for the onset-anchored models — one derived-results file per
+model, named for the headline quantity.
 
 Per-analysis parameters live in `config/config.yaml`, keyed per analysis so that tweaking the
 `k` prior for the estimated-`k` analyses does not invalidate the fixed-`k` fits. Seeds live
@@ -127,8 +139,10 @@ Do not silently revisit these; they are argued out in the implementation plan.
    models. Its variance budget of 86.49 d² admits published EVD incubation estimates; the
    outbreak-specific estimate (mean 19.46, SD 6.08) does not, and is retained only for a
    sensitivity analysis.
-2. **RAT for onset-anchored models.** Compute **both** `RAT-onset` (headline) and
-   `RAT-infection` (supplementary), and report the gap between them.
+2. **Naming and reporting of the risk.** **RAC** (risk of additional cases) is the headline
+   quantity, used throughout; **RAT** (risk of additional transmission) appears only in the
+   supplementary analysis and its methodology. For the onset-anchored models compute **both**
+   and report the gap between them.
 3. **Latents at the conditioning day.** Use the full-data (smoothed) posterior for every day —
    one fit per model. The methods section must state the approximation and its downward bias.
 4. **`R` switch.** Day 33 in each model's own time index (see *Day indexing* above).

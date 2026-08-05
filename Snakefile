@@ -6,7 +6,7 @@
 # Three tiers per analysis, so a change at one tier never re-runs the tiers above it:
 #
 #   1. fit      results/<analysis>/<model>_posterior.nc     minutes-hours (MCMC)
-#   2. rat      results/<analysis>/<model>_rat.csv          seconds-minutes
+#   2. rac      results/<analysis>/<model>_rac.csv          seconds-minutes
 #      evidence results/<analysis>/model_evidence.json
 #   3. figure   figures/<analysis>/*.pdf, *.png             seconds
 #
@@ -40,7 +40,7 @@ FIT_CORE = code(
     "latent_parameterisations",
     "fitting",
 )
-RAT_CORE = code("risk_of_additional_transmission", "renewal", "delay_distributions")
+RAC_CORE = code("risk_of_additional_cases", "renewal", "delay_distributions")
 EVIDENCE_CORE = code("model_evidence", "renewal", "delay_distributions")
 PLOT_CORE = ["scripts/utils.py"]
 
@@ -64,9 +64,9 @@ def posteriors_of(wildcards):
     ]
 
 
-def rats_of(wildcards):
+def racs_of(wildcards):
     return [
-        f"results/{wildcards.analysis}/{model}_rat.csv"
+        f"results/{wildcards.analysis}/{model}_rac.csv"
         for model in models_of(wildcards.analysis)
     ]
 
@@ -114,19 +114,23 @@ rule fit:
 # ---------------------------------------------------------------------------------------
 
 
-rule rat:
+# The risk of additional cases (RAC) is the project's headline quantity. For the
+# onset-anchored models the output also carries the supplementary risk of additional
+# transmission (RAT) as a second column -- one derived-results file per model, named for the
+# headline quantity. Under the naive models the two coincide by assumption.
+rule rac:
     input:
         posterior="results/{analysis}/{model}_posterior.nc",
         data=ONSETS_CSV,
         config=CONFIG_FILE,
         script=lambda wildcards: ANALYSES[wildcards.analysis]["run_script"],
-        code=RAT_CORE,
+        code=RAC_CORE,
     output:
-        "results/{analysis}/{model}_rat.csv",
+        "results/{analysis}/{model}_rac.csv",
     params:
         shared=config["shared"],
     shell:
-        "python {input.script} rat"
+        "python {input.script} rac"
         " --model {wildcards.model}"
         " --posterior {input.posterior}"
         " --data {input.data}"
@@ -160,7 +164,7 @@ rule evidence:
 
 rule figure:
     input:
-        rats=rats_of,
+        racs=racs_of,
         posteriors=posteriors_of,
         evidence="results/{analysis}/model_evidence.json",
         data=ONSETS_CSV,
@@ -196,7 +200,7 @@ rule fits:
 rule results:
     input:
         [
-            f"results/{analysis}/{model}_rat.csv"
+            f"results/{analysis}/{model}_rac.csv"
             for analysis in ANALYSES
             for model in models_of(analysis)
         ],
