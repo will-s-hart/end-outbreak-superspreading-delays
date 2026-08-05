@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.mypy_cache/
+.ruff_cache/
+.ty_cache/
+.pytest_cache/
+
+# pixi
+.pixi/
+
+# snakemake
+.snakemake/
+
+# LaTeX build artefacts
+report/*.aux
+report/*.log
+report/*.out
+report/*.fdb_latexmk
+report/*.fls
+report/*.synctex.gz
+
+# OS
+.DS_Store
+
+# Claude
+.claude/

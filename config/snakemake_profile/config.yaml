@@ -1,0 +1,15 @@
+# Default Snakemake profile, used by `pixi run pipeline` and `pixi run pipeline-dry`.
+#
+# `mtime` is deliberately dropped from the rerun triggers. `results/` and `figures/` are
+# committed, but git does not preserve modification times, so after a fresh clone every
+# committed output looks newer or older than its inputs at random and the whole pipeline
+# would appear stale. The remaining triggers (input identity, params, rule code, software
+# environment) are the ones that actually indicate a stale result.
+#
+# If you do want to re-establish mtime consistency after cloning, run `snakemake --touch`.
+
+rerun-triggers:
+  - input
+  - params
+  - code
+  - software-env

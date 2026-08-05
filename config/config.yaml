@@ -1,0 +1,81 @@
+# Pipeline configuration.
+#
+# Structured per analysis so that Snakemake's `params` rerun-trigger stays fine-grained:
+# tweaking the `k` prior for the estimated-k analyses must not invalidate the fixed-k fits.
+# Anything genuinely common to all four analyses lives under `shared`.
+
+shared:
+  data_file: data/equateur_2018_onsets.csv
+
+  # Analysis window and the R-switch convention (§5.7 of the implementation plan): R
+  # switches on this day index in *each model's own* time index.
+  ert_arrival_day: 33
+  ert_withdrawal_day: 110
+
+  # Delay distributions. `serial_interval` drives all five models; `incubation_period` and
+  # the residual TOST drive the two onset-anchored ones.
+  #
+  # serial_interval: generic EVD estimate, Van Kerkhove et al. (2015) Sci Data 2:150019,
+  #   as used in the main analyses of Thompson et al. (2024).
+  # incubation_period: WHO Ebola Response Team (2014) NEJM 371:1481-1495.
+  # The TOST is not configured directly: it is the gamma carrying the residual mean and
+  # variance (delay_distributions.check_delay_budget), here mean 3.9 d, SD 4.57 d.
+  serial_interval:
+    name: generic_evd
+    mean: 15.3
+    sd: 9.3
+  incubation_period:
+    name: who_ert_2014
+    mean: 11.4
+    sd: 8.1
+  max_lag: 110  # = the analysis window, so nothing is truncated within it
+  serial_interval_tolerance: 0.02  # max TV distance of f_tost * f_inc from w
+
+  # Alternative serial interval for the sensitivity analysis (§2, Stage 10). Not admissible
+  # for the onset-anchored models alongside the incubation estimate above: its variance
+  # (36.97) is smaller than the incubation variance (65.61).
+  serial_interval_outbreak_specific:
+    name: equateur_2018
+    mean: 19.46
+    sd: 6.08
+
+  # Priors, identical across models within an analysis so that posterior model
+  # probabilities are well-defined Bayes factors (§6.2).
+  priors:
+    R_pre: {distribution: lognormal, median: 1.0, quantile_025: 0.2}
+    R_post: {distribution: lognormal, median: 1.0, quantile_025: 0.2}
+
+analyses:
+  naive_models_fixed_k:
+    models: [dlo, sse, ssi]
+    fixed_k: 0.18  # Althaus-style individual-level estimate, doi:10.1016/S1473-3099(15)70135-0
+    run_script: scripts/run_naive_models_fixed_k.py
+    plot_script: scripts/plot_naive_models_fixed_k.py
+    sampler: {draws: 2000, tune: 2000, chains: 4, target_accept: 0.9, seed: 20260805}
+
+  naive_models_estimated_k:
+    models: [dlo, sse, ssi]
+    fixed_k: null
+    k_prior: {distribution: lognormal, median: 0.18, quantile_025: 0.09, quantile_975: 0.36}
+    run_script: scripts/run_naive_models_estimated_k.py
+    plot_script: scripts/plot_naive_models_estimated_k.py
+    sampler: {draws: 2000, tune: 2000, chains: 4, target_accept: 0.9, seed: 20260806}
+
+  onset_models_fixed_k:
+    models: [sse, ssi, sse_so, ssi_so]
+    fixed_k: 0.18
+    run_script: scripts/run_onset_models_fixed_k.py
+    plot_script: scripts/plot_onset_models_fixed_k.py
+    sampler: {draws: 2000, tune: 2000, chains: 4, target_accept: 0.9, seed: 20260807}
+
+  onset_models_estimated_k:
+    models: [sse, ssi, sse_so, ssi_so]
+    fixed_k: null
+    k_prior: {distribution: lognormal, median: 0.18, quantile_025: 0.09, quantile_975: 0.36}
+    run_script: scripts/run_onset_models_estimated_k.py
+    plot_script: scripts/plot_onset_models_estimated_k.py
+    sampler: {draws: 2000, tune: 2000, chains: 4, target_accept: 0.9, seed: 20260808}
+
+# Latent-variable parameterisation, chosen by the Stage-3 sampler benchmark. Left null until
+# that benchmark has run; scripts must fail loudly rather than silently pick a default.
+latent_parameterisation: null

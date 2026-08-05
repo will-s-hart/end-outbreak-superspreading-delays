@@ -1,0 +1,89 @@
+[project]
+name = "end-outbreak-superspreading-delays"
+version = "0.1.0"
+description = "End-of-outbreak decision-making under superspreading and onset-date delays"
+requires-python = ">=3.12"
+dependencies = [
+    "numpy>=2.0",
+    "scipy>=1.13",
+    "pandas>=2.0",
+    "matplotlib>=3.8",
+    "pymc>=5.0",
+    "arviz>=0.18",
+    "pyyaml>=6.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["end_of_outbreak"]
+
+# ---------------------------------------------------------------------------
+# pixi configuration
+# ---------------------------------------------------------------------------
+[tool.pixi.workspace]
+# conda-forge first (higher priority); bioconda is needed only for snakemake-minimal, which
+# conda-forge does not carry.
+channels = ["conda-forge", "bioconda"]
+platforms = ["osx-arm64"]
+
+[tool.pixi.dependencies]
+python = ">=3.12"
+numpy = ">=2.0"
+scipy = ">=1.13"
+pandas = ">=2.0"
+matplotlib = ">=3.8"
+pymc = ">=5.0"
+arviz = ">=0.18"
+pyyaml = ">=6.0"
+
+[tool.pixi.pypi-dependencies]
+end-outbreak-superspreading-delays = { path = ".", editable = true }
+
+[tool.pixi.feature.dev.dependencies]
+pytest = "*"
+snakemake-minimal = "*"
+
+[tool.pixi.feature.dev.pypi-dependencies]
+ruff = "*"
+ty = "*"
+
+[tool.pixi.environments]
+default = { features = ["dev"] }
+
+[tool.pixi.tasks]
+fmt = "ruff format end_of_outbreak scripts tests"
+lint = "ruff check end_of_outbreak scripts tests"
+typecheck = "env -u VIRTUAL_ENV ty check end_of_outbreak scripts tests"
+test = "pytest"
+check = { depends-on = ["fmt", "lint", "typecheck", "test"] }
+pipeline = "snakemake --profile config/snakemake_profile -j4"
+pipeline-dry = "snakemake --profile config/snakemake_profile -n"
+
+# ---------------------------------------------------------------------------
+# ruff
+# ---------------------------------------------------------------------------
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "UP", "B", "SIM", "RUF"]
+# N802/N803/N806: lower-case function / argument / variable names. The
+# mathematical notation of the implementation plan (R_pre, F_r, Y, Lambda, C_t)
+# is deliberately preserved in identifiers. N999: module filenames may carry the
+# same capitalisation.
+# RUF001/RUF002/RUF003: "ambiguous" unicode. Docstrings and comments in this
+# project are prose about an epidemiological analysis and deliberately use
+# typographic characters -- en dashes in date and page ranges, accents in
+# Équateur, and mathematical symbols such as Λ and ≥.
+ignore = ["N802", "N803", "N806", "N999", "RUF001", "RUF002", "RUF003"]
+
+# ---------------------------------------------------------------------------
+# pytest
+# ---------------------------------------------------------------------------
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
