@@ -131,6 +131,25 @@ Snakemake's `script:` directive, so that every script stays runnable and debugga
 possible: normalisation, moment additivity, limiting cases (`k → ∞` collapsing SSE/SSI onto
 Cori), likelihood-vs-simulation agreement, and analytic-vs-particle-filter agreement.
 
+There are **two** particle-filter checks, and they answer different questions — don't collapse
+them into one:
+
+- **Fixed `(R_pre, R_post, k)`, conditioning matched to the pipeline.** The equality check:
+  a regression test that the RAC arithmetic is right. Agreement is required.
+- **Particle MCMC (PMMH) over the parameters.** The pipeline check: an independent route to
+  the posterior sharing no machinery with the PyMC fits, which is the main guard against the
+  latent-parameterisation risk. SBC cannot substitute — it validates an implementation
+  against itself, so a misconception shared by the model and the simulator survives it.
+
+  For the latent models a PMMH RAC curve **should not** match the MCMC one: the filter
+  conditions on *filtering* latents, the pipeline on *smoothed* ones. The gap is the §5.6
+  approximation, and measuring it is the point. Don't "fix" it.
+
+PMMH mixes only if the variance of the estimated log-likelihood is roughly 1–3 at the mode.
+Measure it before writing the sampler; if it can't be reached at a tractable particle count,
+record that and keep the synthetic-data tiers. `particle_mcmc.py` is validation, not a results
+path — it stays out of `rule all` and out of every tier's dependency list.
+
 ## Decisions already taken
 
 Do not silently revisit these; they are argued out in the implementation plan.
@@ -150,6 +169,8 @@ Do not silently revisit these; they are argued out in the implementation plan.
    is `end_of_outbreak`.
 6. **SSI-SO infectivity prior.** `Y_t | D_t ~ Gamma(k D_t, k)`. The `Gamma(k I_t, k)` written
    in `starter_docs/models.jpeg` is a transcription slip.
+7. **Particle MCMC is a check, never a results path.** Main analyses stay in PyMC. See
+   *Testing* above and §6.6 of the implementation plan.
 
 ## Open items
 
