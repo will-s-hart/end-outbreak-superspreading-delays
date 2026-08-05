@@ -16,7 +16,7 @@ Five models are compared, all driven by the same onset-to-onset serial interval:
 | `dlo` | infections (naive) | the day (`NB` on aggregate incidence, fixed `k`) | none |
 | `sse` | infections (naive) | the transmission event (`NB(RΛ, kΛ)`) | none |
 | `ssi` | infections (naive) | the individual (latent Gamma infectivity) | `Y_t`, 31 |
-| `sse_so` | symptom onsets | the transmission event | `λ̃_t`, ~85 |
+| `sse_so` | symptom onsets | the transmission event | `λ̃_t`, 110 |
 | `ssi_so` | symptom onsets | the individual | `Y_t`, 31 |
 
 The output quantity throughout is the **risk of additional cases (RAC)**. It is a
@@ -91,6 +91,34 @@ distributions. Never hard-code the offset; use the constants in `delay_distribut
 
 `f_inc` must have **no mass at lag 0** — that is what makes the onset-anchored recursion well
 ordered. `f_tost` may. At most one of the two may be supported at lag 0.
+
+### The naive-model core
+
+`renewal.py` carries the renewal operator in two interchangeable forms. Use
+`delay_weighted_sum` when the driving series is observed data (DLO, SSE) and
+`delay_design_matrix` when it is latent and the sum must stay symbolic (SSI, and the Stage-8
+onset-anchored models); they agree exactly. `switch_index` is the single home of the
+`R`-switch convention — don't re-derive it inline.
+
+`pymc_models.build_naive_model` and `forward_simulation.simulate_naive` cover `dlo`, `sse`,
+`ssi` and `cori`. Before extending either:
+
+- **`cori` is not one of the five compared models.** It is the Poisson `k → ∞` limit, present
+  as the target of the collapse checks. Keep it out of the four analyses.
+- **`R_pre`, `R_post` and `k` each take either a fixed `float` or a `LogNormalPrior`.** A fixed
+  value becomes a constant in the graph rather than a random variable, so the fixed-`k`
+  analyses and the fixed-`θ` particle-filter checks share one builder with the estimated-`k`
+  analyses.
+- **Days with zero force of infection are dropped from the likelihood**
+  (`renewal.likelihood_days`): the observation there is a point mass at 0. A *positive* count
+  on such a day raises rather than being dropped silently. Nothing is dropped on the real
+  series — the index case drives every day at `max_lag = 110`.
+- **The SSI latent block is centred**, inline in `pymc_models._infectivity_latents`. That is
+  the Stage-3 baseline and the single call site Stage 3 redirects. A 500-draw smoke fit on the
+  real series already produces a few divergences, so the §6.3 risk is real and on schedule.
+- `pymc_models.compile_joint_logp` evaluates a built model's joint density at named values on
+  their **natural** scale — no log transforms, no Jacobian. It is how the tests compare a
+  likelihood with a hand-written density, and what the Stage-6 evidence estimators consume.
 
 ### The SSE-SO latent block — read before touching Stage 3
 
@@ -170,6 +198,16 @@ Snakemake's `script:` directive, so that every script stays runnable and debugga
 `pytest`, tests under `tests/`. Validation is by property rather than by golden file wherever
 possible: normalisation, moment additivity, limiting cases (`k → ∞` collapsing SSE/SSI onto
 Cori), likelihood-vs-simulation agreement, and analytic-vs-particle-filter agreement.
+
+**Likelihood-vs-simulation, for models with latents.** For the closed-form models the check is
+direct: enumerate short histories, evaluate the built model's likelihood for each, compare with
+the simulator's frequencies. For SSI (and later the SO models) the simulator has to match the
+*marginal* of the counts while the builder supplies the *joint* with the latents. The bridge is
+that the latent priors are conditionally independent given the counts —
+`p(I) = E_{Y ~ Π Gamma(k I_u, k)}[Π_t Poisson(...)]` — so a naive Monte-Carlo marginalisation is
+unbiased and cheap. The fast vectorised integrand used for it is pinned against the built
+model's joint density at random points first; don't skip that step, or the test degenerates
+into checking a reimplementation against itself.
 
 There are **two** particle-filter checks, and they answer different questions — don't collapse
 them into one:
