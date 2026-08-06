@@ -11,13 +11,17 @@ is the 2018 Équateur Province (DRC) Ebola outbreak.
 
 Five models are compared, all driven by the same onset-to-onset serial interval:
 
-| Model | Anchoring | Overdispersion acts at the level of | Latents |
+| Model | Anchoring | Overdispersion acts at the level of | Latents (all / sampled) |
 | --- | --- | --- | --- |
 | `dlo` | infections (naive) | the day (`NB` on aggregate incidence, fixed `k`) | none |
 | `sse` | infections (naive) | the transmission event (`NB(RΛ, kΛ)`) | none |
-| `ssi` | infections (naive) | the individual (latent Gamma infectivity) | `Y_t`, 31 |
-| `sse_so` | symptom onsets | the transmission event | `λ̃_t`, 110 |
-| `ssi_so` | symptom onsets | the individual | `Y_t`, 31 |
+| `ssi` | infections (naive) | the individual (latent Gamma infectivity) | `Y_t`, 31 / **30** |
+| `sse_so` | symptom onsets | the transmission event | `λ̃_t`, 110 / **58** |
+| `ssi_so` | symptom onsets | the individual | `Y_t`, 31 / **30** |
+
+The second latent count is what the sampler actually sees: the rest are integrated out in
+closed form, exactly (see *The latent block* below). `cori` and `cori_so` are also built, as the
+`k → ∞` Poisson limits — they are validation targets, not compared models.
 
 The output quantity throughout is the **risk of additional cases (RAC)**. It is a
 **retrospective reset posterior predictive**, not a filtering probability — the shorthand
@@ -92,53 +96,77 @@ distributions. Never hard-code the offset; use the constants in `delay_distribut
 `f_inc` must have **no mass at lag 0** — that is what makes the onset-anchored recursion well
 ordered. `f_tost` may. At most one of the two may be supported at lag 0.
 
-### The naive-model core
+### The model core
 
 `renewal.py` carries the renewal operator in two interchangeable forms. Use
-`delay_weighted_sum` when the driving series is observed data (DLO, SSE) and
-`delay_design_matrix` when it is latent and the sum must stay symbolic (SSI, and the Stage-8
-onset-anchored models); they agree exactly. `switch_index` is the single home of the
-`R`-switch convention — don't re-derive it inline.
+`delay_weighted_sum` when the driving series is observed data (DLO, SSE, Cori-SO) and
+`delay_design_matrix` when it is latent and the sum must stay symbolic (SSI, SSE-SO, SSI-SO);
+they agree exactly. `switch_index` is the single home of the `R`-switch convention — don't
+re-derive it inline.
 
-`pymc_models.build_naive_model` and `forward_simulation.simulate_naive` cover `dlo`, `sse`,
-`ssi` and `cori`. Before extending either:
+`pymc_models` builds every model: `build_naive_model` for the infection-anchored ones,
+`build_onset_anchored_model` for the onset-anchored ones, `build_model` to dispatch on
+anchoring from the shared delay triple. `forward_simulation.simulate_naive` covers the naive
+models; the onset-anchored simulators arrive with Stage 8. Before extending any of them:
 
-- **`cori` is not one of the five compared models.** It is the Poisson `k → ∞` limit, present
-  as the target of the collapse checks. Keep it out of the four analyses.
+- **`cori` and `cori_so` are not compared models.** They are the Poisson `k → ∞` limits,
+  present as the targets of the collapse checks. Keep them out of the four analyses.
 - **`R_pre`, `R_post` and `k` each take either a fixed `float` or a `LogNormalPrior`.** A fixed
   value becomes a constant in the graph rather than a random variable, so the fixed-`k`
   analyses and the fixed-`θ` particle-filter checks share one builder with the estimated-`k`
   analyses.
+- **`latent_parameterisation` is a required argument for any model with latents.** There is no
+  silent default; `config/config.yaml` is the source of truth.
 - **Days with zero force of infection are dropped from the likelihood**
   (`renewal.likelihood_days`): the observation there is a point mass at 0. A *positive* count
   on such a day raises rather than being dropped silently. Nothing is dropped on the real
   series — the index case drives every day at `max_lag = 110`.
-- **The SSI latent block is centred**, inline in `pymc_models._infectivity_latents`. That is
-  the Stage-3 baseline and the single call site Stage 3 redirects. A 500-draw smoke fit on the
-  real series already produces a few divergences, so the §6.3 risk is real and on schedule.
 - `pymc_models.compile_joint_logp` evaluates a built model's joint density at named values on
-  their **natural** scale — no log transforms, no Jacobian. It is how the tests compare a
-  likelihood with a hand-written density, and what the Stage-6 evidence estimators consume.
+  their **natural** scale — no log transforms, no Jacobian. `compile_observation_logp` gives the
+  likelihood term alone, which is the only way to compare two models whose latent blocks differ
+  in size.
 
-### The SSE-SO latent block — read before touching Stage 3
+### The latent block — settled in Stage 3
 
-Measured on the committed data with `max_lag = 110`, `k = 0.18`:
+**Default: `marginalised_inverse_cdf`.** Recorded in `config/config.yaml`; the comparison it
+rests on is `results/checks/sampler_benchmark.md` (74 MCMC runs). Two independent mechanisms,
+and they compose:
 
-- SSE-SO has **110** latents, not the ~85 an early draft assumed. `λ_t > 0` on every inference
-  day because the index case contributes `f_tost,t · D_0` at every lag.
-- Shapes `k λ_t` run from 0.383 down to **2.2 × 10⁻⁶**; 44 are below 10⁻², 20 below 10⁻⁴.
-- A `Gamma(2.2e-6)` sits at `E[log Y] ≈ −4.5 × 10⁵` with `SD ≈ 4.5 × 10⁵` on PyMC's internal
-  log scale. **The shapes, not the dimensionality, are the problem.**
-- Truncating `f_tost` does not fix it — at `max_lag = 40` there are still 98 latents with a
-  smallest shape of 8.9 × 10⁻⁶.
+- **Exact marginalisation.** A latent that reaches no observation day carrying a case enters the
+  likelihood only through the `exp(−Σ_j μ_j)` factor, which is linear in the latents and so
+  factorises. Its Gamma prior is conjugate to that, giving
+  `∫ Gamma(y; k·scale, k) e^{−c y} dy = (1 + c/k)^{−k·scale}` and a conditional posterior
+  `Gamma(k·scale, k + c)`. On the real series this removes **52 of SSE-SO's 110** latents —
+  exactly the pathological tail, since the last case is on day 58 — and one of SSI's/SSI-SO's
+  31. **No approximation whatsoever**, and nothing is lost: recover a removed latent after the
+  fit from `latent_parameterisations.conditional_posterior`, which is what the RAC reset state
+  needs.
+- **Inverse-CDF reparameterisation.** Sample `Uniform(0, 1)` and push through the Gamma quantile
+  function. `pm.icdf` *does* have a gradient in this PyTensor, so this runs under NUTS — the
+  trade-off §6.3 anticipated (better geometry, gradient-free samplers only) does not arise.
 
-The fix is `negligible_latent_threshold` in `config/config.yaml` (null until Stage 3 sets it):
-drop days whose `λ_t` is below it and set `E_t = 0`, with error bounded by
-`R_pre · Σ_dropped λ_t`. Benchmark on the **real** SSE-SO model, never a well-conditioned stub.
+What the benchmark actually established, and should not be re-litigated:
 
-Also note: mean-1 rescaling is an **initialisation** fix, not a reparameterisation — on the log
-scale it is a pure translation, leaving the Gamma shape and hence the geometry untouched. Do
-not implement "log-scale latents with a Jacobian"; it duplicates PyMC's default transform.
+- **It is a geometry problem, not a warm-up problem.** Mean-1 rescaling changes nothing (3999 of
+  4000 draws divergent on SSE-SO, same as the untouched model), and *more* tuning makes `R̂`
+  worse, not better. Rescaling is a pure translation on the log scale, so the shape and hence
+  the curvature are untouched — exactly as §6.3 argued.
+- **The geometric-mean start is not representable.** `E[log Y] ≈ −1/α`, and SSE-SO's untouched
+  shapes reach `α = 2.7 × 10⁻⁶`, so the typical value is `exp(−3.7 × 10⁵)` — zero in double
+  precision. `LOG_UNDERFLOW` marks the wall at `α ≈ 1.4 × 10⁻³`. A coordinate whose typical set
+  is outside the floating-point range cannot be tuned into behaving.
+- **Divergent runs are not merely noisy.** The untouched SSE-SO fits report `R_post` between
+  0.24 and 0.30 where every converged run gives 0.32–0.33.
+- **`negligible_latent_threshold` is `0.0` and is not needed.** No threshold both clears the
+  underflow wall and leaves the likelihood alone: ~10⁻² is needed for the shapes and costs ~0.1
+  nats, which is a 10% shift in every Bayes factor. Marginalisation removes the same coordinates
+  for free, and every surviving latent has `λ_t ≥ 0.136`. The knob stays only as a fallback for
+  a pathological latent that is genuinely *coupled* to the data, which marginalisation cannot
+  touch.
+- **Inverse-CDF and mean-1 rescaling do not compose** — the Gamma quantile function is
+  scale-equivariant, so stacking them is provably a no-op. `LatentParameterisation` refuses the
+  combination rather than pretending to benchmark it.
+- Do not implement "log-scale latents with a Jacobian"; it duplicates PyMC's default transform.
 
 ### Day indexing
 
@@ -249,16 +277,21 @@ Do not silently revisit these; they are argued out in the implementation plan.
    in `starter_docs/models.jpeg` is a transcription slip.
 7. **Particle MCMC is a check, never a results path.** Main analyses stay in PyMC. See
    *Testing* above and §6.6 of the implementation plan.
+8. **Latent parameterisation.** `marginalised_inverse_cdf`, chosen by the Stage-3 benchmark
+   (`results/checks/sampler_benchmark.md`). `negligible_latent_threshold` is `0.0` — the
+   approximation it offered is unnecessary once the uncoupled latents are integrated out
+   exactly. See *The latent block* above.
 
 ## Open items
 
-- **Latent-variable parameterisation** (`latent_parameterisation` in `config/config.yaml`) is
-  `null` until the Stage-3 sampler benchmark has run. Scripts must fail loudly rather than
-  pick a default silently. Record the chosen default here once benchmarked.
 - **Incubation period.** Currently WHO Ebola Response Team (2014), NEJM 371:1481–1495, gamma
   with mean 11.4 d and SD 8.1 d, which leaves a residual TOST of mean 3.9 d and SD 4.57 d.
   Configurable in `config/config.yaml`; `check_delay_budget` rejects any estimate whose
   variance exceeds the serial interval's.
+- **Onset-anchored forward simulators** (`forward_simulation`) are still to come in Stage 8,
+  along with the RAC/RAT calculators, the onset-anchored particle filter and the remaining §4.4
+  equivalence tests. The Stage-3 benchmark therefore has no synthetic SSE-SO arm with a known
+  truth; the truncated real series stands in as its second case.
 
 ## Git workflow
 

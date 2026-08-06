@@ -172,6 +172,7 @@ def test_the_poisson_factor_matches_the_pymc_joint_density():
             R_pre=PARAMETERS.R_pre,
             R_post=PARAMETERS.R_post,
             k=k,
+            latent_parameterisation="centred",
         )
         logp = pymc_models.compile_joint_logp(built)
         for _ in range(5):

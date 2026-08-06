@@ -224,13 +224,58 @@ CORI = ModelSpecification(
     ),
 )
 
+SSE_SO = ModelSpecification(
+    name="sse_so",
+    label="SSE-SO",
+    anchoring="onsets",
+    overdispersion_level="event",
+    latent_variable="lambda_tilde",
+    description=(
+        "Onset-anchored SSE: λ̃_t ~ Gamma(k Σ_s f_tost,s D_{t-s}, k), E_t = R_t λ̃_t, and "
+        "D_t ~ Poisson(Σ_a f_inc,a E_{t-a}). Transmission is referenced to the infector's own "
+        "onset and the incubation period is modelled explicitly. Unlike the infection-anchored "
+        "SSE this has no closed-form likelihood: each observed onset pools contributions from "
+        "many days, each carrying its own independent Gamma."
+    ),
+)
+
+SSI_SO = ModelSpecification(
+    name="ssi_so",
+    label="SSI-SO",
+    anchoring="onsets",
+    overdispersion_level="individual",
+    latent_variable="Y",
+    description=(
+        "Onset-anchored SSI: Y_t | D_t ~ Gamma(k D_t, k), E_t = R_t Σ_s f_tost,s Y_{t-s}, and "
+        "D_t ~ Poisson(Σ_a f_inc,a E_{t-a}). The infectivity prior is Gamma(k D_t, k), not the "
+        "Gamma(k I_t, k) written in starter_docs/models.jpeg, which is a transcription slip."
+    ),
+)
+
+CORI_SO = ModelSpecification(
+    name="cori_so",
+    label="Cori-SO",
+    anchoring="onsets",
+    overdispersion_level="none",
+    latent_variable=None,
+    description=(
+        "Onset-anchored Poisson renewal: E_t = R_t Σ_s f_tost,s D_{t-s} and "
+        "D_t ~ Poisson(Σ_a f_inc,a E_{t-a}). The k → ∞ limit of SSE-SO and SSI-SO, and the "
+        "warm-up case for the §4 equivalence arguments. Not a compared model."
+    ),
+)
+
 NAIVE_MODELS: tuple[ModelSpecification, ...] = (DLO, SSE, SSI)
 """The three infection-anchored models compared in analyses 1 and 2."""
 
+ONSET_ANCHORED_MODELS: tuple[ModelSpecification, ...] = (SSE_SO, SSI_SO)
+"""The two onset-anchored models added to the comparison in analyses 3 and 4."""
+
 MODEL_SPECIFICATIONS: dict[str, ModelSpecification] = {
-    specification.name: specification for specification in (DLO, SSE, SSI, CORI)
+    specification.name: specification
+    for specification in (DLO, SSE, SSI, CORI, SSE_SO, SSI_SO, CORI_SO)
 }
-"""Every model this package can build, by name. Stage 8 adds ``sse_so`` and ``ssi_so``."""
+"""Every model this package can build, by name."""
 
 
 def specification_of(model: str | ModelSpecification) -> ModelSpecification:

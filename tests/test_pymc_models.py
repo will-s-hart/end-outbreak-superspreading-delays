@@ -12,6 +12,8 @@ machinery it shares with the likelihood-versus-simulation tests.
 
 from __future__ import annotations
 
+from typing import Any
+
 import numpy as np
 import pytest
 import scipy.special
@@ -32,12 +34,15 @@ LIKELIHOOD_DAYS = np.arange(1, COUNTS.size)
 
 def _build(model, **overrides):
     counts = overrides.pop("counts", COUNTS)
-    settings = {
+    settings: dict[str, Any] = {
         "serial_interval": SERIAL_INTERVAL,
         "switch_day": SWITCH_DAY,
         "R_pre": R_PRE,
         "R_post": R_POST,
         "k": K,
+        # The centred block is the Stage-2 baseline; the alternatives and the exact
+        # marginalisation are exercised in tests/test_latent_parameterisations.py.
+        "latent_parameterisation": "centred",
     }
     settings.update(overrides)
     return pymc_models.build_naive_model(model, counts, **settings)
@@ -160,7 +165,8 @@ def test_model_days_rejects_a_coordinate_the_model_does_not_have():
 
 
 def test_the_equateur_series_gives_ssi_thirty_one_latents():
-    # Pinned because the count is quoted throughout the plan and AGENTS.md.
+    # Pinned because the count is quoted throughout the plan and AGENTS.md. Under the exact
+    # marginalisation of Stage 3 it drops to 30; see tests/test_latent_parameterisations.py.
     from end_of_outbreak import delay_distributions as dd
     from end_of_outbreak import outbreak_data
 
@@ -173,6 +179,7 @@ def test_the_equateur_series_gives_ssi_thirty_one_latents():
         R_pre=1.0,
         R_post=0.5,
         k=0.18,
+        latent_parameterisation="centred",
     )
     assert pymc_models.model_days(model, pymc_models.COHORT_DAY_DIMENSION).size == 31
     np.testing.assert_array_equal(
@@ -279,24 +286,12 @@ def test_a_fixed_parameter_must_be_positive():
         _build("sse", R_pre=0.0)
 
 
-def test_the_onset_anchored_models_are_not_built_here_yet():
-    from end_of_outbreak.model_specifications import ModelSpecification
+def test_the_naive_builder_refuses_an_onset_anchored_model():
+    with pytest.raises(ValueError, match="use build_onset_anchored_model"):
+        _build("sse_so")
 
-    onset_model = ModelSpecification(
-        name="sse_so",
-        label="SSE-SO",
-        anchoring="onsets",
-        overdispersion_level="event",
-        latent_variable="lambda_tilde",
-        description="placeholder for the Stage-8 builder",
-    )
-    with pytest.raises(NotImplementedError, match="Stage 8"):
-        pymc_models.build_naive_model(
-            onset_model,
-            COUNTS,
-            serial_interval=SERIAL_INTERVAL,
-            switch_day=SWITCH_DAY,
-            R_pre=R_PRE,
-            R_post=R_POST,
-            k=K,
-        )
+
+def test_a_latent_model_will_not_pick_a_parameterisation_for_you():
+    # The Stage-3 choice is recorded in config/config.yaml; nothing may default silently.
+    with pytest.raises(ValueError, match="latent_parameterisation must be given explicitly"):
+        _build("ssi", latent_parameterisation=None)
