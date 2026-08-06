@@ -60,6 +60,7 @@ default.
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
@@ -205,6 +206,254 @@ def _observed_days(
 
 
 # ---------------------------------------------------------------------------------------
+# The latent block's structure, which the data alone determine
+# ---------------------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class LatentBlockStructure:
+    """Everything about a model's latent block that does not depend on ``R`` or ``k``.
+
+    Computed once and used twice: by the builders, to lay out the graph, and by callers who
+    need to reason about the block from outside — above all to rebuild the latents that were
+    integrated out (:func:`marginalised_latent_conditional`).
+
+    The coupling is split because ``R`` takes only two values. The coefficient of latent ``u``
+    in ``Σ_j μ_j`` is exactly ``c_u = R_pre · pre_coupling_u + R_post · post_coupling_u``, so
+    the two weight vectors are data-determined constants and the ``R`` dependence is explicit.
+    Where the split falls differs between the model families, and that difference *is* the §5.7
+    convention: the naive models index ``R`` by the day a case appears, the onset-anchored ones
+    by the day the transmission happens.
+    """
+
+    variable: str
+    """Name of the latent block in the built model."""
+
+    dimension: str
+    """Model coordinate the sampled part of the block is indexed by."""
+
+    days: NDArray[np.int64]
+    """Day carrying each latent position, sampled or not."""
+
+    scale: NDArray[np.float64]
+    """``scale_u``; the latent is ``Gamma(k · scale_u, k)``."""
+
+    pre_coupling: NDArray[np.float64]
+    post_coupling: NDArray[np.float64]
+
+    influence: NDArray[np.float64]
+    """``(n_days, n_latents)``: the coefficient of latent ``u`` in ``μ_j``, ``R`` divided out."""
+
+    likelihood_days: NDArray[np.int64]
+    """Days whose observation the model evaluates, before any latent is removed."""
+
+    incubation_design: NDArray[np.float64] | None = None
+    tost_design: NDArray[np.float64] | None = None
+
+    def coupling(self, R_pre: float, R_post: float) -> NDArray[np.float64]:
+        """``c_u`` at given reproduction numbers."""
+        return R_pre * self.pre_coupling + R_post * self.post_coupling
+
+
+def latent_block_structure(
+    model: str | ModelSpecification,
+    counts: NDArray[np.int64],
+    *,
+    delays: OnsetAnchoredDelays,
+    switch_day: int,
+) -> LatentBlockStructure:
+    """Lay out the latent block of ``ssi``, ``sse_so`` or ``ssi_so`` from the data alone."""
+    specification = specification_of(model)
+    return _latent_block_structure(
+        specification,
+        counts,
+        switch_day=switch_day,
+        serial_interval=delays.serial_interval,
+        tost=delays.tost,
+        incubation=delays.incubation,
+    )
+
+
+def _latent_block_structure(
+    specification: ModelSpecification,
+    counts: NDArray[np.int64],
+    *,
+    switch_day: int,
+    serial_interval: NDArray[np.float64],
+    tost: NDArray[np.float64] | None = None,
+    incubation: NDArray[np.float64] | None = None,
+) -> LatentBlockStructure:
+    """As :func:`latent_block_structure`, but taking the delays the model actually needs.
+
+    The naive builders are handed a serial interval alone, so they cannot supply the whole
+    triple; the onset-anchored ones never look at the serial interval.
+    """
+    if specification.latent_variable is None:
+        raise ValueError(f"model {specification.name!r} has no latent block")
+    counts = np.asarray(counts, dtype=np.int64)
+    n_days = counts.size
+    cohort_days = np.flatnonzero(counts > 0).astype(np.int64)
+
+    if specification.name == "ssi":
+        serial_design = renewal.delay_design_matrix(
+            n_days,
+            serial_interval,
+            first_lag=SERIAL_INTERVAL_FIRST_LAG,
+            source_days=cohort_days,
+        )
+        return _structure_from(
+            specification,
+            counts,
+            latent_days=cohort_days,
+            scale=counts[cohort_days].astype(np.float64),
+            influence=serial_design,
+            switch_day=switch_day,
+        )
+
+    assert tost is not None and incubation is not None
+
+    # E_t for the final day of the window could only produce onsets after it closes, so it is
+    # unidentified and carries no latent; f_inc has no lag-0 mass, which is what makes the
+    # recursion well ordered.
+    transmission_days = np.arange(n_days - 1, dtype=np.int64)
+    incubation_design = renewal.delay_design_matrix(
+        n_days, incubation, first_lag=INCUBATION_FIRST_LAG, source_days=transmission_days
+    )
+    if specification.name == "sse_so":
+        tost_sum = renewal.delay_weighted_sum(
+            counts.astype(np.float64), tost, first_lag=TOST_FIRST_LAG
+        )[transmission_days]
+        return _structure_from(
+            specification,
+            counts,
+            latent_days=transmission_days,
+            scale=tost_sum,
+            influence=incubation_design,
+            switch_day=switch_day,
+            incubation_design=incubation_design,
+        )
+
+    tost_design = renewal.delay_design_matrix(
+        n_days, tost, first_lag=TOST_FIRST_LAG, source_days=cohort_days
+    )[transmission_days]
+    return _structure_from(
+        specification,
+        counts,
+        latent_days=cohort_days,
+        scale=counts[cohort_days].astype(np.float64),
+        # Two delay hops in series: an onset spreads by f_tost to a transmission, and that
+        # transmission spreads by f_inc to the onset it produces.
+        influence=incubation_design @ tost_design,
+        switch_day=switch_day,
+        incubation_design=incubation_design,
+        tost_design=tost_design,
+    )
+
+
+def _structure_from(
+    specification: ModelSpecification,
+    counts: NDArray[np.int64],
+    *,
+    latent_days: NDArray[np.int64],
+    scale: NDArray[np.float64],
+    influence: NDArray[np.float64],
+    switch_day: int,
+    incubation_design: NDArray[np.float64] | None = None,
+    tost_design: NDArray[np.float64] | None = None,
+) -> LatentBlockStructure:
+    """Finish a :class:`LatentBlockStructure`: likelihood days and the two coupling weights."""
+    n_days = counts.size
+    capacity = influence @ (scale > 0.0).astype(np.float64)
+    likelihood_days = renewal.likelihood_days(capacity, counts)
+
+    if specification.anchoring == "infections":
+        # R multiplies the force of infection producing the cases seen on day j, so the split
+        # falls on the observation axis.
+        period = renewal.switch_index(n_days, switch_day)[likelihood_days]
+        pre_coupling = influence[likelihood_days[period == 0]].sum(axis=0)
+        post_coupling = influence[likelihood_days[period == 1]].sum(axis=0)
+    else:
+        # R multiplies the force of infection producing the *infections* on day t, which sits
+        # between the latent and the observation, so the split falls on the transmission axis.
+        assert incubation_design is not None
+        reach = incubation_design[likelihood_days].sum(axis=0)
+        period = renewal.switch_index(n_days, switch_day)[: incubation_design.shape[1]]
+        pre_reach = np.where(period == 0, reach, 0.0)
+        post_reach = np.where(period == 1, reach, 0.0)
+        if tost_design is None:  # sse_so: the latent is indexed by the transmission day itself
+            pre_coupling, post_coupling = pre_reach, post_reach
+        else:
+            pre_coupling, post_coupling = pre_reach @ tost_design, post_reach @ tost_design
+
+    assert specification.latent_variable is not None
+    return LatentBlockStructure(
+        variable=specification.latent_variable,
+        dimension=latent_dimension(specification),
+        days=latent_days,
+        scale=np.asarray(scale, dtype=np.float64),
+        pre_coupling=np.asarray(pre_coupling, dtype=np.float64),
+        post_coupling=np.asarray(post_coupling, dtype=np.float64),
+        influence=influence,
+        likelihood_days=likelihood_days,
+        incubation_design=incubation_design,
+        tost_design=tost_design,
+    )
+
+
+def _coupling(structure: LatentBlockStructure, R_pre: Any, R_post: Any) -> Any:
+    """``c_u`` as a PyTensor expression, from the data-determined weights of ``structure``."""
+    return R_pre * structure.pre_coupling + R_post * structure.post_coupling
+
+
+def marginalised_latent_conditional(
+    model: str | ModelSpecification,
+    counts: NDArray[np.int64],
+    *,
+    delays: OnsetAnchoredDelays,
+    switch_day: int,
+    R_pre: float,
+    R_post: float,
+    k: float,
+    latent_parameterisation: str | lp.LatentParameterisation,
+    negligible_latent_threshold: float = 0.0,
+) -> tuple[NDArray[np.int64], NDArray[np.float64], NDArray[np.float64]]:
+    """``(days, shape, rate)`` of the latents a built model integrated out.
+
+    The latents removed by the ``marginalised`` strategies are **not lost**. Conditional on the
+    parameters they are independent Gammas, ``Y_u | data, θ ~ Gamma(k · scale_u, k + c_u)``, and
+    independent of the sampled block too — so drawing them from this conditional, once per
+    posterior draw of ``(R_pre, R_post, k)``, reconstructs exact draws from the full smoothed
+    posterior over *every* latent.
+
+    That is what the RAC and RAT calculators need. The reset state at day ``t`` requires
+    ``E_u = R_u Y_u`` for every ``u ≤ t`` — including the days past the last observed case,
+    which are precisely the ones marginalisation removes — in order to rebuild the incubation
+    pipeline (§5.1). The reconstruction is done **once per posterior draw**, not once per
+    conditioning day, so the one-fit-serves-every-day economy of §5.6 is untouched.
+
+    Returns empty arrays when the parameterisation integrates nothing out, so callers can use
+    it unconditionally.
+    """
+    parameterisation = lp.parameterisation_of(latent_parameterisation)
+    structure = latent_block_structure(model, counts, delays=delays, switch_day=switch_day)
+    classification = lp.classify_latents(
+        scale=structure.scale,
+        couples_to_observations=_couples_to_observations(
+            structure.influence, np.asarray(counts, dtype=np.int64), structure.likelihood_days
+        ),
+        parameterisation=parameterisation,
+        negligible_threshold=negligible_latent_threshold,
+    )
+    removed = classification.marginalised
+    shape, rate = lp.conditional_posterior(
+        k=k,
+        scale=structure.scale[removed],
+        coupling=structure.coupling(R_pre, R_post)[removed],
+    )
+    return structure.days[removed], shape, rate
+
+
+# ---------------------------------------------------------------------------------------
 # Infection-anchored builders
 # ---------------------------------------------------------------------------------------
 
@@ -279,13 +528,13 @@ def build_naive_model(
 
     # SSI: the driving series is latent, so the renewal operator stays symbolic. Its row sums
     # say which days can be driven at all, which is what selects the likelihood days.
-    design = renewal.delay_design_matrix(
-        n_days, serial_interval, first_lag=SERIAL_INTERVAL_FIRST_LAG, source_days=cohort_days
+    structure = _latent_block_structure(
+        specification, counts, switch_day=switch_day, serial_interval=serial_interval
     )
-    days = renewal.likelihood_days(design.sum(axis=1), counts)
-    scale = counts[cohort_days].astype(np.float64)
+    design = structure.influence
+    days = structure.likelihood_days
     classification = lp.classify_latents(
-        scale=scale,
+        scale=structure.scale,
         couples_to_observations=_couples_to_observations(design, counts, days),
         parameterisation=parameterisation,
         negligible_threshold=negligible_latent_threshold,
@@ -302,19 +551,11 @@ def build_naive_model(
         R_post_value = _parameter("R_post", R_post)
         assert k is not None  # guaranteed by _validate_dispersion for a latent model
         k_value = _parameter("k", k)
-        # Coefficient of Y_u in Σ_j μ_j over every likelihood day, needed to integrate out the
-        # latents the data cannot resolve. It runs over `days`, not the reduced `observed_days`.
-        coupling = pt.dot(
-            _reproduction_number(
-                R_pre_value, R_post_value, days=days, n_days=n_days, switch_day=switch_day
-            ),
-            design[days],
-        )
         Y = lp.build_gamma_latent_block(
             INFECTIVITY_VARIABLE,
             k=k_value,
-            scale=scale,
-            coupling=coupling,
+            scale=structure.scale,
+            coupling=_coupling(structure, R_pre_value, R_post_value),
             classification=classification,
             parameterisation=parameterisation,
             dims=COHORT_DAY_DIMENSION,
@@ -426,21 +667,18 @@ def build_onset_anchored_model(
     _validate_dispersion(specification, k)
     parameterisation = _require_parameterisation(specification, latent_parameterisation)
 
-    n_days = counts.size
-    # E_t for t = n_days - 1 could only produce onsets after the window, so it is unidentified
-    # and left out; f_inc has no lag-0 mass, which is what makes the recursion well ordered.
-    transmission_days = np.arange(n_days - 1, dtype=np.int64)
-    incubation_design = renewal.delay_design_matrix(
-        n_days, delays.incubation, first_lag=INCUBATION_FIRST_LAG, source_days=transmission_days
+    # Cori-SO has no latent block, so it borrows SSE-SO's structure: the same TOST-weighted
+    # onset sums and the same incubation design, with lambda_t entering deterministically.
+    structure = latent_block_structure(
+        SSE_SO if specification.name == "cori_so" else specification,
+        counts,
+        delays=delays,
+        switch_day=switch_day,
     )
-    tost_sum = latent_scale_by_day(SSE_SO, counts, delays=delays)[transmission_days]
-
     if specification.name == "ssi_so":
         return _build_ssi_so(
             counts,
-            delays=delays,
-            transmission_days=transmission_days,
-            incubation_design=incubation_design,
+            structure=structure,
             switch_day=switch_day,
             R_pre=R_pre,
             R_post=R_post,
@@ -451,9 +689,7 @@ def build_onset_anchored_model(
     return _build_sse_so_or_cori_so(
         specification,
         counts,
-        transmission_days=transmission_days,
-        incubation_design=incubation_design,
-        tost_sum=tost_sum,
+        structure=structure,
         switch_day=switch_day,
         R_pre=R_pre,
         R_post=R_post,
@@ -467,9 +703,7 @@ def _build_sse_so_or_cori_so(
     specification: ModelSpecification,
     counts: NDArray[np.int64],
     *,
-    transmission_days: NDArray[np.int64],
-    incubation_design: NDArray[np.float64],
-    tost_sum: NDArray[np.float64],
+    structure: LatentBlockStructure,
     switch_day: int,
     R_pre: float | LogNormalPrior,
     R_post: float | LogNormalPrior,
@@ -479,10 +713,10 @@ def _build_sse_so_or_cori_so(
 ) -> pm.Model:
     """``E_t = R_t λ̃_t`` (SSE-SO) or ``E_t = R_t λ_t`` (Cori-SO), then onsets by ``f_inc``."""
     n_days = counts.size
-    days = renewal.likelihood_days(incubation_design @ tost_sum, counts)
-    # Fraction of day-t infections whose onset falls inside the window: the coefficient that
-    # turns a latent's mean into its contribution to Σ_j μ_j.
-    reach = incubation_design[days].sum(axis=0)
+    transmission_days = structure.days
+    incubation_design = structure.influence
+    tost_sum = structure.scale
+    days = structure.likelihood_days
 
     if parameterisation is None:
         coords = {LIKELIHOOD_DAY_DIMENSION: days}
@@ -503,7 +737,7 @@ def _build_sse_so_or_cori_so(
         return built
 
     classification = lp.classify_latents(
-        scale=tost_sum,
+        scale=structure.scale,
         couples_to_observations=_couples_to_observations(incubation_design, counts, days),
         parameterisation=parameterisation,
         negligible_threshold=negligible_latent_threshold,
@@ -518,9 +752,11 @@ def _build_sse_so_or_cori_so(
     with pm.Model(coords=coords) as built:
         assert k is not None  # guaranteed by _validate_dispersion for a latent model
         k_value = _parameter("k", k)
+        R_pre_value = _parameter("R_pre", R_pre)
+        R_post_value = _parameter("R_post", R_post)
         R_by_transmission_day = _reproduction_number(
-            _parameter("R_pre", R_pre),
-            _parameter("R_post", R_post),
+            R_pre_value,
+            R_post_value,
             days=transmission_days,
             n_days=n_days,
             switch_day=switch_day,
@@ -528,8 +764,8 @@ def _build_sse_so_or_cori_so(
         lambda_tilde = lp.build_gamma_latent_block(
             TRANSMISSIBILITY_VARIABLE,
             k=k_value,
-            scale=tost_sum,
-            coupling=R_by_transmission_day * reach,
+            scale=structure.scale,
+            coupling=_coupling(structure, R_pre_value, R_post_value),
             classification=classification,
             parameterisation=parameterisation,
             dims=TRANSMISSION_DAY_DIMENSION,
@@ -546,9 +782,7 @@ def _build_sse_so_or_cori_so(
 def _build_ssi_so(
     counts: NDArray[np.int64],
     *,
-    delays: OnsetAnchoredDelays,
-    transmission_days: NDArray[np.int64],
-    incubation_design: NDArray[np.float64],
+    structure: LatentBlockStructure,
     switch_day: int,
     R_pre: float | LogNormalPrior,
     R_post: float | LogNormalPrior,
@@ -558,19 +792,16 @@ def _build_ssi_so(
 ) -> pm.Model:
     """``Y_t | D_t ~ Gamma(k D_t, k)``, spread forward by ``f_tost`` and then by ``f_inc``."""
     assert parameterisation is not None  # ssi_so always has latents
+    assert structure.incubation_design is not None and structure.tost_design is not None
     n_days = counts.size
-    cohort_days = np.flatnonzero(counts > 0).astype(np.int64)
-    tost_design = renewal.delay_design_matrix(
-        n_days, delays.tost, first_lag=TOST_FIRST_LAG, source_days=cohort_days
-    )[transmission_days]
+    cohort_days = structure.days
+    incubation_design = structure.incubation_design
+    tost_design = structure.tost_design
 
-    # Coefficient of Y_u in μ_j, up to the reproduction number: two delay hops in series.
-    influence = incubation_design @ tost_design
-    days = renewal.likelihood_days(influence.sum(axis=1), counts)
-    reach = incubation_design[days].sum(axis=0)
-    scale = counts[cohort_days].astype(np.float64)
+    influence = structure.influence
+    days = structure.likelihood_days
     classification = lp.classify_latents(
-        scale=scale,
+        scale=structure.scale,
         couples_to_observations=_couples_to_observations(influence, counts, days),
         parameterisation=parameterisation,
         negligible_threshold=negligible_latent_threshold,
@@ -585,18 +816,20 @@ def _build_ssi_so(
     with pm.Model(coords=coords) as built:
         assert k is not None
         k_value = _parameter("k", k)
+        R_pre_value = _parameter("R_pre", R_pre)
+        R_post_value = _parameter("R_post", R_post)
         R_by_transmission_day = _reproduction_number(
-            _parameter("R_pre", R_pre),
-            _parameter("R_post", R_post),
-            days=transmission_days,
+            R_pre_value,
+            R_post_value,
+            days=np.arange(n_days - 1, dtype=np.int64),
             n_days=n_days,
             switch_day=switch_day,
         )
         Y = lp.build_gamma_latent_block(
             INFECTIVITY_VARIABLE,
             k=k_value,
-            scale=scale,
-            coupling=pt.dot(R_by_transmission_day * reach, tost_design),
+            scale=structure.scale,
+            coupling=_coupling(structure, R_pre_value, R_post_value),
             classification=classification,
             parameterisation=parameterisation,
             dims=COHORT_DAY_DIMENSION,

@@ -291,6 +291,139 @@ def test_the_conditional_posterior_of_a_marginalised_latent_is_the_conjugate_gam
     )
 
 
+# --- rebuilding the latents that were integrated out ------------------------------------------
+
+
+def test_the_conditional_of_a_removed_latent_is_exactly_what_the_two_models_imply():
+    """The identity the RAC reset state depends on, checked pointwise.
+
+    Bayes' rule on the two built models gives the removed latent's conditional density directly:
+    ``p(y | rest) = p_full(Y_sampled, y) / ∫ p_full(Y_sampled, y') dy'``, and the denominator is
+    exactly what the marginalised model evaluates. So the closed form
+    ``marginalised_latent_conditional`` returns has to reproduce that ratio at every ``y``.
+    """
+    counts = ONE_UNCOUPLED_COUNTS
+    full = pymc_models.compile_joint_logp(_sse_so(counts, "centred"))
+    marginalised_model = _sse_so(counts, "marginalised")
+    marginalised = pymc_models.compile_joint_logp(marginalised_model)
+
+    kept = pymc_models.model_days(marginalised_model, pymc_models.TRANSMISSION_DAY_DIMENSION)
+    days, shape, rate = pymc_models.marginalised_latent_conditional(
+        "sse_so",
+        counts,
+        delays=SO_DELAYS,
+        switch_day=SWITCH_DAY,
+        R_pre=R_PRE,
+        R_post=R_POST,
+        k=K,
+        latent_parameterisation="marginalised",
+    )
+    assert days.size == 1
+
+    rng = np.random.default_rng(4)
+    kept_values = rng.gamma(K * _tost_sum(counts)[kept], 1.0 / K)
+    evidence = marginalised(lambda_tilde=kept_values)
+    for y in (0.05, 0.4, 1.3, 5.0):
+        latents = np.zeros(counts.size - 1)
+        latents[kept] = kept_values
+        latents[days] = y
+        assert full(lambda_tilde=latents) - evidence == pytest.approx(
+            float(scipy.stats.gamma.logpdf(y, a=shape[0], scale=1.0 / rate[0]))
+        )
+
+
+def test_the_reconstruction_covers_exactly_the_days_the_model_dropped(real_series):
+    """Sampled days plus rebuilt days must account for every latent the model ever had."""
+    data, delays, _ = real_series
+    model = _real_sse_so(real_series, "marginalised")
+    sampled = pymc_models.model_days(model, pymc_models.TRANSMISSION_DAY_DIMENSION)
+    rebuilt, shape, rate = pymc_models.marginalised_latent_conditional(
+        "sse_so",
+        data.onsets,
+        delays=delays,
+        switch_day=data.ert_arrival_day,
+        R_pre=1.0,
+        R_post=0.5,
+        k=0.18,
+        latent_parameterisation="marginalised",
+    )
+    structure = pymc_models.latent_block_structure(
+        "sse_so", data.onsets, delays=delays, switch_day=data.ert_arrival_day
+    )
+    np.testing.assert_array_equal(np.union1d(sampled, rebuilt), structure.days)
+    assert rebuilt.size == 52
+    # Conditioning tightens each latent: the rate rises above the prior's k by the coupling.
+    assert (rate > 0.18).all()
+    np.testing.assert_allclose(shape, 0.18 * structure.scale[rebuilt])
+
+
+def test_nothing_is_rebuilt_when_nothing_was_integrated_out(real_series):
+    """So a caller can reconstruct unconditionally, whatever parameterisation was used."""
+    data, delays, _ = real_series
+    days, shape, rate = pymc_models.marginalised_latent_conditional(
+        "sse_so",
+        data.onsets,
+        delays=delays,
+        switch_day=data.ert_arrival_day,
+        R_pre=1.0,
+        R_post=0.5,
+        k=0.18,
+        latent_parameterisation="inverse_cdf",
+    )
+    assert days.size == shape.size == rate.size == 0
+
+
+@pytest.mark.parametrize("model", ["ssi", "sse_so", "ssi_so"])
+def test_the_block_structure_agrees_with_every_built_model(real_series, model):
+    """One source of truth: the builders lay out their blocks from this same structure."""
+    data, delays, _ = real_series
+    structure = pymc_models.latent_block_structure(
+        model, data.onsets, delays=delays, switch_day=data.ert_arrival_day
+    )
+    built = pymc_models.build_model(
+        model,
+        data.onsets,
+        delays=delays,
+        switch_day=data.ert_arrival_day,
+        R_pre=1.0,
+        R_post=0.5,
+        k=0.18,
+        latent_parameterisation="centred",
+    )
+    np.testing.assert_array_equal(
+        pymc_models.model_days(built, structure.dimension), structure.days
+    )
+    np.testing.assert_array_equal(
+        pymc_models.model_days(built, pymc_models.LIKELIHOOD_DAY_DIMENSION),
+        structure.likelihood_days,
+    )
+    assert structure.variable in {rv.name for rv in built.free_RVs}
+
+
+def test_the_coupling_splits_on_the_axis_the_switch_convention_names():
+    """The naive models index R by the day a case appears, the SO models by the transmission.
+
+    A latent whose whole influence lands before the switch must have no post-switch coupling,
+    and the day at which that stops being true differs between the families — which is the §5.7
+    asymmetry showing up in the algebra rather than in a figure.
+    """
+    counts = np.array([1, 0, 2, 1, 0, 3, 0, 1, 0])
+    delays = dd.build_onset_anchored_delays(
+        serial_interval=dd.GammaDelay(mean=4.0, sd=3.0),
+        incubation=dd.GammaDelay(mean=2.5, sd=2.0),
+        max_lag=counts.size,
+        tolerance=None,
+    )
+    for model in ("ssi", "sse_so", "ssi_so"):
+        structure = pymc_models.latent_block_structure(model, counts, delays=delays, switch_day=4)
+        total = structure.coupling(1.0, 1.0)
+        np.testing.assert_allclose(total, structure.pre_coupling + structure.post_coupling)
+        assert (structure.pre_coupling >= 0).all()
+        assert (structure.post_coupling >= 0).all()
+        # A pre-switch-only latent exists in every model: the index case's own day.
+        assert structure.post_coupling[0] < structure.pre_coupling[0]
+
+
 # --- what marginalisation buys on the real series -------------------------------------------
 
 

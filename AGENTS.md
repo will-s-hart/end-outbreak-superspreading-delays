@@ -168,6 +168,25 @@ What the benchmark actually established, and should not be re-litigated:
   combination rather than pretending to benchmark it.
 - Do not implement "log-scale latents with a Jacobian"; it duplicates PyMC's default transform.
 
+**Rebuild the marginalised latents before computing RAC or RAT — this is the one way to get the
+default silently wrong.** The removed latents are exactly the days from the last observed case
+(day 58) onwards, which is exactly the range a late conditioning day `t` needs for its
+incubation pipeline. They are *not* in `idata.posterior`; `model_days` returns only the sampled
+days, so an array indexed by position will look plausible and be truncated at day 57. Call
+`pymc_models.marginalised_latent_conditional` once per posterior draw of `(R_pre, R_post, k)`,
+draw from the `Gamma(shape, rate)` it returns, and splice the result onto the sampled block to
+get a complete latent path by day. That is exact — the removed latents are conditionally
+independent of the sampled ones as well as of each other — and it is done once per draw, not
+once per `t`, so the one-fit-serves-every-day economy of §5.6 is untouched.
+
+Validate that reconstruction with a **matched pair of fits**: `marginalised_inverse_cdf` (needs
+reconstruction) against plain `inverse_cdf` (nothing removed) must give the same RAC curve
+within Monte-Carlo error. That is why both stay in the registry.
+
+`pymc_models.latent_block_structure` is the single source for a block's layout — the days, the
+scales, and the two coupling weight vectors with `c_u = R_pre·a_u + R_post·b_u`. The builders
+use it too, so it cannot drift from what they build.
+
 ### Day indexing
 
 Day 0 is the first observed onset (5 April 2018). The ERT arrived on day 33 and withdrew on

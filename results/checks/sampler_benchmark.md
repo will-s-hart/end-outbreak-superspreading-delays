@@ -216,7 +216,28 @@ A refinement was tried and rejected: ranking days by their *influence*
 whose incubation mass mostly falls outside the window anyway, so both rules select nearly the
 same set. Not worth the extra concept.
 
-## 6. Caveats
+## 6. What this means downstream
+
+Marginalisation removes latents from the *sampler*, not from the *model*, and the RAC estimand
+needs them back: the reset state at day `t` requires `E_u = R_u Y_u` for every `u ≤ t` in order
+to rebuild the incubation pipeline (§5.1), and the removed days are exactly those from the last
+observed case onwards — the range that matters most for a late `t`.
+
+That reconstruction is exact and cheap. Conditional on the parameters the removed latents are
+independent `Gamma(k·scale_u, k + c_u)`, independent of the sampled block too, so drawing them
+once per posterior draw of `(R_pre, R_post, k)` gives exact draws from the full smoothed
+posterior. It is **once per draw, not once per conditioning day**, so the one-fit-serves-every-
+day economy of §5.6 survives intact. `pymc_models.marginalised_latent_conditional` returns the
+days and the `(shape, rate)`.
+
+The residual risk is not statistical but clerical: `model_days` returns only the *sampled* days,
+so code that indexes the posterior array by position would silently truncate the retained state
+at day 57. Two guards are in place — the requirement is written into `AGENTS.md`, and both
+`marginalised_inverse_cdf` and plain `inverse_cdf` are kept in the registry so that Stage 4/8
+can validate the reconstruction by a **matched pair of fits**: the two share no latent block, so
+agreeing RAC curves check the reconstruction end to end rather than merely the likelihood.
+
+## 7. Caveats
 
 - **`ESS/s` includes tuning.** Comparable within a tuning length, not across one.
 - **Elapsed times for divergent runs are not throughput.** See the note above §3.
