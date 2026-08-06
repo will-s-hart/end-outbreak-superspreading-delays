@@ -10,11 +10,11 @@ latents it was meant to remove are removable *exactly*, so there is no approxima
 Produced by
 
 ```
-python scripts/run_sampler_benchmark.py --tune 500 2000 --draws 1000 --chains 4
-python scripts/run_sampler_benchmark.py --datasets equateur --tune 2000 --draws 1000 \
+python validation/run_sampler_benchmark.py --tune 500 2000 --draws 1000 --chains 4
+python validation/run_sampler_benchmark.py --datasets equateur --tune 2000 --draws 1000 \
     --chains 4 --estimate-k free \
     --parameterisations centred unit_mean inverse_cdf marginalised marginalised_inverse_cdf \
-    --output results/checks/sampler_benchmark_estimated_k.csv
+    --output validation/results/sampler_benchmark_estimated_k.csv
 ```
 
 writing `sampler_benchmark.csv` (64 runs) and `sampler_benchmark_estimated_k.csv` (10 runs).

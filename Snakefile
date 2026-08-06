@@ -31,7 +31,11 @@ def code(*modules):
     return [f"{PKG}/{m}.py" for m in modules]
 
 
+# `configuration` parses config/config.yaml into the delay triple, the priors and the sampler
+# settings, so every tier depends on it: a change to how a config value is read changes results
+# exactly as a change to the value itself would.
 FIT_CORE = code(
+    "configuration",
     "outbreak_data",
     "delay_distributions",
     "renewal",
@@ -44,6 +48,7 @@ FIT_CORE = code(
 # structure (`pymc_models`, `latent_parameterisations`), and -- from Stage 8, for the
 # onset-anchored models, whose RAC has no closed form -- the simulators too.
 RAC_CORE = code(
+    "configuration",
     "risk_of_additional_cases",
     "renewal",
     "delay_distributions",
@@ -53,8 +58,10 @@ RAC_CORE = code(
     "pymc_models",
     "forward_simulation",
 )
-EVIDENCE_CORE = code("model_evidence", "renewal", "delay_distributions")
-PLOT_CORE = ["scripts/utils.py"]
+EVIDENCE_CORE = code("configuration", "model_evidence", "renewal", "delay_distributions")
+# Stage 5 adds `scripts/utils.py` here for the presentation-only helpers the plotting scripts
+# share; the config parsing they also need is in the package, so every tier can name it.
+PLOT_CORE = code("configuration", "outbreak_data")
 
 ANALYSES = config["analyses"]
 ONSETS_CSV = config["shared"]["data_file"]

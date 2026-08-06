@@ -1,7 +1,19 @@
-"""Shared helpers for the analysis and plotting scripts.
+"""Reading ``config/config.yaml`` into the objects the rest of the package takes.
 
-Presentation- and I/O-level only. Anything reusable as *method* belongs in the
-``end_of_outbreak`` package, so that the Snakemake rules can depend on it precisely.
+Config parsing lives in the package rather than beside the scripts for two reasons. It is
+shared by *both* script trees — the pipeline analyses in ``scripts/`` and the validation
+studies in ``validation/`` — and neither should have to reach into the other's directory for
+it. And it is a real dependency of the results: a change to how the delay triple is built
+must re-run the fits, which only happens if the Snakemake rules can name the module in their
+``input:`` lists.
+
+The other half of the config lives on the objects themselves, where the parsing is specific to
+one type: :meth:`~end_of_outbreak.model_specifications.LogNormalPrior.from_config` and
+:meth:`~end_of_outbreak.fitting.SamplerSettings.from_config`. This module holds what is left —
+loading the file, slicing an analysis out of it, and assembling the delay triple.
+
+Presentation-only helpers (figure styling and the like) do **not** belong here; they go in
+``scripts/utils.py``, which arrives with the plotting scripts in Stage 5.
 """
 
 from __future__ import annotations
@@ -14,6 +26,8 @@ import yaml
 from end_of_outbreak import delay_distributions
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+"""The repository root: this is a flat package, so it is the package directory's parent."""
+
 DEFAULT_CONFIG_FILE = REPO_ROOT / "config" / "config.yaml"
 
 

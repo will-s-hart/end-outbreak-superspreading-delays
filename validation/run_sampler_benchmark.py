@@ -21,7 +21,7 @@ latents are integrated out exactly, so their sampling cost is genuinely zero.
 
 Usage::
 
-    python scripts/run_sampler_benchmark.py --output results/checks/sampler_benchmark.csv
+    python validation/run_sampler_benchmark.py --output validation/results/sampler_benchmark.csv
 
 Not part of the pipeline: this is a one-off study whose conclusion is recorded in
 ``config/config.yaml`` and ``AGENTS.md``.
@@ -48,7 +48,7 @@ from end_of_outbreak import latent_parameterisations as lp
 from end_of_outbreak.model_specifications import LogNormalPrior, TransmissionParameters
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_OUTPUT = REPO_ROOT / "results" / "checks" / "sampler_benchmark.csv"
+DEFAULT_OUTPUT = REPO_ROOT / "validation" / "results" / "sampler_benchmark.csv"
 
 LATENT_MODELS = ("ssi", "sse_so")
 FIXED_K = 0.18

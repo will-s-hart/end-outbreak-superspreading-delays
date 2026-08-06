@@ -54,9 +54,9 @@ ty = "*"
 default = { features = ["dev"] }
 
 [tool.pixi.tasks]
-fmt = "ruff format end_of_outbreak scripts tests"
-lint = "ruff check end_of_outbreak scripts tests"
-typecheck = "env -u VIRTUAL_ENV ty check end_of_outbreak scripts tests"
+fmt = "ruff format end_of_outbreak scripts validation tests"
+lint = "ruff check end_of_outbreak scripts validation tests"
+typecheck = "env -u VIRTUAL_ENV ty check end_of_outbreak scripts validation tests"
 test = "pytest"
 check = { depends-on = ["fmt", "lint", "typecheck", "test"] }
 pipeline = "snakemake --profile config/snakemake_profile -j4"

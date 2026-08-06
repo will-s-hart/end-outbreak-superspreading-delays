@@ -57,9 +57,9 @@ The environment is managed by **pixi**. All commands run through `pixi run`:
 
 | Command | What it does |
 | --- | --- |
-| `pixi run fmt` | `ruff format end_of_outbreak scripts tests` |
-| `pixi run lint` | `ruff check end_of_outbreak scripts tests` |
-| `pixi run typecheck` | `ty check end_of_outbreak scripts tests` (clears `VIRTUAL_ENV` first) |
+| `pixi run fmt` | `ruff format end_of_outbreak scripts validation tests` |
+| `pixi run lint` | `ruff check end_of_outbreak scripts validation tests` |
+| `pixi run typecheck` | `ty check end_of_outbreak scripts validation tests` (clears `VIRTUAL_ENV` first) |
 | `pixi run test` | `pytest` |
 | `pixi run check` | all four of the above, in order |
 | `pixi run pipeline` | `snakemake --profile config/snakemake_profile -j4` |
@@ -133,7 +133,7 @@ arrive with Stage 8. Before extending any of them:
 ### The latent block — settled in Stage 3
 
 **Default: `marginalised_inverse_cdf`.** Recorded in `config/config.yaml`; the comparison it
-rests on is `results/checks/sampler_benchmark.md` (74 MCMC runs). Two independent mechanisms,
+rests on is `validation/results/sampler_benchmark.md` (74 MCMC runs). Two independent mechanisms,
 and they compose:
 
 - **Exact marginalisation.** A latent that reaches no observation day carrying a case enters the
@@ -218,7 +218,7 @@ states. `particle_filter.ParticleFilterResult` names both — `latent_paths` are
 (smoothing) draws, `filtering_remaining_weight` is Λ(t) under the filter — so the equality check
 uses the former and the §5.6 measurement uses the latter.
 
-What Stage 4 established (`results/checks/rac_validation.md`, and the checks it summarises):
+What Stage 4 established (`validation/results/rac_validation.md`, and the checks it summarises):
 
 - **The external validation passes exactly.** Thompson et al.'s convention differs from this
   project's by exactly one day, `γ(t) = Λ(t − 1)`, so their eqs. (3)–(5) are this pipeline's
@@ -255,10 +255,36 @@ Flat package `end_of_outbreak/` (no `src/`), with `scripts/` for analysis and pl
   each rule depends on, so that editing `particle_filter.py` re-runs no MCMC fits. A
   kitchen-sink `utils.py` inside the package, or a fat `__init__.py` that re-exports
   everything, would defeat that scheme — don't add either.
-- Reusable *method* goes in the package; presentation-only helpers go in `scripts/utils.py`.
+- Reusable *method* goes in the package, and so does **config parsing**
+  (`configuration.py`): both script trees need it, and the Snakemake rules have to be able
+  to name it in their `input:` lists, which they cannot do for a file under `scripts/`.
+  Presentation-only helpers — figure styling and the like — go in `scripts/utils.py`, which
+  arrives with the plotting scripts in Stage 5.
 - Strict split between **compute-and-save** scripts and **load-and-plot** scripts, so
   restyling a figure never re-runs MCMC.
 - Analysis scripts are named for what they do, never for figure numbers.
+
+### Where a new script or output file goes
+
+Two trees, and the split is by **purpose, not by cost**:
+
+| | Report analyses | Validation studies |
+| --- | --- | --- |
+| Scripts | `scripts/run_*.py`, `scripts/plot_*.py` | `validation/run_*.py` |
+| Outputs | `results/<analysis>/`, `figures/<analysis>/` | `validation/results/` |
+| Driven by | a Snakemake rule | run on demand |
+| In `rule all` / a tier's dependency list | yes | **never** |
+
+So: benchmarks, cross-checks, replications of other people's results, degeneracy measurements
+and anything else whose subject is *the implementation rather than the outbreak* go in
+`validation/`, with a written `.md` summary beside the data. Anything that feeds a figure or a
+number in the report goes in `scripts/` and `results/`. **Do not put a check's output under
+`results/`** — the point of the split is that everything there can be taken as a report input
+without further checking. `validation/README.md` states the local conventions; `particle_mcmc.py`
+is the model to follow for the package side (validation *method* still lives in the package, it
+just stays out of every rule's dependency list).
+
+`validation/` is covered by `pixi run check` like everything else, and its outputs are committed.
 
 ### Pipeline
 
@@ -323,10 +349,10 @@ PMMH mixes only if the variance of the estimated log-likelihood is roughly 1–3
 Measure it before writing the sampler; if it can't be reached at a tractable particle count,
 record that and keep the synthetic-data tiers. `particle_mcmc.py` is validation, not a results
 path — it stays out of `rule all` and out of every tier's dependency list. Stage 4 already
-measured `Var(log L̂)` for SSI on the real series — see `results/checks/rac_smc_variance.csv`
+measured `Var(log L̂)` for SSI on the real series — see `validation/results/rac_smc_variance.csv`
 — so that go/no-go does not need re-deriving.
 
-The equality check itself lives in `scripts/run_rac_validation.py` rather than in `tests/`
+The equality check itself lives in `validation/run_rac_validation.py` rather than in `tests/`
 where it needs MCMC on the real series; the tests carry the same comparisons on short
 histories, which is what keeps `pixi run test` quick.
 
@@ -352,7 +378,7 @@ Do not silently revisit these; they are argued out in the implementation plan.
 7. **Particle MCMC is a check, never a results path.** Main analyses stay in PyMC. See
    *Testing* above and §6.6 of the implementation plan.
 8. **Latent parameterisation.** `marginalised_inverse_cdf`, chosen by the Stage-3 benchmark
-   (`results/checks/sampler_benchmark.md`). `negligible_latent_threshold` is `0.0` — the
+   (`validation/results/sampler_benchmark.md`). `negligible_latent_threshold` is `0.0` — the
    approximation it offered is unnecessary once the uncoupled latents are integrated out
    exactly. See *The latent block* above.
 
@@ -372,7 +398,7 @@ Do not silently revisit these; they are argued out in the implementation plan.
 - **Analysis and plotting scripts** (`run_*`/`plot_*`, and the `MAIN_TARGETS` list at the top of
   the `Snakefile`) arrive with Stage 5. `fitting.fit_model` and
   `risk_of_additional_cases.risk_curve_from_posterior` are the two calls a run script needs;
-  `scripts/run_rac_validation.py` is a worked example of both.
+  `validation/run_rac_validation.py` is a worked example of both.
 
 ## Git workflow
 

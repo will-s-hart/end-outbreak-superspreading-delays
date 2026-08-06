@@ -21,7 +21,7 @@ Two things worth carrying forward beyond the pass/fail:
 Produced by
 
 ```
-python scripts/run_rac_validation.py --checks all
+python validation/run_rac_validation.py --checks all
 ```
 
 writing `rac_thompson_replication.csv` (+ `.png`), `rac_equality_check.csv`,

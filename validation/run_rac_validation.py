@@ -2,7 +2,7 @@
 
 Each answers a different question, and none of them substitutes for another::
 
-    python scripts/run_rac_validation.py --checks all
+    python validation/run_rac_validation.py --checks all
 
 ``thompson``
     **External validation.** Re-runs the Équateur analysis under Thompson et al.'s own
@@ -29,8 +29,8 @@ Each answers a different question, and none of them substitutes for another::
     second fit under the *same* parameterisation with a different seed calibrates what "within
     Monte-Carlo error" means here, instead of leaving it to judgement.
 
-Writes one CSV per check to ``results/checks/`` plus a figure for the Thompson replication;
-``results/checks/rac_validation.md`` is the written summary that goes with them.
+Writes one CSV per check to ``validation/results/`` plus a figure for the Thompson replication;
+``validation/results/rac_validation.md`` is the written summary that goes with them.
 """
 
 from __future__ import annotations
@@ -45,25 +45,23 @@ import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import utils
 from numpy.typing import NDArray
 
-from end_of_outbreak import fitting, outbreak_data, particle_filter, pymc_models
+from end_of_outbreak import configuration, fitting, outbreak_data, particle_filter, pymc_models
 from end_of_outbreak import risk_of_additional_cases as rac
 from end_of_outbreak.delay_distributions import OnsetAnchoredDelays
 from end_of_outbreak.model_specifications import LogNormalPrior, TransmissionParameters
 
 matplotlib.use("Agg")
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_OUTPUT_DIR = REPO_ROOT / "results" / "checks"
+DEFAULT_OUTPUT_DIR = configuration.REPO_ROOT / "validation" / "results"
 FIXED_K_ANALYSIS = "naive_models_fixed_k"
 CLOSED_FORM_MODELS = ("dlo", "sse", "cori")
 
 
 def _setting(analysis: dict[str, Any]) -> tuple[outbreak_data.OutbreakData, OnsetAnchoredDelays]:
     data = outbreak_data.load_onset_data(analysis["shared"]["data_file"])
-    return data, utils.onset_anchored_delays_from_config({"shared": analysis["shared"]})
+    return data, configuration.onset_anchored_delays_from_config({"shared": analysis["shared"]})
 
 
 def _dates(data: outbreak_data.OutbreakData) -> list[datetime.date]:
@@ -583,7 +581,7 @@ def check_matched_pair(
 
 def parse_arguments(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--config", type=Path, default=utils.DEFAULT_CONFIG_FILE)
+    parser.add_argument("--config", type=Path, default=configuration.DEFAULT_CONFIG_FILE)
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
     parser.add_argument(
         "--checks",
@@ -615,14 +613,14 @@ def parse_arguments(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> None:
     arguments = parse_arguments(argv)
-    config = utils.load_config(arguments.config)
-    analysis = utils.analysis_config(config, FIXED_K_ANALYSIS)
+    config = configuration.load_config(arguments.config)
+    analysis = configuration.analysis_config(config, FIXED_K_ANALYSIS)
     data, delays = _setting(analysis)
     sampler = fitting.SamplerSettings.from_config(analysis["sampler"])
     parameterisation = config["latent_parameterisation"]
     fixed_k = float(analysis["fixed_k"])
     wanted = set(arguments.checks)
-    output_dir = utils.ensure_parent(arguments.output_dir / "placeholder").parent
+    output_dir = configuration.ensure_parent(arguments.output_dir / "placeholder").parent
 
     if wanted & {"all", "thompson"}:
         print("Thompson et al. (2024) replication, under their conventions:")
