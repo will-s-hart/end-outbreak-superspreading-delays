@@ -27,6 +27,12 @@ after it ends. For SSI the latent infectivities of the seeded days are drawn fro
 density ``p(I, Y) = Π_u Gamma(Y_u; k I_u, k) · Π_t Poisson(I_t; R_t Σ_s w_s Y_{t-s})`` the
 infectivity priors are conditionally independent given ``I``. (The same identity is what makes
 the naive Monte-Carlo marginalisation used in the tests unbiased.)
+
+``initial_infectivity`` overrides that draw with a supplied ``Y`` path. The RAC reset state of
+§5.1 is a *posterior* state, not a prior one, so a simulator that redrew the seeded
+infectivities from the prior would be answering a different question; passing the same ``Y``
+to the analytic calculator and to the simulator is what makes the §6.4 equality check a
+matched-conditioning comparison rather than a filtering-versus-smoothing one.
 """
 
 from __future__ import annotations
@@ -76,6 +82,7 @@ def simulate_naive(
     n_days: int,
     switch_day: int,
     initial_counts: NDArray[np.int64] | tuple[int, ...] = (1,),
+    initial_infectivity: NDArray[np.float64] | None = None,
     n_replicates: int = 1,
     rng: np.random.Generator | None = None,
 ) -> NaiveSimulation:
@@ -96,6 +103,12 @@ def simulate_naive(
     initial_counts
         Observed prefix to condition on. The default ``(1,)`` is the sole imported index case
         of §3.1.
+    initial_infectivity
+        Latent ``Y`` for the seeded days, for SSI only: either one path of length
+        ``len(initial_counts)`` shared by every replicate, or one per replicate. Must vanish
+        wherever ``initial_counts`` does. Omit it to draw from ``Gamma(k I_u, k)``, which is
+        the exact conditional law given the counts alone; supply it to condition on a
+        *posterior* state, as the RAC checks of §6.4 do.
     n_replicates
         Number of independent trajectories.
     rng
@@ -133,12 +146,22 @@ def simulate_naive(
     # SSI is driven by the latent infectivities rather than by the counts themselves. The
     # seeded days' infectivities are drawn from their exact conditional law given the counts.
     uses_latent_infectivity = specification.latent_variable is not None
+    if initial_infectivity is not None and not uses_latent_infectivity:
+        raise ValueError(
+            f"model {specification.name!r} has no latent infectivity to seed; it is driven by "
+            "the counts themselves"
+        )
     infectivity: NDArray[np.float64] | None = None
     if uses_latent_infectivity:
         assert k is not None  # guaranteed: every latent model here has a dispersion
         infectivity = np.zeros((n_replicates, n_days), dtype=np.float64)
-        for day in np.flatnonzero(seed > 0):
-            infectivity[:, day] = rng.gamma(k * seed[day], 1.0 / k, size=n_replicates)
+        if initial_infectivity is None:
+            for day in np.flatnonzero(seed > 0):
+                infectivity[:, day] = rng.gamma(k * seed[day], 1.0 / k, size=n_replicates)
+        else:
+            infectivity[:, : seed.size] = _validated_seed_infectivity(
+                initial_infectivity, seed, n_replicates=n_replicates
+            )
         driving = infectivity
     else:
         driving = counts.astype(np.float64)
@@ -165,6 +188,31 @@ def simulate_naive(
             driving[:, day] = new_counts
 
     return NaiveSimulation(counts=counts, infectivity=infectivity)
+
+
+def _validated_seed_infectivity(
+    initial_infectivity: NDArray[np.float64],
+    seed: NDArray[np.int64],
+    *,
+    n_replicates: int,
+) -> NDArray[np.float64]:
+    """A supplied seed path, broadcast to one row per replicate and checked against the counts."""
+    supplied = np.asarray(initial_infectivity, dtype=np.float64)
+    if supplied.ndim == 1:
+        supplied = np.broadcast_to(supplied, (n_replicates, supplied.size))
+    if supplied.shape != (n_replicates, seed.size):
+        raise ValueError(
+            f"initial_infectivity must have shape ({seed.size},) or "
+            f"({n_replicates}, {seed.size}), got {supplied.shape}"
+        )
+    if (supplied < 0).any():
+        raise ValueError("initial_infectivity must be non-negative")
+    if (supplied[:, seed == 0] != 0).any():
+        raise ValueError(
+            "initial_infectivity must vanish on days with no cases: Y_u | I_u = 0 is a point "
+            "mass at zero, so a positive value there is not a state the model can be in"
+        )
+    return supplied
 
 
 def _draw_counts(

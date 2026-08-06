@@ -106,8 +106,12 @@ re-derive it inline.
 
 `pymc_models` builds every model: `build_naive_model` for the infection-anchored ones,
 `build_onset_anchored_model` for the onset-anchored ones, `build_model` to dispatch on
-anchoring from the shared delay triple. `forward_simulation.simulate_naive` covers the naive
-models; the onset-anchored simulators arrive with Stage 8. Before extending any of them:
+anchoring from the shared delay triple. `fitting.fit_model` is the one place that turns a built
+model into an `InferenceData`, and it records on the result the things the draws do not carry —
+the latent parameterisation, and the value of any parameter that was *fixed* rather than
+estimated (a fixed parameter is a constant in the graph, so it never appears in the posterior).
+`forward_simulation.simulate_naive` covers the naive models; the onset-anchored simulators
+arrive with Stage 8. Before extending any of them:
 
 - **`cori` and `cori_so` are not compared models.** They are the Poisson `k → ∞` limits,
   present as the targets of the collapse checks. Keep them out of the four analyses.
@@ -181,11 +185,56 @@ once per `t`, so the one-fit-serves-every-day economy of §5.6 is untouched.
 
 Validate that reconstruction with a **matched pair of fits**: `marginalised_inverse_cdf` (needs
 reconstruction) against plain `inverse_cdf` (nothing removed) must give the same RAC curve
-within Monte-Carlo error. That is why both stay in the registry.
+within Monte-Carlo error. That is why both stay in the registry. Stage 4 ran it and it passes;
+see *The RAC calculators* below.
 
 `pymc_models.latent_block_structure` is the single source for a block's layout — the days, the
 scales, and the two coupling weight vectors with `c_u = R_pre·a_u + R_post·b_u`. The builders
 use it too, so it cannot drift from what they build.
+
+### The RAC calculators — Stage 4
+
+`risk_of_additional_cases.py` holds the estimand and nothing else: `pooled_remaining_weight`
+(Λ(t)), the closed forms of §5.3, the posterior averaging, the reconstruction the default
+parameterisation makes necessary, and `simulated_risk_curve`, which is the cross-check today
+and — for the onset-anchored models, which have no closed form — the actual estimator from
+Stage 8. Four things to know before touching it:
+
+- **RAC(t) is one number per day, not a distribution.** It is a posterior *probability*, so the
+  average over draws happens inside it: `risk_curve` returns `1 − mean_draws exp(log P)`. Use
+  `monte_carlo_standard_error` when comparing two curves — the between-chain spread is the
+  scale any such comparison has to be judged against.
+- **Λ(t) is the whole retained state for SSE and SSI — and is not enough for DLO.** DLO applies
+  a fresh, force-of-infection-independent `k` on every future day, so it needs the whole
+  profile `(μ_j)_{j>t}` from `future_force_of_infection`. Collapsing it to Λ(t) would silently
+  turn DLO into a different model, and the §5.4 headline would vanish with it.
+- **A parameter that was *fixed* in the fit is not in the posterior.** Pass `fixed_k` for the
+  fixed-`k` analyses, and `fixed_R_pre`/`fixed_R_post` too for the fixed-`θ` cross-checks.
+- **`cori`/`cori_so` remain validation targets**, not compared models, here as everywhere.
+
+**Never compare a filtering RAC with a smoothed one and call agreement a pass.** The estimand
+resets from a smoothed state (§5.1, §5.6); a particle filter's forward pass gives filtering
+states. `particle_filter.ParticleFilterResult` names both — `latent_paths` are the ancestral
+(smoothing) draws, `filtering_remaining_weight` is Λ(t) under the filter — so the equality check
+uses the former and the §5.6 measurement uses the latter.
+
+What Stage 4 established (`results/checks/rac_validation.md`, and the checks it summarises):
+
+- **The external validation passes exactly.** Thompson et al.'s convention differs from this
+  project's by exactly one day, `γ(t) = Λ(t − 1)`, so their eqs. (3)–(5) are this pipeline's
+  arithmetic at `k → ∞` with their Gamma posterior for `R`. Their published Équateur `R`
+  estimate is recovered (`Gamma(28, 10.65)`, mode 2.53 — Fig. S3D dashed) and so is their risk
+  curve (Fig. S3E dashed).
+- **§5.4, measured.** At `k = 0.18` and `R = 2.6` on this series, DLO's RAC sits within 10% of
+  the Poisson limit while SSE's is three to four times smaller (day 90: 0.41 vs 0.12, Poisson
+  0.44). The same `k` does far less work in DLO. The inequality behind it —
+  `−RΛ ≤ Σ_j φ(μ_j) ≤ φ(Λ)` for `φ(μ) = −k log(1 + Rμ/k)` — is universal; the *direction* of
+  the comparison with SSE is a property of a thin, spread-out profile, not a theorem, so do not
+  restate it as one.
+- **The §5.6 gap has both signs, as §5.6 predicted.** Smoothed minus filtering is strongly
+  positive early (up to +0.64 around day 2, where the filter has not yet seen the cases that
+  reveal a high infectivity) and negative after the last case (mean −0.03, worst −0.15 around
+  day 70). Report it as measured, not as a claimed direction.
 
 ### Day indexing
 
@@ -273,7 +322,13 @@ them into one:
 PMMH mixes only if the variance of the estimated log-likelihood is roughly 1–3 at the mode.
 Measure it before writing the sampler; if it can't be reached at a tractable particle count,
 record that and keep the synthetic-data tiers. `particle_mcmc.py` is validation, not a results
-path — it stays out of `rule all` and out of every tier's dependency list.
+path — it stays out of `rule all` and out of every tier's dependency list. Stage 4 already
+measured `Var(log L̂)` for SSI on the real series — see `results/checks/rac_smc_variance.csv`
+— so that go/no-go does not need re-deriving.
+
+The equality check itself lives in `scripts/run_rac_validation.py` rather than in `tests/`
+where it needs MCMC on the real series; the tests carry the same comparisons on short
+histories, which is what keeps `pixi run test` quick.
 
 ## Decisions already taken
 
@@ -308,9 +363,16 @@ Do not silently revisit these; they are argued out in the implementation plan.
   Configurable in `config/config.yaml`; `check_delay_budget` rejects any estimate whose
   variance exceeds the serial interval's.
 - **Onset-anchored forward simulators** (`forward_simulation`) are still to come in Stage 8,
-  along with the RAC/RAT calculators, the onset-anchored particle filter and the remaining §4.4
-  equivalence tests. The Stage-3 benchmark therefore has no synthetic SSE-SO arm with a known
-  truth; the truncated real series stands in as its second case.
+  along with the onset-anchored RAC/RAT calculators, the onset-anchored particle filter and the
+  remaining §4.4 equivalence tests. The Stage-3 benchmark therefore has no synthetic SSE-SO arm
+  with a known truth; the truncated real series stands in as its second case. The naive-model
+  RAC calculators, simulators and filter all landed in Stage 4 and raise `NotImplementedError`
+  pointing at Stage 8 when handed an onset-anchored model, rather than quietly doing something
+  infection-anchored.
+- **Analysis and plotting scripts** (`run_*`/`plot_*`, and the `MAIN_TARGETS` list at the top of
+  the `Snakefile`) arrive with Stage 5. `fitting.fit_model` and
+  `risk_of_additional_cases.risk_curve_from_posterior` are the two calls a run script needs;
+  `scripts/run_rac_validation.py` is a worked example of both.
 
 ## Git workflow
 

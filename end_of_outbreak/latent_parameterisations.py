@@ -435,7 +435,10 @@ def suggested_initial_values(
 
 
 def conditional_posterior(
-    *, k: float, scale: NDArray[np.float64], coupling: NDArray[np.float64]
+    *,
+    k: float | NDArray[np.float64],
+    scale: NDArray[np.float64],
+    coupling: NDArray[np.float64],
 ) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
     """``(shape, rate)`` of a marginalised latent's exact conditional posterior.
 
@@ -443,6 +446,9 @@ def conditional_posterior(
     parameters it is ``Gamma(k · scale_u, k + c_u)``, so a posterior draw of it can be
     reconstructed after the fit from a parameter draw. That is what the RAC calculators need
     in order to rebuild the state at the conditioning day.
+
+    Everything here is elementwise, so ``k`` and ``coupling`` may carry a leading draw axis
+    (against a ``scale`` that does not) and a whole posterior is converted at once.
     """
     scale = np.asarray(scale, dtype=np.float64)
     coupling = np.asarray(coupling, dtype=np.float64)

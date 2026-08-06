@@ -40,7 +40,19 @@ FIT_CORE = code(
     "latent_parameterisations",
     "fitting",
 )
-RAC_CORE = code("risk_of_additional_cases", "renewal", "delay_distributions")
+# The RAC step rebuilds the latents the fit integrated out, which needs the model's block
+# structure (`pymc_models`, `latent_parameterisations`), and -- from Stage 8, for the
+# onset-anchored models, whose RAC has no closed form -- the simulators too.
+RAC_CORE = code(
+    "risk_of_additional_cases",
+    "renewal",
+    "delay_distributions",
+    "outbreak_data",
+    "model_specifications",
+    "latent_parameterisations",
+    "pymc_models",
+    "forward_simulation",
+)
 EVIDENCE_CORE = code("model_evidence", "renewal", "delay_distributions")
 PLOT_CORE = ["scripts/utils.py"]
 

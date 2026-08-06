@@ -250,8 +250,10 @@ class LatentBlockStructure:
     incubation_design: NDArray[np.float64] | None = None
     tost_design: NDArray[np.float64] | None = None
 
-    def coupling(self, R_pre: float, R_post: float) -> NDArray[np.float64]:
-        """``c_u`` at given reproduction numbers."""
+    def coupling(
+        self, R_pre: float | NDArray[np.float64], R_post: float | NDArray[np.float64]
+    ) -> NDArray[np.float64]:
+        """``c_u`` at given reproduction numbers, broadcasting over a leading draw axis."""
         return R_pre * self.pre_coupling + R_post * self.post_coupling
 
 
@@ -411,9 +413,9 @@ def marginalised_latent_conditional(
     *,
     delays: OnsetAnchoredDelays,
     switch_day: int,
-    R_pre: float,
-    R_post: float,
-    k: float,
+    R_pre: float | NDArray[np.float64],
+    R_post: float | NDArray[np.float64],
+    k: float | NDArray[np.float64],
     latent_parameterisation: str | lp.LatentParameterisation,
     negligible_latent_threshold: float = 0.0,
 ) -> tuple[NDArray[np.int64], NDArray[np.float64], NDArray[np.float64]]:
@@ -431,6 +433,11 @@ def marginalised_latent_conditional(
     pipeline (§5.1). The reconstruction is done **once per posterior draw**, not once per
     conditioning day, so the one-fit-serves-every-day economy of §5.6 is untouched.
 
+    ``R_pre``, ``R_post`` and ``k`` may each be a scalar or a vector of posterior draws; the
+    layout of the block does not depend on them, so a whole posterior is handled in one call.
+    With vectors of length ``n_draws`` the returned ``shape`` and ``rate`` are
+    ``(n_draws, n_removed)``, which is directly what ``rng.gamma`` wants.
+
     Returns empty arrays when the parameterisation integrates nothing out, so callers can use
     it unconditionally.
     """
@@ -445,10 +452,16 @@ def marginalised_latent_conditional(
         negligible_threshold=negligible_latent_threshold,
     )
     removed = classification.marginalised
+    # A trailing axis on each parameter so that a vector of draws broadcasts against the
+    # per-latent vectors rather than being matched elementwise with them.
+    coupling = structure.coupling(
+        np.asarray(R_pre, dtype=np.float64)[..., None],
+        np.asarray(R_post, dtype=np.float64)[..., None],
+    )
     shape, rate = lp.conditional_posterior(
-        k=k,
+        k=np.asarray(k, dtype=np.float64)[..., None],
         scale=structure.scale[removed],
-        coupling=structure.coupling(R_pre, R_post)[removed],
+        coupling=coupling[..., removed],
     )
     return structure.days[removed], shape, rate
 

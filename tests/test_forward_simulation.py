@@ -27,6 +27,7 @@ process. Two routes are used, because the models differ in what "the likelihood"
 from __future__ import annotations
 
 import itertools
+from typing import Any
 
 import numpy as np
 import pytest
@@ -49,7 +50,7 @@ N_MARGINALISATION_DRAWS = 400_000
 
 
 def _simulate(model, parameters=PARAMETERS, *, seed=20260805, **overrides):
-    settings = {
+    settings: dict[str, Any] = {
         "serial_interval": SERIAL_INTERVAL,
         "n_days": N_DAYS,
         "switch_day": SWITCH_DAY,
@@ -285,6 +286,45 @@ def test_ssi_infectivity_has_mean_one_per_case():
     seeded = simulated.infectivity[:, 0]
     assert seeded.mean() == pytest.approx(cohort, rel=0.02)
     assert seeded.var() == pytest.approx(cohort / k, rel=0.05)
+
+
+def test_a_supplied_seed_infectivity_is_used_as_given():
+    """The RAC checks of §6.4 condition on a *posterior* latent path, not a redrawn prior one."""
+    supplied = np.array([3.5])
+    simulated = _simulate(
+        "ssi", n_days=2, initial_counts=np.array([1]), initial_infectivity=supplied
+    )
+    assert simulated.infectivity is not None
+    np.testing.assert_array_equal(simulated.infectivity[:, 0], 3.5)
+    # Day 1 is then Poisson(R_pre · w_1 · 3.5) exactly, which the counts must reflect.
+    expected = PARAMETERS.R_pre * SERIAL_INTERVAL[0] * supplied[0]
+    assert simulated.counts[:, 1].mean() == pytest.approx(expected, rel=0.02)
+
+
+def test_a_seed_infectivity_may_differ_between_replicates():
+    """One row per replicate is how a whole posterior block of paths is pushed through at once."""
+    supplied = np.linspace(0.5, 2.5, N_REPLICATES)[:, None]
+    simulated = _simulate(
+        "ssi", n_days=2, initial_counts=np.array([1]), initial_infectivity=supplied
+    )
+    assert simulated.infectivity is not None
+    np.testing.assert_allclose(simulated.infectivity[:, 0], supplied[:, 0])
+
+
+def test_a_seed_infectivity_must_vanish_where_there_are_no_cases():
+    with pytest.raises(ValueError, match="vanish on days with no cases"):
+        _simulate(
+            "ssi",
+            n_days=3,
+            initial_counts=np.array([1, 0]),
+            initial_infectivity=np.array([1.0, 0.5]),
+            n_replicates=5,
+        )
+
+
+def test_only_the_latent_models_take_a_seed_infectivity():
+    with pytest.raises(ValueError, match="no latent infectivity"):
+        _simulate("sse", n_days=2, initial_infectivity=np.array([1.0]), n_replicates=5)
 
 
 def test_the_other_models_carry_no_infectivity():
