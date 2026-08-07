@@ -7,6 +7,9 @@ __pycache__/
 .ty_cache/
 .pytest_cache/
 
+# VS Code
+.vscode/
+
 # pixi
 .pixi/
 

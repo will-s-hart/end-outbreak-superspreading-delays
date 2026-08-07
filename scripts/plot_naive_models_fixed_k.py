@@ -32,21 +32,17 @@ import argparse
 from pathlib import Path
 from typing import Any
 
+import figure_panels
 import matplotlib.pyplot as plt
-import numpy as np
 import pandas as pd
 import utils
 import xarray as xr
 from matplotlib.figure import Figure
 
 from end_of_outbreak import configuration, outbreak_data
-from end_of_outbreak import risk_of_additional_cases as rac
 from end_of_outbreak.model_specifications import LogNormalPrior
 
 ANALYSIS = "naive_models_fixed_k"
-
-SETTLING_THRESHOLD = 0.05
-"""The threshold whose crossing is marked on panel D; the report quotes 0.01 as well."""
 
 
 def build_figure(
@@ -65,7 +61,7 @@ def build_figure(
     grid = figure.add_gridspec(2, 3, height_ratios=[1.0, 1.2], hspace=0.6, wspace=0.35)
     models = list(curves)
 
-    _plot_reproduction_numbers(
+    figure_panels.parameter_posterior_panel(
         figure.add_subplot(grid[0, 0]),
         {model: utils.posterior_draws(posteriors[model], "R_pre") for model in models},
         prior=R_pre_prior,
@@ -74,107 +70,24 @@ def build_figure(
         letter="A",
         legend=True,
     )
-    _plot_reproduction_numbers(
+    figure_panels.parameter_posterior_panel(
         figure.add_subplot(grid[0, 1]),
         {model: utils.posterior_draws(posteriors[model], "R_post") for model in models},
         prior=R_post_prior,
         xlabel="$R_{\\mathrm{post}}$",
         title="After ERT arrival",
         letter="B",
-        legend=False,
     )
-    _plot_model_probabilities(figure.add_subplot(grid[0, 2]), evidence, models)
-    _plot_risk_curves(figure.add_subplot(grid[1, :]), curves, data)
+    figure_panels.model_probability_panel(
+        figure.add_subplot(grid[0, 2]), evidence, models, letter="C"
+    )
+    figure_panels.risk_curve_panel(figure.add_subplot(grid[1, :]), curves, data, letter="D")
 
     figure.suptitle(
         f"Équateur 2018: naive (onset-as-infection) models, $k$ fixed at {fixed_k:g}",
         fontsize=9.5,
     )
     return figure
-
-
-def _plot_reproduction_numbers(
-    ax: Any,
-    draws: dict[str, np.ndarray],
-    *,
-    prior: LogNormalPrior,
-    xlabel: str,
-    title: str,
-    letter: str,
-    legend: bool,
-) -> None:
-    """Panels A and B: one posterior density per model, over the shared prior."""
-    utils.plot_parameter_posteriors(ax, draws, prior=prior, xlabel=xlabel)
-    ax.set_title(title)
-    utils.panel_label(ax, letter)
-    if legend:
-        ax.legend(loc="upper right")
-
-
-def _plot_model_probabilities(ax: Any, evidence: dict[str, Any], models: list[str]) -> None:
-    """Panel C: the posterior model probabilities, straight from the evidence file."""
-    probabilities = {
-        model: float(evidence["posterior_model_probability"][model]) for model in models
-    }
-    utils.plot_model_probability_pie(ax, probabilities)
-    ax.set_title("Posterior model probability")
-    utils.panel_label(ax, "C")
-
-
-def _plot_risk_curves(
-    ax: Any, curves: dict[str, pd.DataFrame], data: outbreak_data.OutbreakData
-) -> None:
-    """Panel D: RAC over the conditioning days, with the onsets behind it."""
-    utils.plot_incidence(ax, data.dates, data.onsets)
-    utils.mark_thresholds(ax)
-    for model, frame in curves.items():
-        ax.plot(
-            frame["date"],
-            frame[utils.RISK_COLUMN],
-            color=utils.model_colour(model),
-            label=utils.model_label(model),
-            zorder=3,
-        )
-        settled = settling_day(frame)
-        if settled is not None:
-            ax.plot(
-                data.date_of(settled),
-                float(frame.loc[frame["day"] == settled, utils.RISK_COLUMN].iloc[0]),
-                marker="o",
-                markersize=3.5,
-                color=utils.model_colour(model),
-                zorder=4,
-            )
-    utils.mark_intervention_dates(
-        ax,
-        arrival=data.date_of(data.ert_arrival_day),
-        withdrawal=data.date_of(data.ert_withdrawal_day),
-    )
-    utils.date_axis(ax)
-    ax.set_xlim(data.dates[0], data.dates[-1])
-    ax.set_ylim(0.0, 1.0)
-    ax.set_xlabel("conditioning day $t$ (2018)")
-    ax.set_ylabel("risk of additional cases")
-    ax.set_title("Risk of at least one further case after day $t$")
-    # Mid-left: the curves sit flat at ~1 until the last observed case and the onset bars are
-    # confined to the bottom, so this is the one large region of the panel that stays empty.
-    ax.legend(loc="center left", bbox_to_anchor=(0.015, 0.55))
-    utils.panel_label(ax, "D")
-
-
-def settling_day(frame: pd.DataFrame, threshold: float = SETTLING_THRESHOLD) -> int | None:
-    """The first day a curve falls below ``threshold`` and stays there.
-
-    Delegated to :class:`~end_of_outbreak.risk_of_additional_cases.RiskCurve` rather than
-    reimplemented here, because "settles below" is a definition the report quotes and it must not
-    be able to drift between the marker on the panel and the number in the text.
-    """
-    curve = rac.RiskCurve(
-        days=np.asarray(frame["day"], dtype=np.int64),
-        risk=np.asarray(frame[utils.RISK_COLUMN], dtype=np.float64),
-        n_draws=0,
-    )
-    return curve.first_day_below(threshold)
 
 
 def main(argv: list[str] | None = None) -> None:

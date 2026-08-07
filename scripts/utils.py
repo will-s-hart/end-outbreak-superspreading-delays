@@ -13,11 +13,12 @@ Two import decisions are deliberate:
   :func:`xarray.open_datatree`. The posteriors are read directly here — a fit is an
   ``xarray.DataTree`` (``arviz.InferenceData`` is a deprecated alias for it in arviz 1.x), and
   a figure needs nothing from it but the draws of two scalars.
-- **``risk_of_additional_cases`` is imported by the plot scripts, not by this module.** They
-  need :class:`~end_of_outbreak.risk_of_additional_cases.RiskCurve.first_day_below` — the rule
-  for when a curve has settled below a threshold — and that rule must live in exactly one
-  place. It is the one tier-2 module the ``figure`` rule depends on, which is why it appears in
-  ``PLOT_CORE`` in the ``Snakefile``.
+- **``risk_of_additional_cases`` is imported by ``figure_panels``, not by this module.** A RAC
+  panel needs :class:`~end_of_outbreak.risk_of_additional_cases.RiskCurve.first_day_below` —
+  the rule for when a curve has settled below a threshold — and that rule must live in exactly
+  one place. It is the one tier-2 module the ``figure`` rule depends on, which is why it
+  appears in ``PLOT_CORE`` in the ``Snakefile``. Keeping it out of here keeps this module free
+  of PyMC too, since that is what the RAC calculators import.
 """
 
 from __future__ import annotations
@@ -132,6 +133,10 @@ def evidence_path(results_dir: str | Path) -> Path:
     return Path(results_dir) / "model_evidence.json"
 
 
+def dispersion_path(results_dir: str | Path) -> Path:
+    return Path(results_dir) / "dispersion_posteriors.json"
+
+
 def read_risk_curves(results_dir: str | Path, models: list[str]) -> dict[str, pd.DataFrame]:
     """Load one analysis's RAC curves, keyed by model, with ``date`` parsed."""
     curves = {}
@@ -165,6 +170,25 @@ def read_model_evidence(results_dir: str | Path) -> dict[str, Any]:
             f"run `snakemake {path}` (or the analysis's run script with the `evidence` "
             "subcommand) first. There is deliberately no fallback: a fabricated pie chart "
             "looks exactly like a real one."
+        )
+    with open(path) as handle:
+        return json.load(handle)
+
+
+def read_dispersion_summary(results_dir: str | Path) -> dict[str, Any]:
+    """Load the ``k`` posterior summaries and their pairwise divergences.
+
+    Same no-fallback rule as :func:`read_model_evidence`, for the same reason: the medians and
+    credible intervals a ``k`` panel puts in its legend are quoted in the report, so they must
+    be the ones the ``dispersion`` rule computed and not a summary the figure invented.
+    """
+    path = dispersion_path(results_dir)
+    if not path.exists():
+        raise FileNotFoundError(
+            f"no dispersion summary at {path}. The k panel reports posterior medians and "
+            "credible intervals, which are computed by the `dispersion` rule from "
+            f"end_of_outbreak.posterior_comparison — run `snakemake {path}` (or the analysis's "
+            "run script with the `dispersion` subcommand) first."
         )
     with open(path) as handle:
         return json.load(handle)
@@ -204,13 +228,18 @@ def plot_parameter_posteriors(
     *,
     prior: LogNormalPrior | None = None,
     xlabel: str,
+    labels: dict[str, str] | None = None,
     n_grid: int = 400,
 ) -> None:
     """Overlaid posterior densities for one parameter, one line per model.
 
     The prior is drawn too when given. It is not decoration: the posterior model probabilities
-    of panel C compare the models *as specified*, priors included (§6.5), so a reader needs to
-    see how much of each posterior is prior.
+    of the model-probability panel compare the models *as specified*, priors included (§6.5), so
+    a reader needs to see how much of each posterior is prior.
+
+    ``labels`` overrides the legend entry for a model, which is how the ``k`` panel of Fig. 2
+    carries each posterior's median and credible interval. Those numbers come from the file the
+    ``dispersion`` rule wrote; this module summarises nothing itself.
     """
     # A weakly identified R_pre has a long right tail — the 99.9th percentile of the Équateur
     # posterior is near 9 — and drawing out to it squashes the region the reader is comparing.
@@ -235,7 +264,7 @@ def plot_parameter_posteriors(
             grid,
             positive_density(samples, grid=grid),
             color=model_colour(model),
-            label=model_label(model),
+            label=(labels or {}).get(model, model_label(model)),
             zorder=2,
         )
     ax.set_xlim(grid[0], grid[-1])
@@ -276,7 +305,11 @@ def plot_model_probability_pie(
         handletextpad=0.5,
         labelspacing=0.3,
     )
+    # An equal aspect shrinks the axes box to a square, and matplotlib centres the result in its
+    # grid cell. Anchoring north instead keeps the title and the panel letter level with the
+    # panels beside it, which is otherwise wrong wherever the cell is taller than it is wide.
     ax.set_aspect("equal")
+    ax.set_anchor("N")
 
 
 def _probability_text(probability: float, minimum_label: float) -> str:

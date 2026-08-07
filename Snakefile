@@ -5,10 +5,11 @@
 #
 # Three tiers per analysis, so a change at one tier never re-runs the tiers above it:
 #
-#   1. fit      results/<analysis>/<model>_posterior.nc     minutes-hours (MCMC)
-#   2. rac      results/<analysis>/<model>_rac.csv          seconds-minutes
-#      evidence results/<analysis>/model_evidence.json
-#   3. figure   figures/<analysis>/*.pdf, *.png             seconds
+#   1. fit        results/<analysis>/<model>_posterior.nc         minutes-hours (MCMC)
+#   2. rac        results/<analysis>/<model>_rac.csv              seconds-minutes
+#      evidence   results/<analysis>/model_evidence.json
+#      dispersion results/<analysis>/dispersion_posteriors.json   (analyses that estimate k)
+#   3. figure     figures/<analysis>/*.pdf, *.png                 seconds
 #
 # Tier 1 carries the model in a wildcard rather than fitting a whole analysis at once, so
 # re-fitting SSE-SO does not re-fit SSI.
@@ -31,10 +32,17 @@ def code(*modules):
     return [f"{PKG}/{m}.py" for m in modules]
 
 
+# The run scripts are a docstring and an analysis name apiece: the whole body of every
+# `fit`/`rac`/`evidence`/`dispersion` step lives in `scripts/analysis_driver.py`, so every
+# results tier depends on it exactly as it does on the package modules below. It cannot live in
+# `scripts/utils.py`, which `PLOT_CORE` names -- results-driving logic there would make a
+# restyle a reason to re-run MCMC.
+RUN_DRIVER = ["scripts/analysis_driver.py"]
+
 # `configuration` parses config/config.yaml into the delay triple, the priors and the sampler
 # settings, so every tier depends on it: a change to how a config value is read changes results
 # exactly as a change to the value itself would.
-FIT_CORE = code(
+FIT_CORE = RUN_DRIVER + code(
     "configuration",
     "outbreak_data",
     "delay_distributions",
@@ -47,7 +55,7 @@ FIT_CORE = code(
 # The RAC step rebuilds the latents the fit integrated out, which needs the model's block
 # structure (`pymc_models`, `latent_parameterisations`), and -- from Stage 8, for the
 # onset-anchored models, whose RAC has no closed form -- the simulators too.
-RAC_CORE = code(
+RAC_CORE = RUN_DRIVER + code(
     "configuration",
     "risk_of_additional_cases",
     "renewal",
@@ -58,7 +66,7 @@ RAC_CORE = code(
     "pymc_models",
     "forward_simulation",
 )
-EVIDENCE_CORE = code(
+EVIDENCE_CORE = RUN_DRIVER + code(
     "configuration",
     "model_evidence",
     "renewal",
@@ -69,6 +77,16 @@ EVIDENCE_CORE = code(
     "pymc_models",
     "fitting",
 )
+# The `k` posteriors and the divergences between them, for the analyses that estimate `k`.
+# Nothing here rebuilds a model: the summaries are of draws a fit already produced.
+DISPERSION_CORE = RUN_DRIVER + code(
+    "configuration",
+    "posterior_comparison",
+    "outbreak_data",
+    "delay_distributions",
+    "model_specifications",
+    "fitting",
+)
 # The figure tier is deliberately the narrowest list. A plotting script reads what tier 2 wrote
 # and decides what it looks like; the one piece of *method* it borrows is
 # `RiskCurve.first_day_below`, the rule for when a curve has settled below a threshold, which
@@ -77,15 +95,15 @@ EVIDENCE_CORE = code(
 # a figure without first changing a results file.
 PLOT_CORE = code(
     "configuration", "outbreak_data", "model_specifications", "risk_of_additional_cases"
-) + ["scripts/utils.py"]
+) + ["scripts/utils.py", "scripts/figure_panels.py"]
 
 ANALYSES = config["analyses"]
 ONSETS_CSV = config["shared"]["data_file"]
 
-# Analyses whose run and plot scripts exist. Stage 7 adds the estimated-`k` naive analysis and
-# Stage 9 the two onset-anchored ones; until then, naming them in a target would only produce a
-# missing-input error that says nothing useful.
-IMPLEMENTED_ANALYSES = ["naive_models_fixed_k"]
+# Analyses whose run and plot scripts exist. Stage 9 adds the two onset-anchored ones; until
+# then, naming them in a target would only produce a missing-input error that says nothing
+# useful.
+IMPLEMENTED_ANALYSES = ["naive_models_fixed_k", "naive_models_estimated_k"]
 
 
 # Everything a rule's result depends on must appear in its `params:`. The default profile
@@ -116,6 +134,18 @@ def models_of(analysis):
     return ANALYSES[analysis]["models"]
 
 
+def estimates_dispersion(analysis):
+    """Whether this analysis gives `k` a prior rather than holding it at a literature value."""
+    return ANALYSES[analysis].get("fixed_k") is None
+
+
+def dispersion_summary_of(wildcards):
+    """The `k` summary file, for the analyses that have one; nothing for the fixed-`k` ones."""
+    if not estimates_dispersion(wildcards.analysis):
+        return []
+    return [f"results/{wildcards.analysis}/dispersion_posteriors.json"]
+
+
 def posteriors_of(wildcards):
     return [
         f"results/{wildcards.analysis}/{model}_posterior.nc"
@@ -134,8 +164,8 @@ def racs_of(wildcards):
 # Targets
 # ---------------------------------------------------------------------------------------
 
-# The main figures. Grows with `IMPLEMENTED_ANALYSES`; the supplementary figures and the
-# compiled report join it at Stage 10.
+# One main figure per implemented analysis. Grows with `IMPLEMENTED_ANALYSES`; the §5.5 RAT
+# supplement of the onset-anchored analyses and the compiled report join it at Stages 9 and 10.
 MAIN_TARGETS = [
     f"figures/{analysis}/{analysis}.{extension}"
     for analysis in IMPLEMENTED_ANALYSES
@@ -222,6 +252,30 @@ rule evidence:
         " --output {output}"
 
 
+# The `k` posteriors of the analyses that estimate it, and every pairwise divergence between
+# them: the models share a prior on `k` by design (§6.2), so where their posteriors end up
+# apart is aim 2 measured rather than demonstrated. The numbers the report quotes -- and the
+# medians the `k` panel puts in its legend -- come from here and nowhere else.
+rule dispersion:
+    input:
+        posteriors=posteriors_of,
+        data=ONSETS_CSV,
+        config=CONFIG_FILE,
+        script=lambda wildcards: ANALYSES[wildcards.analysis]["run_script"],
+        code=DISPERSION_CORE,
+    output:
+        "results/{analysis}/dispersion_posteriors.json",
+    params:
+        analysis=lambda wildcards: analysis_params(wildcards.analysis),
+        shared=SHARED_PARAMS,
+    shell:
+        "python {input.script} dispersion"
+        " --posteriors {input.posteriors}"
+        " --data {input.data}"
+        " --config {input.config}"
+        " --output {output}"
+
+
 # ---------------------------------------------------------------------------------------
 # Tier 3 -- figures
 # ---------------------------------------------------------------------------------------
@@ -232,6 +286,7 @@ rule figure:
         racs=racs_of,
         posteriors=posteriors_of,
         evidence="results/{analysis}/model_evidence.json",
+        dispersion=dispersion_summary_of,
         data=ONSETS_CSV,
         config=CONFIG_FILE,
         script=lambda wildcards: ANALYSES[wildcards.analysis]["plot_script"],
@@ -272,8 +327,13 @@ rule results:
             for model in models_of(analysis)
         ],
         [f"results/{analysis}/model_evidence.json" for analysis in IMPLEMENTED_ANALYSES],
+        [
+            f"results/{analysis}/dispersion_posteriors.json"
+            for analysis in IMPLEMENTED_ANALYSES
+            if estimates_dispersion(analysis)
+        ],
 
 
 rule figures:
     input:
-        [f"figures/{analysis}/{analysis}.pdf" for analysis in IMPLEMENTED_ANALYSES],
+        MAIN_TARGETS,

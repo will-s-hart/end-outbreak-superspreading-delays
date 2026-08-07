@@ -6,38 +6,47 @@ in this tree — see `validation/` for benchmarks and cross-checks.
 
 | Script | Tier | Writes |
 | --- | --- | --- |
+| `analysis_driver.py` | 1 and 2 | — the whole body of every `run_*.py`, shared |
 | `run_naive_models_fixed_k.py` | 1 and 2 | `results/naive_models_fixed_k/{model}_posterior.nc`, `..._rac.csv`, `model_evidence.json` |
+| `run_naive_models_estimated_k.py` | 1 and 2 | the same, plus `results/naive_models_estimated_k/dispersion_posteriors.json` |
 | `plot_naive_models_fixed_k.py` | 3 | `figures/naive_models_fixed_k/*.pdf`, `*.png` |
+| `plot_naive_models_estimated_k.py` | 3 | the same for `naive_models_estimated_k` |
+| `figure_panels.py` | 3 | the panels the analysis figures are assembled from |
 | `utils.py` | — | presentation-only helpers shared by the plotting scripts |
 
-Stage 7 adds the estimated-`k` naive analysis and Stage 9 the two onset-anchored ones. Add each
-to `IMPLEMENTED_ANALYSES` at the top of the `Snakefile` as it lands — that list, not the config,
-is what `rule all` and the convenience aggregates are built from, so an analysis whose scripts do
-not yet exist cannot turn a target into a missing-input error.
+Stage 9 adds the two onset-anchored analyses. Add each to `IMPLEMENTED_ANALYSES` at the top of
+the `Snakefile` as it lands — that list, not the config, is what `rule all` and the convenience
+aggregates are built from, so an analysis whose scripts do not yet exist cannot turn a target
+into a missing-input error. Stage 9 also brings back the `supplementary_figure` rule, for the
+§5.5 RAT panel; Stage 7 had one for a day, until Fig. 2 grew to five panels and stopped
+displacing anything.
 
 Conventions, all of them load-bearing:
 
 - **Compute-and-save and load-and-plot are separate scripts**, so restyling a figure never
-  re-runs MCMC. The run scripts carry one subcommand per tier (`fit`, `rac`, `evidence`) and
-  each Snakemake rule invokes exactly one of them.
+  re-runs MCMC. The run scripts carry one subcommand per tier (`fit`, `rac`, `evidence`, and
+  `dispersion` where `k` is estimated) and each Snakemake rule invokes exactly one of them.
 - **Named for what they do**, never for figure numbers.
 - **`argparse`, invoked from `shell:`**, never through Snakemake's `script:` directive, so each
   stays runnable and debuggable on its own.
 - **Config parsing is in the package** (`end_of_outbreak.configuration`), not here, because the
   validation scripts need it too and because the Snakemake rules have to be able to name it in
-  their `input:` lists. `utils.py` is for figure styling and similar — things whose only effect
-  is on tier 3.
+  their `input:` lists. `utils.py` and `figure_panels.py` are for figure styling and panel
+  drawing — things whose only effect is on tier 3.
 - **A plotting script computes nothing.** Every number it draws was written to `results/` by a
-  tier-2 rule. The one exception is deliberate and documented in `utils.py`: the plot scripts
-  borrow `RiskCurve.first_day_below` from the package, because "the day a curve settles below a
-  threshold" is a definition the report quotes and must not be able to drift between the marker
-  on the panel and the number in the text.
-- **A missing input fails loudly.** `utils.read_model_evidence` raises rather than falling back
-  when `model_evidence.json` is absent: a pie chart of placeholder numbers is indistinguishable
-  from a real one on the page.
+  tier-2 rule, down to the medians and credible intervals in the `k` panel's legend. The one
+  exception is deliberate and documented: `figure_panels` borrows `RiskCurve.first_day_below`
+  from the package, because "the day a curve settles below a threshold" is a definition the
+  report quotes and must not be able to drift between the marker on the panel and the number in
+  the text.
+- **A missing input fails loudly.** `utils.read_model_evidence` and `read_dispersion_summary`
+  raise rather than falling back when their file is absent: a pie chart of placeholder numbers
+  is indistinguishable from a real one on the page.
 
-The four run scripts differ only in the analysis they name and in what their docstrings say
-about it. That duplication is deliberate for now — factor a shared driver when the second one
-lands in Stage 7 and the real shape of it is visible, not before. Whatever comes out of that,
-it cannot live in `utils.py`: that file is in `PLOT_CORE`, and putting fit-driving logic in it
-would make every restyle a reason to re-run MCMC.
+**The run scripts are a docstring and an analysis name apiece** — Stage 7 factored the shared
+body into `analysis_driver.py`, once the second analysis made its real shape visible. It could
+not go in `utils.py`: that file is in `PLOT_CORE`, and putting fit-driving logic in it would
+make every restyle a reason to re-run MCMC. `analysis_driver.py` is named instead in `FIT_CORE`,
+`RAC_CORE`, `EVIDENCE_CORE` and `DISPERSION_CORE`. The plot scripts stay one per analysis,
+because the panel *arrangement* is what differs between figures; what they share is
+`figure_panels.py`.
