@@ -1,18 +1,11 @@
 % End-of-outbreak decision-making under superspreading and onset-date delays.
 %
-% Methods and results. Build with the Snakemake `report` rule, or by hand:
+% Build with the Snakemake `report` rule, or by hand:
 %
 %     latexmk -pdf -cd report/report.tex
 %
-% EVERY NUMBER IN THIS DOCUMENT IS \resultnum{...}, and nothing else. The values come from
-% ../results/report_numbers.tex, which scripts/run_report_numbers.py generates from the files
-% the tier-2 pipeline rules wrote. Do not type a result into the prose: an unknown key is a
-% compile error, but a stale literal is invisible. The only numbers written out by hand are
-% the ones that are *inputs* rather than results -- and those are macros too, so that changing
-% config/config.yaml changes the methods section.
-%
-% Appendix B is where the repository lives. Keep implementation detail there and out of the
-% methods: the body should read as a paper, not as a description of this codebase.
+% Numerical results are expanded from ../results/report_numbers.tex so that the text and figures
+% remain synchronised with the analysis outputs.
 
 \documentclass[11pt,a4paper]{article}
 
@@ -30,9 +23,8 @@
 \usepackage{xcolor}
 \definecolor{linkcolour}{rgb}{0.10,0.25,0.55}
 \usepackage[colorlinks=true,allcolors=linkcolour]{hyperref}
-% The prose carries long unbreakable tokens -- repository paths and \resultnum expansions such
-% as "0.38 (0.23--0.63)" -- so give the line breaker a little room rather than leaving overfull
-% boxes in the margin.
+% Result expansions can be long and unbreakable, so give the line breaker enough flexibility to
+% avoid overfull boxes.
 \emergencystretch=1.5em
 
 \setlist[itemize]{itemsep=2pt,topsep=4pt,parsep=0pt}
@@ -41,10 +33,6 @@
 \newtheorem{proposition}{Proposition}
 \theoremstyle{definition}
 \newtheorem*{remark}{Remark}
-
-% Repository paths, which are long and would otherwise overflow the measure. \nolinkurl breaks
-% them at the slashes and takes underscores verbatim, so a path is written exactly as it is.
-\newcommand{\file}[1]{\texttt{\nolinkurl{#1}}}
 
 % --- the results macros --------------------------------------------------------------------
 %
@@ -104,21 +92,21 @@
 
 \begin{abstract}
 \noindent
-Deciding when an outbreak is over means estimating the probability that further cases will
-follow if control measures are relaxed. That estimate depends on two modelling choices that are
-usually made implicitly: the mechanism through which heterogeneity in transmission is
-represented, and whether the observed symptom-onset series is read as a series of infections.
-We compare five renewal models of the 2018 \'Equateur Province Ebola outbreak, all driven by
-the same onset-to-onset serial interval, and evaluate under each the risk of additional cases
-(RAC) after a given day. Overdispersion acting at the level of the day, the transmission event
-and the individual gives materially different risks at the same nominal dispersion parameter,
-and the three mechanisms disagree about what that parameter should be when it is estimated. In
-models that anchor transmission to the infector's own onset and represent the incubation period
-explicitly, both decision thresholds are crossed 8--12 days earlier than under the
-infection-anchored counterparts, and the post-intervention reproduction number is roughly a
-third of the naive estimate. Separating the risk of additional \emph{cases} from the risk of
-additional \emph{transmission} quantifies the contribution of individuals already infected but
-not yet symptomatic, a distinction the infection-anchored models cannot represent.
+Deciding when an outbreak is over requires estimating the probability that further cases will
+occur if control measures are relaxed. This estimate depends on two often-implicit choices: how
+transmission heterogeneity is represented and whether symptom-onset dates are treated as if they
+were infection dates. We compared five renewal models of the 2018 \'Equateur Province Ebola
+outbreak, all calibrated to the same onset-to-onset serial interval, and calculated the risk of
+additional cases (RAC) after each day. Models placing overdispersion at the level of the day,
+transmission event, or individual produced materially different risks at the same nominal
+dispersion parameter and inferred different values when that parameter was estimated. Models
+that anchored transmission to the infector's symptom onset and represented incubation explicitly
+crossed both decision thresholds 8--12 days earlier than their infection-anchored counterparts;
+they also inferred substantially smaller post-intervention reproduction numbers. Finally,
+distinguishing additional cases from additional transmission isolated the contribution of people
+already infected but not yet symptomatic---a component that infection-anchored models cannot
+represent. End-of-outbreak assessments therefore depend not only on the amount of transmission
+heterogeneity, but also on its mechanism and on the time scale to which transmission is anchored.
 \end{abstract}
 
 % =============================================================================================
@@ -126,21 +114,21 @@ not yet symptomatic, a distinction the infection-anchored models cannot represen
 \label{sec:introduction}
 % =============================================================================================
 
-An end-of-outbreak declaration is a decision under uncertainty: interventions are withdrawn on
-the judgement that the probability of further cases has become acceptably small. The standard
-tool for that judgement is a renewal model fitted to the observed case series and projected
-forward under a counterfactual in which control is relaxed. Two modelling choices inside that
-procedure are rarely examined.
+An end-of-outbreak declaration is a decision under uncertainty: interventions are withdrawn
+when the probability of further cases is judged acceptably small. Renewal models provide a
+natural basis for that decision by linking observed incidence to past transmission and projecting
+forward under relaxed control. Two choices within these models are seldom examined together.
 
 \paragraph{The mechanism of overdispersion.} Transmission of Ebola virus disease, like that of
 many pathogens, is highly heterogeneous, and this is usually represented by a single dispersion
-parameter $k$. But models can share a mean--variance relationship at the population level while
+parameter $k$. Models can share a mean--variance relationship at the population level while
 differing in \emph{where} the excess variance sits --- in a day's aggregate incidence, in each
 transmission event, or in each infected individual. Those are different statements about the
 world, and we show they imply different end-of-outbreak risks. They also make $k$ a different
 quantity in each case, so a literature estimate obtained under one mechanism is not portable to
-another: transplanting the individual-level value $k = \resultnum{naivemodelsfixedk.fixedk}$ into
-a day-level model is a category error, and one that has been made.
+another. In particular, an individual-level estimate such as
+$k = \resultnum{naivemodelsfixedk.fixedk}$ does not retain its interpretation in a day-level
+incidence model.
 
 \paragraph{Onset dates are not infection dates.} Renewal models are routinely fitted with a
 symptom-onset time series substituted directly for an infection time series. This conflates two
@@ -149,14 +137,14 @@ about \resultnum{delays.incubation.mean} days. We quantify the consequences by c
 infection-anchored models with explicitly onset-anchored counterparts, in which transmission is
 referenced to the infector's own onset and the incubation period is modelled.
 
-We compare five models on a single, well-documented outbreak, all driven by the same
-onset-to-onset serial interval so that the comparison isolates mechanism and anchoring rather
-than confounding either with a different assumed interval. Section~\ref{sec:data} describes the
-data and delay distributions, Section~\ref{sec:models} the models,
-Section~\ref{sec:risk} the risk estimand and its closed forms, and
-Section~\ref{sec:inference} the inference. Section~\ref{sec:results} reports four analyses and a
-supplementary comparison. Section~\ref{sec:sensitivity} lists the sensitivity analyses the
-design calls for; none has been run, and there is no discussion section at this stage.
+We compare five models using the 2018 \'Equateur Province Ebola outbreak. All use the same
+onset-to-onset serial interval, allowing differences to be attributed to transmission mechanism
+and temporal anchoring rather than to different interval assumptions. We first compare three
+infection-anchored mechanisms with the dispersion fixed and estimated, then compare event- and
+individual-level models with onset-anchored counterparts. The primary estimand is the risk of
+additional cases; a supplementary analysis separates it from the risk of additional
+transmission. Sensitivity analyses needed to assess the robustness of these comparisons are
+specified separately.
 
 % =============================================================================================
 \section{Data and delay distributions}
@@ -191,9 +179,8 @@ days from the first observed onset:
 The analysis window is days $0$--$\resultnum{data.withdrawalday}$, i.e.\
 \resultnum{data.days} days, with \resultnum{data.preertcases} cases before the ERT arrived and
 \resultnum{data.postertcases} after. The series is padded with zero counts from the last
-observed onset to the end of the window. Those zeros are not cosmetic: they are the evidence
-that drives the risk down, and the estimand is undefined over the decision period without them.
-No under-reporting adjustment is made.
+observed onset to the end of the window. These case-free days provide the evidence that drives
+the estimated risk down. No adjustment is made for under-reporting.
 
 Day~$0$ is treated as an initial condition in every model, so likelihoods run over days
 $1,\dots,\resultnum{data.withdrawalday}$. Conditioning on a single imported index case asserts
@@ -202,30 +189,30 @@ is mild --- the renewal recursion simply starts from one case. For the onset-anc
 is stronger, because it also asserts an \emph{empty incubation pipeline} at day~$0$: anyone
 infected shortly before the index case's onset would contribute onsets in the first weeks that
 the model can explain only as transmission from the index case, inflating $\Rpre$. The
-onset-anchored models are therefore the ones exposed to a mis-identified index case
-(Section~\ref{sec:sensitivity}, item~5).
+onset-anchored models are therefore more sensitive to whether the first observed case is the true
+epidemiological index case.
 
 \subsection{Serial interval}
 \label{sec:serial-interval}
 
-Two estimates are available for this outbreak. The \emph{generic} Ebola estimate --- a
-discretised gamma with mean \resultnum{delays.serialinterval.mean}\,d and standard deviation
-\resultnum{delays.serialinterval.sd}\,d --- is used throughout, for all five models. The
-\emph{outbreak-specific} estimate, with mean
+We use a generic Ebola serial-interval estimate, represented by a discretised gamma distribution
+with mean \resultnum{delays.serialinterval.mean}\,d and standard deviation
+\resultnum{delays.serialinterval.sd}\,d, in all five models. An outbreak-specific estimate fitted
+to contact-traced pairs from this outbreak has mean
 \resultnum{delays.alternativeserialinterval.mean}\,d and standard deviation
-\resultnum{delays.alternativeserialinterval.sd}\,d and fitted to contact-traced pairs from this
-outbreak, is retained only for a sensitivity analysis.
+\resultnum{delays.alternativeserialinterval.sd}\,d.
 
-The reason for the choice is the variance budget of Section~\ref{sec:decomposition}. Splitting
+We selected the generic estimate because it is compatible with the variance budget of
+Section~\ref{sec:decomposition}. Splitting
 an onset-to-onset interval into an incubation period and a time-from-onset-to-transmission
 (TOST) delay requires the two variances to sum to the serial interval's. The generic estimate
 has variance \resultnum{delays.serialinterval.variance}\,d$^2$, which comfortably accommodates
 standard published Ebola incubation estimates. The outbreak-specific estimate has variance
 \resultnum{delays.alternativeserialinterval.variance}\,d$^2$, \emph{smaller} than the incubation
 variance alone (\resultnum{delays.incubation.variance}\,d$^2$), and is therefore structurally
-inadmissible for the onset-anchored models. That incompatibility is itself informative about how
-much structure the decomposition imposes, and it is why the outbreak-specific sensitivity
-analysis can be run only for the infection-anchored models.
+inadmissible for the onset-anchored models under the assumed independent delay decomposition.
+Sensitivity to the outbreak-specific estimate can therefore be assessed only for the
+infection-anchored models.
 
 \subsection{Discretisation, indexing and the decomposition}
 \label{sec:decomposition}
@@ -281,16 +268,15 @@ The incubation period is fixed from a published Ebola estimate --- mean
 variance, here mean \resultnum{delays.tost.mean}\,d and standard deviation
 \resultnum{delays.tost.sd}\,d. A negative residual variance would make the incubation estimate
 inadmissible against the serial interval. Discretising and then convolving is not quite the same
-operation as convolving and then discretising, so the decomposition is verified numerically: the
+operation as convolving and then discretising, so we verified the decomposition numerically: the
 discrete convolution $\ftost * \finc$ differs from the discretised target $w$ by
 \resultnum{delays.discrepancy} in total variation. All delays are truncated at lag
 \resultnum{delays.maxlag}, the length of the analysis window, so nothing is truncated within it.
 
 \begin{remark}
 The convolution is faithful, but \emph{how} the mean and variance are split between incubation
-and TOST is an assumption and is not identified by the serial interval alone. Since it is
-exactly this split that the onset-anchored models exploit, Section~\ref{sec:sensitivity},
-item~2, bounds how much of the onset-anchoring result depends on it.
+and TOST is assumed rather than identified by the serial interval alone. The sensitivity of the
+onset-anchoring results to this decomposition must therefore be assessed explicitly.
 \end{remark}
 
 % =============================================================================================
@@ -301,8 +287,8 @@ item~2, bounds how much of the onset-anchoring result depends on it.
 \subsection{Notation}
 \label{sec:notation}
 
-Let $C_t$ be the observed count on day $t$. The three \emph{infection-anchored} (``naive'')
-models set $I_t := C_t$, reading onset dates as infection dates --- the practice under study.
+Let $C_t$ be the observed count on day $t$. The three \emph{infection-anchored} models set
+$I_t := C_t$, reading onset dates as infection dates --- the practice under study.
 The two \emph{onset-anchored} models set $D_t := C_t$ and treat onsets as onsets, with
 infections and onsets separated by the incubation period. The reproduction number $R_t$ takes
 the value $\Rpre$ before the ERT arrives and $\Rpost$ from its arrival onwards
@@ -320,10 +306,11 @@ mean $\alpha/\beta$.
 \subsection{Infection-anchored models}
 \label{sec:naive-models}
 
-All four infection-anchored models share one generative skeleton. Cases beget cases through the
-serial interval: an individual infected on day $u$ produces secondary infections that appear on
-day $u+\ell$ with probability $w_\ell$, and the reproduction number in force on the day a
-secondary case appears sets how many of them to expect. Write
+The Poisson baseline and the three compared infection-anchored models share one generative
+skeleton. Cases beget cases through the serial interval: an individual infected on day $u$
+produces secondary infections that appear on day $u+\ell$ with probability $w_\ell$, and the
+reproduction number in force on the day a secondary case appears sets their expected number.
+Write
 \begin{equation}
   \lambda_t = \sum_{s\ge 1} w_s I_{t-s}
   \label{eq:naive-foi}
@@ -331,7 +318,11 @@ secondary case appears sets how many of them to expect. Write
 for the force of infection driving day $t$. What distinguishes the models is the offspring law
 --- where, if anywhere, the excess variance sits.
 
-\paragraph{\cori{} --- the Poisson baseline.} An individual infected on day $u$ generates, at
+\paragraph{From transmission to observations.} Infection and symptom onset are identified, so
+$I_t=C_t$. The transmission law for $I_t$ is therefore also the likelihood for the observed
+daily counts; no incubation step intervenes.
+
+\paragraph{Poisson baseline: \cori{}.} An individual infected on day $u$ generates, at
 each lag $\ell$ and independently of every other, a Poisson number of offspring with mean
 $R_{u+\ell}w_\ell$. Poisson superposition then gives the day-$t$ total as
 \begin{equation}
@@ -339,24 +330,9 @@ $R_{u+\ell}w_\ell$. Poisson superposition then gives the day-$t$ total as
   \label{eq:cori}
 \end{equation}
 This is the standard renewal model of Cori et al.\ (2013) and the model underlying most published
-end-of-outbreak risk calculations. It has no dispersion parameter, and its natural and
-inference-convenient forms coincide.
+end-of-outbreak risk calculations. It has no dispersion parameter.
 
-\paragraph{\dlo{} --- day-level overdispersion.} The negative binomial is applied directly to the
-day's aggregate incidence, with the same dispersion on every day:
-\begin{equation}
-  \text{\dlo{}}: \qquad
-  I_t \mid \lambda_t \sim \NB\!\left(\text{mean}=R_t\lambda_t,\ \text{disp}=k\right).
-  \label{eq:dlo}
-\end{equation}
-This model has no per-individual reading at all. The excess variance is a property of the day
-rather than of anybody in it, and it does not scale with how many people are infectious --- so
-$k$ here is a statement about day-to-day variability in aggregate incidence, not about how
-unequally individuals transmit. That is the defining feature, and the reason the same numerical
-$k$ means something quite different here than in the two models below. Its natural and
-inference-convenient forms also coincide, and the likelihood is closed form.
-
-\paragraph{\sse{} --- superspreading events.} The offspring law is again negative binomial, but
+\paragraph{Transmission-event heterogeneity: \sse{}.} The offspring law is negative binomial,
 with a dispersion that \emph{does} scale with the force of infection:
 \begin{equation}
   \text{\sse{}}: \qquad
@@ -369,19 +345,18 @@ the success probability $k/(k+R_t)$, which does not depend on $\ell$, so by nega
 closure they pool into exactly \eqref{eq:sse}, and each individual's own offspring total is
 $\NB(R,k)$. The decomposition is used again in Section~\ref{sec:naive-risk}.
 
-For inference, \eqref{eq:sse} is un-marginalised into its Poisson--Gamma representation,
+Equivalently, \eqref{eq:sse} has the Poisson--Gamma representation
 \begin{equation}
   \tilde\lambda_t \mid \lambda_t \sim \Gam\!\left(k\lambda_t,\ k\right),
   \qquad
   I_t \mid \tilde\lambda_t \sim \Pois\!\left(R_t\tilde\lambda_t\right),
   \label{eq:sse-convenient}
 \end{equation}
-in which the day's transmission opportunity is inflated or deflated by a fresh Gamma factor. For
-\sse{} this is optional --- the marginal \eqref{eq:sse} is closed form, making \sse{} the only
-one of the five compared models that needs no latent variables --- but the same representation is
-what makes \sseso{} tractable below.
+in which the day's transmission opportunity is inflated or deflated by a fresh Gamma factor.
+The marginal form \eqref{eq:sse} is used directly for \sse{}; the mixture representation is
+needed to define its onset-anchored counterpart below.
 
-\paragraph{\ssi{} --- superspreading individuals.} Heterogeneity is attached to people rather
+\paragraph{Individual heterogeneity: \ssi{}.} Heterogeneity is attached to people rather
 than to occasions. Each infected individual carries a latent infectivity drawn independently from
 $\Gam(k,k)$, with mean $1$ and variance $1/k$, so the aggregate infectivity of the day-$t$ cohort
 is $\Gam(kI_t,k)$ and infections arise as a Poisson process driven by past infectivity:
@@ -397,8 +372,20 @@ is $\Gam(kI_t,k)$ and infections arise as a Poisson process driven by past infec
 Here $I_t = 0$ forces $Y_t = 0$. Marginally each individual's offspring total is $\NB(R,k)$, the
 same as under \sse{} --- the two models are calibrated to the same individual-level offspring
 distribution and differ only in mechanism. But the $Y_t$ cannot be integrated out of the joint
-law, so \eqref{eq:ssi} is both the natural and the inference-convenient form. On this series
-\ssi{} carries \resultnum{naivemodelsfixedk.ssi.latents.total} latent infectivities.
+law and must be inferred with the other model parameters.
+
+\paragraph{Day-level heterogeneity: \dlo{}.} Unlike the three families above, \dlo{} has no
+onset-anchored counterpart in this study. The negative binomial is applied directly to the day's
+aggregate incidence, with the same dispersion on every day:
+\begin{equation}
+  \text{\dlo{}}: \qquad
+  I_t \mid \lambda_t \sim \NB\!\left(\text{mean}=R_t\lambda_t,\ \text{disp}=k\right).
+  \label{eq:dlo}
+\end{equation}
+Its excess variance is a property of the day and does not scale with the number of infectious
+people. Thus $k$ describes day-to-day variation in aggregate incidence rather than inequality in
+individual transmission, and the same numerical value has a different meaning here than in
+\sse{} or \ssi{}.
 
 \begin{remark}[The Poisson limit]
 \label{rmk:naive-limit}
@@ -416,25 +403,26 @@ unobserved infection time, which is appropriate for a disease with negligible pr
 transmission. Two things change. The serial interval is replaced by the TOST distribution, so the
 force of infection is a weighted sum of past \emph{onset} cohorts; and infection and onset become
 distinct events, separated by the incubation period. Each of the three models below is the exact
-onset-anchored counterpart of one of \eqref{eq:cori}, \eqref{eq:sse} and \eqref{eq:ssi}.
+onset-anchored counterpart of one of \eqref{eq:cori}, \eqref{eq:sse} and \eqref{eq:ssi}, and is
+presented in the same order. \dlo{} is omitted because no onset-anchored day-level model is
+compared.
 
-Let $J_t$ denote the number of infections on day $t$ and $D_t$ the number of onsets. In all three
-models the day-$u$ infections are carried forward to their onset days by independent incubation
-draws,
+\paragraph{From transmission to observations.} Let $J_t$ denote the number of infections on day
+$t$ and $D_t=C_t$ the number of observed onsets. In all three models, day-$u$ infections are
+carried forward to their onset days by independent incubation draws,
 \begin{equation}
   (N_{u,a})_{a\ge1} \mid J_u \sim \mathrm{Multinomial}\bigl(J_u,\ (\finc_a)\bigr),
   \qquad
   D_t = \sum_{a\ge1} N_{t-a,a},
   \label{eq:incubation-split}
 \end{equation}
-and only the onsets are observed: the infection counts $J_t$ and their allocations $N_{u,a}$ are
-latent. That latent block is large, discrete and unnecessary, because it can be integrated out
-exactly.
+and only the onsets are observed. The infection counts $J_t$ and allocations $N_{u,a}$ can be
+integrated out exactly.
 
 \begin{proposition}[Onsets alone suffice]
 \label{prop:equivalence}
 Suppose that, conditional on a non-negative day-$t$ rate $E_t$ that is a function of
-$D_{0:t-1}$ and of any latent variables attached to days $u < t$, the infections satisfy
+$D_{0:t}$ and of any latent variables attached to days $u \le t$, the infections satisfy
 $J_t \mid E_t \sim \Pois(E_t)$, and that they are allocated to onset days by
 \eqref{eq:incubation-split}. Then that model and
 \begin{equation}
@@ -449,11 +437,11 @@ The proof is in Appendix~\ref{app:equivalence}. It rests on Poisson thinning, wh
 multinomial split \eqref{eq:incubation-split} into independent Poisson parts, and on Poisson
 superposition, which recombines them into \eqref{eq:onset-step}; the same thinning argument
 supplies the incubation pipeline of Section~\ref{sec:onset-risk}. The hypothesis covers all three
-models: two have Poisson offspring outright, and \sseso{}'s negative binomial is Poisson
-conditional on its own Gamma factor, exactly as in \eqref{eq:sse-convenient}. Each model below is
-therefore given twice --- as it is defined, and as it is fitted.
+models: two have Poisson offspring directly, and \sseso{}'s negative binomial is Poisson
+conditional on its Gamma factor, as in \eqref{eq:sse-convenient}. We therefore give both the
+infection process and the equivalent likelihood for observed onsets.
 
-\paragraph{\coriso{} --- the onset-anchored Poisson baseline.} A case with onset on day $u$
+\paragraph{Poisson baseline: \coriso{}.} A case with onset on day $u$
 infects others $s$ days later with probability $\ftost_s$, in $\Pois(R_{u+s}\ftost_s)$ numbers
 and independently across lags and individuals. Summing over infectors,
 \begin{equation}
@@ -470,9 +458,9 @@ $E_t = R_t\lambda_t$ and reduces this to
   \Pois\!\left(\sum_{a\ge1}\finc_a R_{t-a}\sum_{s\ge0}\ftost_s D_{t-a-s}\right),
   \label{eq:coriso-convenient}
 \end{equation}
-a deterministic recursion in the observed onsets with no latent variables at all.
+a deterministic recursion in the observed onsets.
 
-\paragraph{\sseso{} --- superspreading events, onset-anchored.} The offspring law is negative
+\paragraph{Transmission-event heterogeneity: \sseso{}.} The offspring law is negative
 binomial with a dispersion scaling with the force of infection, as in \eqref{eq:sse}:
 \begin{equation}
   \text{\sseso{}}: \qquad
@@ -493,12 +481,10 @@ Proposition~\ref{prop:equivalence} then applies with $E_t = R_t\tilde\lambda_t$:
 \end{equation}
 Here, unlike in \sse{}, the Gamma factor cannot be integrated out again: each $D_t$ pools
 contributions from many days, each carrying its own independent $\tilde\lambda$, so the onsets
-are \emph{not} marginally negative binomial and there is no closed-form likelihood. \sseso{}
-carries one latent per day whose TOST-weighted onset sum is non-zero; because the index case
-contributes $\ftost_t D_0 > 0$ at every lag out to the truncation, that is \emph{every} inference
-day --- \resultnum{onsetmodelsfixedk.sseso.latents.total} latents on this series.
+are \emph{not} marginally negative binomial. The day-specific Gamma effects must therefore be
+retained in the likelihood.
 
-\paragraph{\ssiso{} --- superspreading individuals, onset-anchored.} Each case carries a latent
+\paragraph{Individual heterogeneity: \ssiso{}.} Each case carries a latent
 infectivity drawn from $\Gam(k,k)$, so the day-$t$ onset cohort has aggregate infectivity
 $\Gam(kD_t,k)$ and drives a Poisson infection process, as in \eqref{eq:ssi}:
 \begin{equation}
@@ -520,19 +506,15 @@ $E_t = R_t\lambda^{Y}_t$ and gives
   \Pois\!\left(\sum_{a\ge1}\finc_a R_{t-a}\sum_{s\ge0}\ftost_s Y_{t-a-s}\right).
   \label{eq:ssiso-convenient}
 \end{equation}
-The latents are the same cohort infectivities as under \ssi{} ---
-\resultnum{onsetmodelsfixedk.ssiso.latents.total} of them here --- and, as there, they cannot be
-integrated out. Section~\ref{sec:latent-block} describes how the latent blocks of
-\eqref{eq:sseso-convenient} and \eqref{eq:ssiso-convenient} are handled.
+The latents are the same cohort infectivities as under \ssi{} and, as there, cannot be integrated
+out.
 
-\begin{remark}[The Poisson limit, and the role of \cori{} and \coriso{}]
+\begin{remark}[The Poisson limit]
 \label{rmk:onset-limit}
 As in Remark~\ref{rmk:naive-limit}, $k\to\infty$ collapses \sseso{} and \ssiso{} onto \coriso{}.
-Neither \cori{} nor \coriso{} is one of the five compared models. They serve as the verification
-targets for the collapse checks of Section~\ref{sec:verification}; \cori{} is additionally the
-model whose published \'Equateur risk curve provides the external check of the risk calculation;
-and they fix the reference point for Section~\ref{sec:structure}, in which a mechanism's effect
-on the risk is read as its departure from the Poisson limit.
+Neither \cori{} nor \coriso{} is one of the five compared models. They provide the Poisson limits
+against which the overdispersed models are interpreted; \cori{} also links the analysis to a
+published \'Equateur risk curve.
 \end{remark}
 
 \subsection{The five compared models}
@@ -543,13 +525,16 @@ on the risk is read as its departure from the Poisson limit.
   \toprule
   Model & Anchoring & Excess variance acts at the level of & Latents \\
   \midrule
-  \dlo{}   & infections (naive) & the day --- NB on aggregate incidence & none \\
-  \sse{}   & infections (naive) & the transmission event                & none \\
-  \ssi{}   & infections (naive) & the individual                        & $Y_t$ \\
+  \dlo{}   & infections$^\dagger$ & the day --- NB on aggregate incidence & none \\
+  \sse{}   & infections$^\dagger$ & the transmission event                & none \\
+  \ssi{}   & infections$^\dagger$ & the individual                        & $Y_t$ \\
   \sseso{} & symptom onsets     & the transmission event                & $\tilde\lambda_t$ \\
   \ssiso{} & symptom onsets     & the individual                        & $Y_t$ \\
   \bottomrule
 \end{tabular}
+
+\smallskip
+\footnotesize $^\dagger$Observed onsets are treated as infection dates.
 \end{center}
 
 \subsection{\texorpdfstring{When does $R$ switch?}{When does R switch?}}
@@ -571,11 +556,9 @@ $\mathbb{E}[A] = \resultnum{delays.incubation.mean}$\,d. (The serial interval,
 \resultnum{delays.serialinterval.mean}\,d, is the infector-onset to infectee-onset gap and does
 not separate the two conventions.)
 
-This asymmetry is a consequence of onset-as-infection conflation rather than a modelling
-artefact: it is one route by which naive models mis-date an intervention's effect, and
-Section~\ref{sec:results-onset} quantifies what it does to $\Rpost$ and to the risk curve.
-Section~\ref{sec:sensitivity}, item~4, describes the run that would separate this indexing
-effect from the structural one.
+This asymmetry is a consequence of onset-as-infection conflation: it is one route by which
+infection-anchored models mis-date an intervention's effect. Section~\ref{sec:results-onset}
+quantifies its consequences for $\Rpost$ and the risk curve.
 
 % =============================================================================================
 \section{The risk of additional cases and of additional transmission}
@@ -624,75 +607,89 @@ $\RAC(t)$ is one number per day, not a distribution: it is a posterior probabili
 average over draws happens inside it. In each case below we obtain a conditional
 zero-probability given one posterior draw, and report
 \begin{equation}
-  \RAC(t) = 1 - \frac{1}{M}\sum_{m=1}^{M}\exp\bigl(\log \Pr(\text{no further case} \mid
+\RAC(t) = 1 - \frac{1}{S}\sum_{m=1}^{S}\exp\bigl(\log \Pr(\text{no further case} \mid
   \theta^{(m)})\bigr),
   \label{eq:posterior-average}
 \end{equation}
-over $M$ posterior draws, and likewise for $\RAT$. Because this is an average it carries
+over $S$ posterior draws, and likewise for $\RAT$. Because this is an average it carries
 Monte-Carlo error, which is estimated from the between-chain spread and reported beside every
 curve.
 
 \subsection{Infection-anchored models}
 \label{sec:naive-risk}
 
-Define the pooled remaining-transmission weight
+Fix one posterior draw. In the infection-anchored models, the observed incidence and, for
+\ssi{}, the retained infectivities completely specify the reset state: there is no separate
+incubation pipeline.
+
+\paragraph{Retained transmission weight.} Define
 \begin{equation}
   \Lambda(t) = \sum_{u\le t} I_u\,(1-F_{t-u})
-  \quad (\sse{},\ \dlo{}),
+  \quad (\text{\cori{}},\ \text{\sse{}},\ \text{\dlo{}}),
   \qquad
   \Lambda_Y(t) = \sum_{u\le t} Y_u\,(1-F_{t-u})
-  \quad (\ssi{}),
+  \quad (\text{\ssi{}}),
   \label{eq:pooled-weight}
 \end{equation}
 where $(1-F_{t-u})$ is the probability that a case first appearing on day $u$ still has
 transmission to come after day $t$; with $F_0 = 0$, the $u=t$ term enters with full weight.
 
+\paragraph{Future-event exponent.} Let $H_{\mathrm{inf}}(t)$ be minus the log-probability that the
+retained state produces no future event:
+\begin{equation}
+  H_{\mathrm{inf}}(t) =
+  \begin{cases}
+    \Rreset\Lambda(t) & (\text{\cori{}}),\\
+    k\Lambda(t)\log(1+\Rreset/k) & (\text{\sse{}}),\\
+    \Rreset\Lambda_Y(t) & (\text{\ssi{}}),\\
+    k\displaystyle\sum_{j>t}\log(1+\Rreset\mu_j/k) & (\text{\dlo{}}),
+  \end{cases}
+  \qquad
+  \mu_j = \sum_{s\ge1}w_s I_{j-s},
+  \label{eq:infection-exponent}
+\end{equation}
+where the future counts in $\mu_j$ are set to zero, $I_u:=0$ for $u>t$.
+
 \begin{proposition}[Conditional zero-probabilities, infection-anchored models]
 \label{prop:naive}
 Conditional on one draw of the parameters and, for \ssi{}, the retained latent infectivities,
 \begin{align}
-  \Pr(\text{no further case after } t)_{\mcori} &= \exp\!\left(-\Rreset\Lambda(t)\right),
-  \label{eq:cori-risk}\\
-  \Pr(\text{no further case after } t)_{\msse} &= \left(1+\Rreset/k\right)^{-k\Lambda(t)},
-  \label{eq:sse-risk}\\
-  \Pr(\text{no further case after } t)_{\mssi} &= \exp\!\left(-\Rreset\Lambda_Y(t)\right),
-  \label{eq:ssi-risk}\\
-  \Pr(\text{no further case after } t)_{\mdlo} &= \prod_{j>t}\left(1+\Rreset\mu_j/k\right)^{-k},
-  \qquad \mu_j = \sum_{s\ge1} w_s I_{j-s},
-  \label{eq:dlo-risk}
+  \log\Pr(\text{no further case after }t) &= -H_{\mathrm{inf}}(t),
+  \label{eq:infection-no-case}\\
+  \log\Pr(\text{no further transmission after }t) &= -H_{\mathrm{inf}}(t).
+  \label{eq:infection-no-transmission}
 \end{align}
-where in \eqref{eq:dlo-risk} the future counts are set to zero, $I_u := 0$ for $u > t$.
 \end{proposition}
 
 \begin{proof}
+\emph{Retained cohorts.}
 For \cori{}, each observed case contributes $\Pois(\Rreset w_\ell)$ offspring at lag $\ell$
 independently; the contributions with $\ell > t-u$ are untouched by the conditioning and pool by
-Poisson superposition into $\Pois(\Rreset\Lambda(t))$. For \sse{} the same contributions are
+Poisson superposition into $\Pois(\Rreset\Lambda(t))$. For \sse{}, the same contributions are
 $\NB(\Rreset w_\ell,\ k w_\ell)$ and pool by negative binomial closure into
 $\NB(\Rreset\Lambda(t),\ k\Lambda(t))$, whose zero-probability is as stated. For \ssi{}, given
 the latents they are again Poisson, with rates $\Rreset w_\ell Y_u$, pooling into
 $\Pois(\Rreset\Lambda_Y(t))$. For \dlo{}, the future counts are negative binomial day by day with
 a dispersion that does not depend on the force of infection, so the zero-probabilities multiply
-over days.
+over days. Taking minus the logarithm gives the four rows of \eqref{eq:infection-exponent}.
+
+\emph{Cases versus transmission.}
+Because infection and symptom onset are identified in these models, a future transmission event
+and the future case it creates are represented as occurring together.
 \end{proof}
 
 \noindent
-\eqref{eq:cori-risk} is included because it is the reference the other three are read against
-(Section~\ref{sec:structure}), not because \cori{} is compared: it is the Poisson limit of
-\eqref{eq:sse-risk} and \eqref{eq:ssi-risk} as $k\to\infty$, and $\Lambda_Y(t) \to \Lambda(t)$.
-
-The \dlo{} product is finite in practice, since $\mu_j = 0$ once $j$ exceeds $t$ plus the support
-of $w$. Under every infection-anchored model $\RAT = \RAC$, because an infection and the case it
-produces fall on the same day by construction.
+Thus $\RAC(t)=\RAT(t)=1-e^{-H_{\mathrm{inf}}(t)}$. The \cori{} row is included as the Poisson
+reference, not as a compared model. It is the $k\to\infty$ limit of the \sse{} and \ssi{} rows,
+with $\Lambda_Y(t)\to\Lambda(t)$. The \dlo{} sum is finite because $\mu_j=0$ once $j$ exceeds
+$t$ plus the support of $w$.
 
 \subsection{Onset-anchored models}
 \label{sec:onset-risk}
 
-Here the observed onsets do not determine the state needed to project forward: at day $t$ there
-is a latent pipeline of individuals already infected but not yet symptomatic. Both quantities
-nevertheless have closed forms conditional on a posterior draw, and it is these that are
-evaluated --- no forward simulation is required. Fix a draw and write $R_u$ for the historical
-reproduction number on day $u$ and $\Rreset$ for the reset value. Define three quantities.
+Fix one posterior draw. Here the observed onsets do not completely specify the reset state: in
+addition to retained onset cohorts, it contains a latent pipeline of individuals already infected
+but not yet symptomatic. Write $R_u$ for the historical reproduction number on day $u$.
 
 \paragraph{Retained transmission weight.} The driving series still able to transmit after $t$,
 \begin{equation}
@@ -700,7 +697,8 @@ reproduction number on day $u$ and $\Rreset$ for the reset value. Define three q
   \qquad
   \mathcal{D}_u =
   \begin{cases}
-    D_u & (\text{\coriso},\ \text{\sseso}),\\
+    D_u & (\text{\coriso}),\\
+    D_u & (\text{\sseso}),\\
     Y_u & (\text{\ssiso}),
   \end{cases}
   \label{eq:retained-weight}
@@ -719,33 +717,39 @@ with $E_u$ the model's conditional mean number of infections on day $u$ --- $R_u
 \eqref{eq:coriso-convenient}--\eqref{eq:ssiso-convenient} ---
 evaluated at the \emph{historical} $R_u$: the pipeline was filled before the reset.
 
-\paragraph{Per-case exponent.} Minus the log-probability that one future case, transmitting
-freely under $\Rreset$ over its whole TOST support, has no offspring at all,
+\paragraph{Future-event exponent.} Let $c$ be minus the log-probability that one future case,
+transmitting under $\Rreset$ over its whole TOST support, has no offspring:
 \begin{equation}
   c =
   \begin{cases}
     \Rreset & (\text{\coriso}),\\
-    k\log\!\left(1+\Rreset/k\right) & (\text{\sseso},\ \text{\ssiso}).
+    k\log\!\left(1+\Rreset/k\right) & (\text{\sseso}),\\
+    k\log\!\left(1+\Rreset/k\right) & (\text{\ssiso}).
   \end{cases}
   \label{eq:per-case}
 \end{equation}
-
-\begin{proposition}[Conditional zero-probabilities, onset-anchored models]
-\label{prop:onset}
-Let
+The exponent for no transmission from onset cohorts already observed by day $t$ is
 \begin{equation}
-  H(t) =
+  H_{\mathrm{on}}(t) =
   \begin{cases}
-    \Rreset\,W(t) & (\text{\coriso},\ \text{\ssiso}),\\
-    c\,W(t) & (\text{\sseso}).
+    \Rreset\,W(t) & (\text{\coriso}),\\
+    c\,W(t) & (\text{\sseso}),\\
+    \Rreset\,W(t) & (\text{\ssiso}).
   \end{cases}
   \label{eq:retained-exponent}
 \end{equation}
-Then, conditional on one draw of the parameters and the retained latent state,
+For \ssiso{}, $H_{\mathrm{on}}(t)$ conditions on the inferred infectivities of onset cohorts
+already observed, whereas $c$ averages over the as-yet-unobserved infectivity of a future
+pipeline member.
+
+\begin{proposition}[Conditional zero-probabilities, onset-anchored models]
+\label{prop:onset}
+Conditional on one draw of the parameters and the retained latent state,
 \begin{align}
-  \log\Pr(\text{no further case after } t) &= -H(t) - M(t),
+  \log\Pr(\text{no further case after } t) &= -H_{\mathrm{on}}(t) - M(t),
   \label{eq:log-no-case}\\
-  \log\Pr(\text{no further transmission after } t) &= -H(t) - M(t)\bigl(1 - e^{-c}\bigr).
+  \log\Pr(\text{no further transmission after } t)
+    &= -H_{\mathrm{on}}(t) - M(t)\bigl(1 - e^{-c}\bigr).
   \label{eq:log-no-transmission}
 \end{align}
 \end{proposition}
@@ -761,71 +765,37 @@ untouched by the conditioning, and summing over $s$ and $u \le t$ gives
 $\Pois(\Rreset W(t))$, with zero-probability $e^{-\Rreset W(t)}$. Under \sseso{} the same
 contributions are $\NB(\Rreset\ftost_s D_u,\ k\ftost_s D_u)$ with common success probability
 $k/(k+\Rreset)$, so they pool into $\NB(\Rreset W(t),\ kW(t))$, whose zero-probability is
-$(1+\Rreset/k)^{-kW(t)} = e^{-cW(t)}$. Either way the probability is $e^{-H(t)}$.
+$(1+\Rreset/k)^{-kW(t)} = e^{-cW(t)}$. Either way the probability is
+$e^{-H_{\mathrm{on}}(t)}$.
 
 \emph{Pipeline.} Poisson splitting of the day-$u$ infections by the incubation delay (the
 argument of Appendix~\ref{app:equivalence}) makes the number infected on or before $t$ but
 symptomatic after $t$ Poisson with mean $M(t)$, independently of the retained cohorts' remaining
 transmission.
 
+\emph{Cases versus transmission.}
 A future \emph{case} requires either a pipeline member to become symptomatic or a retained
 cohort to generate a new infection --- and every new infection produces an onset strictly later,
 since $\finc$ has no mass at lag~$0$. So no further case has probability
-$e^{-M(t)}\,e^{-H(t)}$, giving \eqref{eq:log-no-case}.
+$e^{-M(t)}\,e^{-H_{\mathrm{on}}(t)}$, giving \eqref{eq:log-no-case}.
 
 A future \emph{transmission event} permits pipeline members to become symptomatic provided each
 transmits zero times, which each does independently with probability $e^{-c}$ by
 \eqref{eq:per-case}. If the pipeline size is $N \sim \Pois(M(t))$ then
 $\mathbb{E}\bigl[(e^{-c})^{N}\bigr] = \exp\bigl(-M(t)(1-e^{-c})\bigr)$ by the Poisson generating
-function, and multiplying by $e^{-H(t)}$ gives \eqref{eq:log-no-transmission}.
+function, and multiplying by $e^{-H_{\mathrm{on}}(t)}$ gives
+\eqref{eq:log-no-transmission}.
 \end{proof}
 
-Treating the three models together is convenient for the derivation, but the quantity each one
-actually evaluates is a single expression in the observed onsets and the retained latent path.
-Substituting \eqref{eq:retained-weight}--\eqref{eq:retained-exponent} into
-Proposition~\ref{prop:onset} gives, with $\lambda_u$, $\lambda^Y_u$ and $\tilde\lambda_u$ as in
-Section~\ref{sec:onset-models}:
-\begin{align}
-  \text{\coriso{}}: \quad
-  \Pr(\text{no case})
-    &= \exp\biggl(-\Rreset\sum_{u\le t} D_u\,\stost_{t-u}
-       \;-\; \sum_{u\le t} R_u\lambda_u\,\sinc_{t-u}\biggr),
-  \label{eq:coriso-rac}\\
-  \Pr(\text{no transmission})
-    &= \exp\biggl(-\Rreset\sum_{u\le t} D_u\,\stost_{t-u}
-       \;-\; \bigl(1-e^{-\Rreset}\bigr)\sum_{u\le t} R_u\lambda_u\,\sinc_{t-u}\biggr);
-  \label{eq:coriso-rat}\\[6pt]
-  \text{\sseso{}}: \quad
-  \Pr(\text{no case})
-    &= \Bigl(1+\frac{\Rreset}{k}\Bigr)^{-k\sum_{u\le t} D_u\,\stost_{t-u}}
-       \exp\biggl(-\sum_{u\le t} R_u\tilde\lambda_u\,\sinc_{t-u}\biggr),
-  \label{eq:sseso-rac}\\
-  \Pr(\text{no transmission})
-    &= \Bigl(1+\frac{\Rreset}{k}\Bigr)^{-k\sum_{u\le t} D_u\,\stost_{t-u}}
-       \exp\biggl(-\Bigl[1-\bigl(1+\tfrac{\Rreset}{k}\bigr)^{-k}\Bigr]
-       \sum_{u\le t} R_u\tilde\lambda_u\,\sinc_{t-u}\biggr);
-  \label{eq:sseso-rat}\\[6pt]
-  \text{\ssiso{}}: \quad
-  \Pr(\text{no case})
-    &= \exp\biggl(-\Rreset\sum_{u\le t} Y_u\,\stost_{t-u}
-       \;-\; \sum_{u\le t} R_u\lambda^{Y}_u\,\sinc_{t-u}\biggr),
-  \label{eq:ssiso-rac}\\
-  \Pr(\text{no transmission})
-    &= \exp\biggl(-\Rreset\sum_{u\le t} Y_u\,\stost_{t-u}
-       \;-\; \Bigl[1-\bigl(1+\tfrac{\Rreset}{k}\bigr)^{-k}\Bigr]
-       \sum_{u\le t} R_u\lambda^{Y}_u\,\sinc_{t-u}\biggr).
-  \label{eq:ssiso-rat}
-\end{align}
-In each pair the first sum is the transmission still owed by onset cohorts observed through day
-$t$, and the second is the incubation pipeline. The two differ only in the factor multiplying the
-pipeline term: a further \emph{case} needs the pipeline to be empty, whereas a further
-\emph{transmission event} needs only that no pipeline member goes on to infect anyone. Deleting
-the pipeline term from \eqref{eq:sseso-rac} and \eqref{eq:ssiso-rac} leaves exactly the \sse{}
-and \ssi{} expressions of Proposition~\ref{prop:naive}, with the onset cohorts $D_u$ in place of
-the infection cohorts $I_u$ and the TOST survival function in place of $1-F$ --- which is the
-precise sense in which the infection-anchored models assume the pipeline away.
+\paragraph{Comparison of the two anchorings.} Both $H_{\mathrm{inf}}(t)$ and
+$H_{\mathrm{on}}(t)$ describe transmission still owed by cohorts observed through day $t$.
+The onset-anchored calculation adds $M(t)$, the infections already generated under the historical
+$R_u$ whose onsets lie after $t$. A further \emph{case} requires that pipeline to be empty; no
+further \emph{transmission} requires only that its members have no offspring. Setting $M(t)=0$
+reduces the onset-anchored expressions to the same retained-cohort structure as their
+infection-anchored counterparts, with the TOST survival replacing the serial-interval survival.
 
-\begin{remark}[Consequences worth stating]
+\begin{remark}[Immediate consequences]
 Three special cases follow immediately and are used as verification targets
 (Section~\ref{sec:verification}).
 \begin{enumerate}[label=(\roman*)]
@@ -833,19 +803,21 @@ Three special cases follow immediately and are used as verification targets
     \eqref{eq:log-no-case}, so $\RAC(t) \ge \RAT(t)$ always, with equality exactly when
     $M(t) = 0$. The gap is the pipeline, and it is the term the infection-anchored models set to
     zero by assumption.
-  \item Setting $\Rreset = 0$ gives $c = 0$ and $H(t) = 0$, so $\RAT(t) = 0$ exactly and
-    $\RAC(t) = 1 - e^{-M(t)}$: with no future transmission permitted, the only remaining risk is
-    that the retained pipeline is non-empty.
-  \item As $k \to \infty$, $c = k\log(1+\Rreset/k) \to \Rreset$ and \sseso{}'s $H(t)$ tends to
+  \item Setting $\Rreset = 0$ gives $c = 0$ and $H_{\mathrm{on}}(t) = 0$, so $\RAT(t) = 0$
+    exactly and $\RAC(t) = 1 - e^{-M(t)}$: with no future transmission permitted, the only
+    remaining risk is that the retained pipeline is non-empty.
+  \item As $k \to \infty$, $c = k\log(1+\Rreset/k) \to \Rreset$ and \sseso{}'s
+    $H_{\mathrm{on}}(t)$ tends to
     $\Rreset W(t)$, so both overdispersed models collapse onto \coriso{}.
 \end{enumerate}
 \end{remark}
 
-\begin{remark}[Where the reset asymmetry enters]
-$H(t)$ uses the reset $\Rreset$, because it describes transmission that has yet to happen;
+\begin{remark}[Why historical and reset reproduction numbers both appear]
+$H_{\mathrm{on}}(t)$ uses the reset $\Rreset$, because it describes transmission that has yet to
+happen;
 $M(t)$ uses the historical $R_u$, because the pipeline it counts was generated before the reset.
-Under the naive models there is no pipeline, so the whole retained state is projected at
-$\Rreset$. This is the formal counterpart of the timing argument of
+Under the infection-anchored models there is no pipeline, so the whole retained state is projected
+at $\Rreset$. This is the formal counterpart of the timing argument of
 Section~\ref{sec:results-onset}.
 \end{remark}
 
@@ -857,16 +829,19 @@ on the observed history \emph{only through the scalar} $\Lambda(t)$ or $\Lambda_
 remaining offspring pools into a single negative binomial or, given the latents, a single
 Poisson. \dlo{} does not. Its risk depends on the whole temporal \emph{profile}
 $(\mu_j)_{j>t}$ of the future force of infection, because a fresh dispersion that does not scale
-with that force is applied on each future day. Writing $\varphi(\mu) = -k\log(1+R\mu/k)$, which
-is convex with $\varphi(0) = 0$ and hence superadditive,
+with that force is applied on each future day. Writing
+$\varphi(\mu) = -k\log(1+\Rreset\mu/k)$, which is convex with $\varphi(0) = 0$ and hence
+superadditive,
 \begin{equation}
-  -R\,\Lambda(t) \;\le\; \log \Pr(\text{no further case})_{\mdlo} = \sum_{j>t}\varphi(\mu_j)
+  -\Rreset\Lambda(t) \;\le\; \log \Pr(\text{no further case})_{\mdlo}
+  = \sum_{j>t}\varphi(\mu_j)
   \;\le\; \varphi\bigl(\Lambda(t)\bigr).
   \label{eq:dlo-bounds}
 \end{equation}
 Spreading the same total $\Lambda(t)$ across days \emph{dilutes} the overdispersion, so a value
 of $k$ calibrated as an individual-level offspring dispersion does far less work in \dlo{} than
-in \sse{} or \ssi{}. The lower bound is exactly the Poisson limit \eqref{eq:cori-risk}, so
+in \sse{} or \ssi{}. The lower bound is the negative of the \cori{} exponent in
+\eqref{eq:infection-exponent}, so
 \dlo{}'s risk is squeezed towards \cori{}'s precisely when the future force of infection is thin
 and spread out.
 
@@ -876,52 +851,27 @@ does not. It is a property of a thin, spread-out profile rather than a theorem, 
 $\Lambda(t)$ into a day or two reverses it.
 \end{remark}
 
-\subsection{Latent states at the conditioning day}
+\subsection{Retrospective conditioning of latent states}
 \label{sec:smoothing}
 
-For the latent-variable models, the risk at day $t$ in principle wants latents conditioned on
-the history through $t$ --- a \emph{filtering} distribution --- whereas a single full-data fit
-delivers the \emph{smoothed} distribution given the whole record.
-
-\textbf{We use the full-data (smoothed) posterior for every $t$.} One fit per model then serves
-every day of every curve, which keeps each analysis to a handful of posterior simulations rather
-than several hundred. This is consistent with the analysis being retrospective by design: the
-parameters are estimated from all the data, and the latents are treated the same way. The
-consequence should be stated plainly --- the projection at day $t$ uses latents informed by data
-after day $t$, so $\RAC(t)$ is not literally conditioned on the history through $t$ for \ssi{},
-\sseso{} and \ssiso{}. \dlo{} and \sse{} are unaffected, having no latents.
-
-The \emph{direction} of the effect is a hypothesis rather than an assertion. Smoothing sharpens
-the latents but does not push them uniformly one way: observations of zero after day $t$ are
-evidence that recent cohorts had low infectivity and pull the retained state down, while
-positive observations after day $t$ are evidence that earlier cohorts had high infectivity and
-pull it up. After the final onset every subsequent observation is a zero, so the expectation is a
-predominantly downward effect over the decision-relevant late period and an ambiguous one
-earlier.
-
-We measured this rather than assuming it, using the filtering distributions produced as a
-by-product of a particle filter's forward pass. Both signs appear, and where predicted. For
-\ssi{} at a fixed parameter vector, smoothed minus filtering risk is $+0.64$ around day~$2$,
-where the filter has not yet seen the cases that reveal a high early infectivity, and is negative
-after the last observed case, with mean $-0.031$ and worst $-0.153$ around day~$70$. For the
-onset-anchored models the same comparison, taken in the opposite direction, gives filtering minus
-smoothed risk of about $-0.63$ to $-0.66$ at its largest early and a mean of about $+0.013$ after
-the final onset. The late-period effect is small enough not to move the threshold crossings by
-more than about a day, but it is a signed, measured quantity rather than a claim.
+The estimand is deliberately retrospective. For \ssi{}, \sseso{} and \ssiso{}, the state
+retained at day $t$ is therefore drawn from its \emph{smoothed} posterior conditional on the
+complete record, not from the filtering distribution conditional only on observations through
+$t$. Consequently, $\RAC(t)$ should not be interpreted as a real-time probability for these
+models. Future observations can move the retained state in either direction: later cases imply
+greater infectivity in earlier cohorts, whereas later zeros imply less. We compare smoothed and
+filtering risks with particle methods as a sensitivity analysis. \dlo{} and \sse{} have no
+latent state and are unaffected by this distinction.
 
 \subsection{Recovering integrated-out latent states}
 \label{sec:reconstruction}
 
-The latent parameterisation of Section~\ref{sec:latent-block} integrates out, in closed form,
-every latent that the data constrain only through a multiplicative
-$\exp(-\sum_j \mu_j)$ factor. On this series those are exactly the days from the last observed
-onset onwards --- precisely the days a late conditioning day needs for its incubation pipeline.
-They are therefore drawn back from their exact conditional $\Gam(k\,\mathrm{scale}_u,\ k + c_u)$
-and spliced onto the sampled block before any risk is computed, giving a complete latent path by
-day. This is exact, since the removed latents are conditionally independent of the sampled ones
-and of each other, and it costs one Gamma draw per removed latent per posterior draw. Omitting
-it would truncate the retained state at day~\resultnum{data.lastonsetday} and understate the
-risk over exactly the period in which the decision is made.
+Some latent states can be integrated out of the likelihood analytically (Section~\ref{sec:latent-block})
+but are still needed to define the reset state. Before calculating either risk, we recover these
+states from their exact conditional distribution,
+$\Gam(k\,\mathrm{scale}_u,\ k+c_u)$, conditional on each posterior draw. This restores the complete
+latent trajectory, including infections after the final observed onset that may remain in the
+incubation pipeline.
 
 % =============================================================================================
 \section{Inference}
@@ -931,15 +881,14 @@ risk over exactly the period in which the decision is made.
 \subsection{Priors}
 \label{sec:priors}
 
-Priors are proper and identical across the models within an analysis. This is not a stylistic
-choice: the posterior model probabilities are Bayes factors, and diffuse or improper priors
-would make them arbitrary.
+We use proper priors, shared across models within each analysis, so that marginal likelihoods
+and posterior model probabilities are well defined.
 
 \begin{itemize}
   \item $\Rpre$ and $\Rpost$: independent log-normals with median
     \resultnum{priors.R.median} and 95\% interval
     $(\resultnum{priors.R.quantilelower},\ \resultnum{priors.R.quantileupper})$.
-  \item $k$, where estimated: a deliberately fairly informative log-normal with median
+  \item $k$, where estimated: an informative log-normal with median
     \resultnum{priors.k.median} and 95\% interval
     $(\resultnum{priors.k.quantilelower},\ \resultnum{priors.k.quantileupper})$, identical in
     every model.
@@ -949,14 +898,12 @@ would make them arbitrary.
 \end{itemize}
 
 \begin{remark}[Identical priors are necessary but not sufficient for a fair comparison]
-Propriety makes the Bayes factors well defined; it does not make them \emph{neutral} when the
-same symbol means different things in different models. $k$ is exactly such a symbol: an
-individual-level offspring dispersion in \sse{} and \ssi{}, a day-level incidence dispersion in
-\dlo{} (Section~\ref{sec:structure}). Placing the same prior on both is a deliberate choice.
-Analysis~1 in particular compares models one of which is \emph{deliberately miscalibrated}, in
-order to demonstrate the error under study, so its posterior model probabilities are evidence
-about those specified models rather than clean evidence about mechanism. Prior-predictive
-calibration is out of scope here, so this caveat carries the weight instead.
+Identical priors do not imply identical interpretations. In \sse{} and \ssi{}, $k$ is an
+individual-level offspring dispersion; in \dlo{}, it controls day-level incidence variation
+(Section~\ref{sec:structure}). Analysis~1 applies an individual-level literature estimate to all
+three models to test its portability. Its posterior model probabilities therefore compare the
+full model specifications, including that imposed value, and should not be read as evidence about
+mechanism alone.
 \end{remark}
 
 \subsection{Posterior sampling}
@@ -966,12 +913,8 @@ All fits use Hamiltonian Monte Carlo (the No-U-Turn sampler, as implemented in P
 \resultnum{naivemodelsfixedk.chains} chains of \resultnum{naivemodelsfixedk.draws} draws after
 \resultnum{naivemodelsfixedk.tune} tuning iterations in every analysis, at a target acceptance
 probability of \resultnum{naivemodelsfixedk.targetaccept} in Analyses~1--3 and
-\resultnum{onsetmodelsestimatedk.targetaccept} in Analysis~4. One fit per (model, analysis) pair
-jointly estimates $\Rpre$, $\Rpost$, any latents, and --- in Analyses~2 and~4 --- $k$.
-
-\sse{} and \ssi{} appear in both the infection-anchored and the onset-anchored analyses. They are
-refitted independently in each, so their summaries can differ between figures by Monte-Carlo
-error; no number is carried across.
+\resultnum{onsetmodelsestimatedk.targetaccept} in Analysis~4. One fit per model and analysis
+jointly estimates $\Rpre$, $\Rpost$, any latent states, and --- in Analyses~2 and~4 --- $k$.
 
 \paragraph{Convergence.} Across all models of all four analyses, the worst $\hat{R}$ for the
 reported scalar parameters is \resultnum{overall.diagnostics.maxrhat}, the smallest bulk
@@ -982,111 +925,70 @@ bulk effective sample sizes are \resultnum{naivemodelsfixedk.diagnostics.minbulk
 \resultnum{onsetmodelsfixedk.diagnostics.minbulkess} and
 \resultnum{onsetmodelsestimatedk.diagnostics.minbulkess}, with no divergences in any of them.
 
-\subsection{The latent block}
+\subsection{Latent-state sampling}
 \label{sec:latent-block}
 
-Sampling the latent Gammas directly does not work. The \sseso{} shapes on this series span
-several orders of magnitude, down to around $10^{-6}$, and a Gamma coordinate with a shape that
-small has a typical value outside the range of double precision, so no amount of tuning or
-reinitialisation will make it behave. Two devices are used, and they compose.
+The Gamma latent variables, particularly in \sseso{}, include very small shape parameters. We
+combine exact marginalisation with an inverse-CDF parameterisation to obtain stable posterior
+sampling without changing the model.
 
 \begin{itemize}
   \item \textbf{Exact marginalisation.} A latent that reaches no observation day carrying a case
-    enters the likelihood only through $\exp(-\sum_j \mu_j)$, which is linear in the latents and
-    so factorises. Its Gamma prior is conjugate to that factor, giving
+    enters the likelihood only through an exponential factor linear in that latent. Its Gamma
+    prior is conjugate to this factor, giving
     $\int \Gam(y;\,k\,\mathrm{scale},\,k)\,e^{-cy}\,\mathrm{d}y =
     (1+c/k)^{-k\,\mathrm{scale}}$ and a conditional posterior
-    $\Gam(k\,\mathrm{scale},\ k+c)$. On this series that removes
+    $\Gam(k\,\mathrm{scale},\ k+c)$. This removes
     \resultnum{onsetmodelsfixedk.sseso.latents.marginalised} of \sseso{}'s
     \resultnum{onsetmodelsfixedk.sseso.latents.total} latents, leaving
-    \resultnum{onsetmodelsfixedk.sseso.latents.sampled} sampled --- exactly the pathological tail,
-    since the last case is on day~\resultnum{data.lastonsetday} --- and
+    \resultnum{onsetmodelsfixedk.sseso.latents.sampled} sampled, and removes
     \resultnum{onsetmodelsfixedk.ssi.latents.marginalised} of \ssi{}'s and \ssiso{}'s
-    \resultnum{onsetmodelsfixedk.ssi.latents.total}. It is exact, and
-    Section~\ref{sec:reconstruction} describes how the removed latents are recovered where the
-    risk calculation needs them.
+    \resultnum{onsetmodelsfixedk.ssi.latents.total}. Section~\ref{sec:reconstruction} describes
+    their exact recovery for the risk calculation.
   \item \textbf{Inverse-CDF reparameterisation.} The surviving latents are sampled as
-    $\mathrm{Uniform}(0,1)$ variates pushed through the Gamma quantile function, giving a
-    bounded, flat-prior, constant-geometry parameter space. The quantile function is
-    differentiable in the automatic-differentiation framework used, so this runs under the same
-    gradient-based sampler as everything else.
+    $\mathrm{Uniform}(0,1)$ variates transformed through the corresponding Gamma quantile
+    function.
 \end{itemize}
-
-\begin{remark}
-The choice rests on a benchmark of 74 posterior simulations, whose main negative finding
-constrains what else might be tried: this is a geometry problem, not a warm-up problem.
-Rescaling the latents to unit mean --- a translation on the log scale, which leaves the
-curvature untouched --- leaves the \sseso{} fit with essentially every draw divergent, exactly as
-the untouched model does, and additional tuning makes $\hat{R}$ worse rather than better. The
-inverse-CDF reparameterisation takes the same model from 4000 divergences to none.
-\end{remark}
 
 \subsection{Model evidence}
 \label{sec:evidence}
 
-The marginal likelihood $p(D_{1:\resultnum{data.withdrawalday}} \mid \text{model})$ is computed
-with the parameters \emph{and} the latents integrated out, from each model's own joint density,
-so that the integral estimated is the one that was sampled. The integral is taken in
-unconstrained coordinates with the Jacobian included. Bridge sampling is the estimator; prior
-Monte Carlo and importance sampling are retained as agreement checks, and deterministic
-quadrature as the exact answer where the parameter space is small enough. Posterior model
-probabilities follow from the evidences under the uniform model prior of
-Section~\ref{sec:priors}.
+We compute the marginal likelihood
+$p(D_{1:\resultnum{data.withdrawalday}} \mid \text{model})$ by integrating over both parameters
+and latent states. Bridge sampling is the primary estimator; prior Monte Carlo and importance
+sampling provide independent numerical checks, and deterministic quadrature is used where the
+parameter space is sufficiently small. Posterior model probabilities follow from these marginal
+likelihoods and the uniform model prior of Section~\ref{sec:priors}.
 
 \subsection{Comparing dispersion posteriors}
 \label{sec:dispersion}
 
-Where $k$ is estimated, the models are given the same prior on it, so wherever their posteriors
-end up apart is a measurement rather than a demonstration. Three complementary quantities are
-reported for every pair, because none says enough alone: the \emph{median ratio} (location, but
-not width); the \emph{overlap} $\int\min(p_a,p_b)$, which is scale-free, symmetric and finite
-where a Kullback--Leibler divergence would not be; and $\Pr(k_a > k_b)$ for independent draws.
+Where $k$ is estimated, we compare every pair of posterior distributions using three
+complementary quantities: the \emph{median ratio}, which measures location; the \emph{overlap}
+$\int\min(p_a,p_b)$, a scale-free symmetric measure; and $\Pr(k_a > k_b)$ for independent draws.
 All are computed on the log scale, as the density panels are drawn; the overlap is invariant to
-that choice, since both densities acquire the same Jacobian. Every pair is compared rather than
-a designated reference model.
+that choice because both densities acquire the same Jacobian.
 
-\subsection{Verification}
+\subsection{Model and numerical validation}
 \label{sec:verification}
 
-The risk calculation is verified against three independent routes, and the models against their
-own limits.
+We validated the models against analytic limits and independent simulation. A deterministic
+one-day incubation period recovers the infection-anchored models after shifting the time index;
+as $k\to\infty$, \sse{} and \ssi{} converge to \cori{}, while \sseso{} and \ssiso{} converge to
+\coriso{}. Simulations from the explicit infection-and-incubation process agree with the
+onset-only representation of Proposition~\ref{prop:equivalence}. Explicit reset simulations also
+agree with the risk formulas in Propositions~\ref{prop:naive} and~\ref{prop:onset}, including the
+$\Rreset=0$ limit in which $\RAT=0$ and $\RAC$ is the probability that the incubation pipeline is
+non-empty.
 
-\paragraph{Limits and equivalences.} Setting $\finc_1 = 1$ (a deterministic one-day incubation)
-and shifting indices recovers the infection-anchored models from the onset-anchored ones;
-$k \to \infty$ collapses \sse{} and \ssi{} onto \cori{}, and \sseso{} and \ssiso{} onto
-\coriso{}; forward-simulating the natural and inference-convenient forms of the onset-anchored
-models gives matching distributions of the observed onsets (Appendix~\ref{app:equivalence}); and
-the inference-convenient likelihood matches brute-force marginalisation over the latent infection
-counts on short histories. The closed forms of Proposition~\ref{prop:onset} are checked directly
-against explicit reset simulation, and, in the degenerate case $\Rreset = 0$, against the
-statement that $\RAT$ is exactly zero and $\RAC$ exactly the probability that the retained
-pipeline is non-empty.
-
-\paragraph{Particle filtering and particle MCMC.} Two checks answer different questions. At fixed
-$(\Rpre,\Rpost,k)$, with conditioning matched to the pipeline, a particle filter provides an
-equality check on the risk arithmetic; agreement is obtained to $3.2\times10^{-3}$ for \ssi{} and
-$0.021$ for the onset-anchored models. Over the parameters, particle marginal
-Metropolis--Hastings gives an independent route to the posterior sharing no machinery with the
-main fits --- the strongest available guard against an error in the latent parameterisation,
-which simulation-based calibration could not catch, since it validates an implementation against
-itself. Posterior intervals from the two routes overlap for all six synthetic parameter
-comparisons, and the largest measured variance of the estimated log-likelihood is $0.081$ at 250
-particles, comfortably inside the range particle MCMC tolerates. A particle-MCMC risk curve
-should \emph{not} match the main one for the latent models: the filter conditions on filtering
-latents where the main calculation uses smoothed ones, and that gap is the
-Section~\ref{sec:smoothing} measurement rather than a defect.
-
-\paragraph{Evidence estimation.} Bridge sampling reproduces deterministic quadrature for \dlo{}
-and \sse{} on this series to $1.1\times10^{-3}$ and $2.9\times10^{-3}$ nats, with the quadrature
-box's boundary density 41--44 nats below its peak; the three estimators agree on \ssi{}, where no
-exact answer exists, all within their own error bars; and the evidence is invariant to the latent
-parameterisation, which is what shows the marginalisation carries the whole removed factor rather
-than just its shape.
-
-\paragraph{External replication.} In the Poisson limit, the risk calculation reproduces the
-published \'Equateur risk curve of Thompson et al.\ (2024) exactly under their conventions, which
-differ from ours by exactly one day. Their published reproduction-number posterior for this
-outbreak is recovered, and the two risk curves agree to $2.2\times10^{-4}$ over 200\,000 draws.
+Particle filtering provides an independent check of the latent-state calculations, and particle
+marginal Metropolis--Hastings reproduces the parameter posteriors on synthetic data. Filtering
+and smoothed particle states are kept distinct because they correspond to different estimands
+(Section~\ref{sec:smoothing}). Bridge-sampling estimates agree with deterministic quadrature for
+the low-dimensional models and with alternative estimators for the latent models. Finally, in
+the Poisson limit the analysis recovers the published reproduction-number posterior and
+\'Equateur risk curve of Thompson et al.\ (2024), after accounting for the one-day difference in
+time-indexing convention.
 
 % =============================================================================================
 \section{Results}
@@ -1110,20 +1012,21 @@ where they are furthest apart.
   \centering
   \includegraphics[width=\textwidth]{../figures/naive_models_fixed_k/naive_models_fixed_k.pdf}
   \caption{\textbf{The mechanism of overdispersion changes the end-of-outbreak risk, at a
-    dispersion parameter that is only meaningful for two of the three models.} \dlo{}, \sse{}
+    dispersion parameter whose interpretation differs across models.} \dlo{}, \sse{}
     and \ssi{} fitted to the \'Equateur onset series with $k$ fixed at
     \resultnum{naivemodelsfixedk.fixedk}. \textbf{A}, \textbf{B}: posterior densities for
     $\Rpre$ and $\Rpost$, over the shared prior. \textbf{C}: posterior model probabilities under
-    a uniform prior over the \resultnum{naivemodelsfixedk.nmodels} models; one of the three is
-    deliberately miscalibrated, so this panel is evidence about the models \emph{as specified},
-    priors included. \textbf{D}: risk of additional cases against conditioning day, with daily
+    a uniform prior over the \resultnum{naivemodelsfixedk.nmodels} models. Because the fixed
+    value of $k$ has a different interpretation in \dlo{}, this panel compares the complete model
+    specifications rather than mechanism alone. \textbf{D}: risk of additional cases against
+    conditioning day, with daily
     onsets behind it, the ERT arrival and withdrawal marked, and the $0.05$ and $0.01$ decision
     thresholds drawn. The marker on each curve is its $0.05$ crossing.}
   \label{fig:naive-fixed}
 \end{figure}
 
 \begin{itemize}
-  \item \textbf{The same $k$ buys \dlo{} almost no overdispersion.} At
+  \item \textbf{The same numerical $k$ produces little overdispersion in \dlo{}.} At
     day~\resultnum{data.referenceday} the risk is
     \resultnum{naivemodelsfixedk.dlo.rac.reference} under \dlo{} against
     \resultnum{naivemodelsfixedk.sse.rac.reference} under \sse{} and
@@ -1154,8 +1057,9 @@ where they are furthest apart.
     nothing, so \sse{} gets no such revision --- its entire retained state is $\Lambda(t)$. At
     matched expected further cases, \sse{}'s residual risk is a rare burst and \ssi{}'s a more
     likely singleton, and the question ``any further case?'' sees the second as the larger risk.
-    So the axis is not naive-versus-mechanistic: it is how many units the same $\Lambda(t)$ is
-    divided over and whether each unit's dispersion survives to time $t$. \dlo{} divides over
+    The contrast is therefore not \dlo{} against the other mechanisms: it is how many units the
+    same $\Lambda(t)$ is divided over and whether each unit's dispersion survives to time $t$.
+    \dlo{} divides over
     future days, \ssi{} over past individuals, \sse{} not at all.
   \item \textbf{The ordering is a property of the question as much as of the models.} Asking
     instead whether transmission would re-establish reverses \sse{} and \ssi{} on these same
@@ -1193,8 +1097,8 @@ where they are furthest apart.
 \begin{figure}[htbp]
   \centering
   \includegraphics[width=\textwidth]{../figures/naive_models_estimated_k/naive_models_estimated_k.pdf}
-  \caption{\textbf{Estimating $k$ under a shared prior shows that the models want different
-    values of it --- and that the risk gap survives anyway.} As Fig.~\ref{fig:naive-fixed}, with
+  \caption{\textbf{The models infer different dispersion parameters, and their risk curves
+    remain separated.} As Fig.~\ref{fig:naive-fixed}, with
     $k$ estimated. \textbf{C}: the three $k$ posteriors over the prior they share, with each
     model's posterior median and 95\% credible interval in the legend. \textbf{D}: posterior
     model probabilities. \textbf{E}: risk of additional cases, with the view starting at the
@@ -1203,7 +1107,7 @@ where they are furthest apart.
 \end{figure}
 
 \begin{itemize}
-  \item \textbf{The models disagree about $k$, but not along the axis one might expect.} The
+  \item \textbf{The main split in $k$ is between individual- and day-level heterogeneity.} The
     posterior medians (95\% credible intervals) are
     \resultnum{naivemodelsestimatedk.dlo.k.interval} for \dlo{},
     \resultnum{naivemodelsestimatedk.sse.k.interval} for \sse{} and
@@ -1228,10 +1132,9 @@ where they are furthest apart.
     $k$ (less overdispersion) than the infection process carried. \ssi{} is close to invariant to
     this, because the convolution \emph{regroups} individuals across days while the aggregate
     infectivity of $n$ independent individuals is $\Gam(kn,k)$ whichever $n$ they are: regrouping
-    moves the cohorts, not the variance. This is a proposed mechanism for the measurement, not a
-    second measurement --- these three models are all infection-anchored, so this analysis cannot
-    separate it from the purely structural difference of Section~\ref{sec:structure}.
-    Section~\ref{sec:results-onset} is where it is tested.
+    moves the cohorts, not the variance. Because all three models here are infection-anchored,
+    this analysis alone cannot separate that explanation from the structural difference of
+    Section~\ref{sec:structure}; the onset-anchored comparison provides that test.
   \item \textbf{Only \ssi{}'s posterior is compatible with the literature value.} \ssi{}'s 95\%
     credible interval, $(\resultnum{naivemodelsestimatedk.ssi.k.lower},
     \resultnum{naivemodelsestimatedk.ssi.k.upper})$, contains
@@ -1240,16 +1143,16 @@ where they are furthest apart.
     \resultnum{naivemodelsestimatedk.dlo.k.upper})$ and \sse{}'s
     $(\resultnum{naivemodelsestimatedk.sse.k.lower},
     \resultnum{naivemodelsestimatedk.sse.k.upper})$ do not, and both medians sit above the
-    prior's own 97.5th percentile of \resultnum{priors.k.quantileupper}, despite that prior being
-    deliberately informative.
+    prior's own 97.5th percentile of \resultnum{priors.k.quantileupper}, despite the informative
+    prior.
   \item \textbf{The evidence says the same thing more sharply.} Letting $k$ move is worth
     \resultnum{naivemodelsestimatedk.sse.evidencegain} nats to \sse{} and
     \resultnum{naivemodelsestimatedk.dlo.evidencegain} to \dlo{}, but only
     \resultnum{naivemodelsestimatedk.ssi.evidencegain} to \ssi{}. Analysis~1 was charging \dlo{}
-    and \sse{} for a value that was never theirs, and \resultnum{naivemodelsfixedk.fixedk} really
-    is \ssi{}'s number on this series.
-  \item \textbf{The risk gap survives, which is the point of the pairing.} Each model now sits at
-    its own best $k$, and \dlo{} still crosses $0.05$ on
+    and \sse{} for a value poorly supported under those models, whereas
+    \resultnum{naivemodelsfixedk.fixedk} is compatible with \ssi{} on this series.
+  \item \textbf{The risk gap persists when $k$ is estimated.} At each model's inferred $k$,
+    \dlo{} still crosses $0.05$ on
     day~\resultnum{naivemodelsestimatedk.dlo.rac05.day}, against
     day~\resultnum{naivemodelsestimatedk.sse.rac05.day} for \sse{} and
     day~\resultnum{naivemodelsestimatedk.ssi.rac05.day} for \ssi{}, and still
@@ -1260,8 +1163,8 @@ where they are furthest apart.
   \item \textbf{The posterior model probabilities keep their direction} --- \ssi{}
     \resultnum{naivemodelsestimatedk.ssi.probability}, \dlo{}
     \resultnum{naivemodelsestimatedk.dlo.probability}, \sse{}
-    \resultnum{naivemodelsestimatedk.sse.probability} --- and now carry a cleaner reading, since
-    each model has been allowed its own dispersion.
+    \resultnum{naivemodelsestimatedk.sse.probability}. Because each model has its own inferred
+    dispersion, this comparison is not confounded by imposing the same numerical value of $k$.
 \end{itemize}
 
 % ---------------------------------------------------------------------------------------------
@@ -1283,10 +1186,10 @@ where they are furthest apart.
   \centering
   \includegraphics[width=\textwidth]{../figures/onset_models_estimated_k/onset_models_estimated_k.pdf}
   \caption{\textbf{Onset anchoring with the dispersion estimated.} Panels as in
-    Fig.~\ref{fig:naive-estimated}. Panel~\textbf{C} is where the attenuation hypothesis of
-    Section~\ref{sec:results-naive-estimated} is settled: \sseso{}'s $k$ posterior should sit
-    below naive \sse{}'s if incubation convolution is what inflates day-level dispersion
-    estimates, while \ssiso{}'s should barely move from \ssi{}'s.}
+    Fig.~\ref{fig:naive-estimated}. In panel~\textbf{C}, \sseso{}'s $k$ posterior shifts below
+    \sse{}'s and towards the literature estimate, whereas \ssiso{} remains close to \ssi{}.
+    This contrast supports attenuation of day-level, but not individual-level, heterogeneity when
+    onsets are treated as infections.}
   \label{fig:onset-estimated}
 \end{figure}
 
@@ -1322,21 +1225,21 @@ where they are furthest apart.
     spent. The infection-anchored models have no pipeline, move the infection decision to the
     later symptom-onset date, and apply the reset $\Rreset$ to it, which makes the residual state
     look younger and drain later.
-  \item \textbf{The same indexing error inflates the naive $\Rpost$ roughly threefold.} With $k$
+  \item \textbf{The infection-anchored convention more than doubles the inferred $\Rpost$.} With $k$
     estimated the posterior medians (95\% credible intervals) are
     \resultnum{onsetmodelsestimatedk.sse.rpost.interval} for \sse{} and
     \resultnum{onsetmodelsestimatedk.ssi.rpost.interval} for \ssi{}, against
     \resultnum{onsetmodelsestimatedk.sseso.rpost.interval} for \sseso{} and
-    \resultnum{onsetmodelsestimatedk.ssiso.rpost.interval} for \ssiso{}. The naive convention
+    \resultnum{onsetmodelsestimatedk.ssiso.rpost.interval} for \ssiso{}. The infection-anchored convention
     applies the day-\resultnum{data.ertarrivalday} switch to \emph{onsets}, so post-arrival onsets
     that arose from pre-arrival infections are charged to the controlled period. $\Rpre$ is far
     more stable across the four --- \resultnum{onsetmodelsestimatedk.sse.rpre.interval},
     \resultnum{onsetmodelsestimatedk.ssi.rpre.interval},
     \resultnum{onsetmodelsestimatedk.sseso.rpre.interval} and
-    \resultnum{onsetmodelsestimatedk.ssiso.rpre.interval} --- which is what one expects if the
-    effect concerns \emph{when} the switch lands rather than the epidemic's early growth.
-  \item \textbf{The attenuation hypothesis passes.} \sseso{}'s $k$ posterior,
-    \resultnum{onsetmodelsestimatedk.sseso.k.interval}, sits below naive \sse{}'s
+    \resultnum{onsetmodelsestimatedk.ssiso.rpre.interval} --- consistent with an effect on
+    \emph{when} the switch lands rather than on the epidemic's early growth.
+  \item \textbf{The results support attenuation of day-level dispersion.} \sseso{}'s $k$ posterior,
+    \resultnum{onsetmodelsestimatedk.sseso.k.interval}, sits below infection-anchored \sse{}'s
     \resultnum{onsetmodelsestimatedk.sse.k.interval} and towards the literature value: median
     ratio \resultnum{onsetmodelsestimatedk.sse-vs-sseso.medianratio}, overlap
     \resultnum{onsetmodelsestimatedk.sse-vs-sseso.overlap},
@@ -1346,18 +1249,18 @@ where they are furthest apart.
     \resultnum{onsetmodelsestimatedk.ssiso.k.interval}, overlap
     \resultnum{onsetmodelsestimatedk.ssi-vs-ssiso.overlap}. Incubation convolution attenuates
     \emph{day-level} dispersion when onsets are read as infections; individual-level dispersion is
-    comparatively stable under regrouping, as predicted.
-  \item \textbf{Once anchoring is explicit, the mechanism stops mattering for $k$.} \sseso{} and
+    comparatively stable under regrouping.
+  \item \textbf{The two onset-anchored mechanisms infer similar $k$ values.} \sseso{} and
     \ssiso{} agree almost exactly --- overlap
     \resultnum{onsetmodelsestimatedk.sseso-vs-ssiso.overlap}, median ratio
     \resultnum{onsetmodelsestimatedk.sseso-vs-ssiso.medianratio},
     $\Pr(k_{\msseso}>k_{\mssiso}) =
-     \resultnum{onsetmodelsestimatedk.sseso-vs-ssiso.probabilitygreater}$ --- where their naive
+     \resultnum{onsetmodelsestimatedk.sseso-vs-ssiso.probabilitygreater}$ --- where their infection-anchored
     counterparts differ by a factor of
     \resultnum{onsetmodelsestimatedk.sse-vs-ssi.medianratio} at an overlap of
     \resultnum{onsetmodelsestimatedk.sse-vs-ssi.overlap}. The event-versus-individual gap of
-    Section~\ref{sec:results-naive-estimated} was to a large extent the conflation, not the
-    mechanism.
+    Section~\ref{sec:results-naive-estimated} is therefore largely attributable to temporal
+    conflation in this outbreak.
   \item \textbf{The onset-anchored models are strongly preferred, and are indistinguishable from
     each other.} With $k$ estimated the posterior model probabilities are
     \resultnum{onsetmodelsestimatedk.sseso.probability} for \sseso{} and
@@ -1372,17 +1275,15 @@ where they are furthest apart.
     \resultnum{onsetmodelsfixedk.ssiso.probability},
     \resultnum{onsetmodelsfixedk.ssi.probability},
     \resultnum{onsetmodelsfixedk.sse.probability}).
-  \item \textbf{The onset-anchored models gain nothing from estimating $k$, which is a
-    consistency check on the two preceding points.} Releasing $k$ is worth
+  \item \textbf{Estimating $k$ adds little evidence for the onset-anchored models.} Releasing $k$ is worth
     \resultnum{onsetmodelsestimatedk.sseso.evidencegain} nats to \sseso{} and
     \resultnum{onsetmodelsestimatedk.ssiso.evidencegain} to \ssiso{} --- within their own
-    estimation error --- against \resultnum{onsetmodelsestimatedk.sse.evidencegain} for naive
+    estimation error --- against \resultnum{onsetmodelsestimatedk.sse.evidencegain} for infection-anchored
     \sse{}. Their $k$ posteriors already sit on \resultnum{onsetmodelsfixedk.fixedk}, so fixing it
     there costs them nothing.
-  \item \textbf{The direction of the 8--12-day advance should not be universalised.} It is
-    measured under this reset convention, this switch convention, this outbreak history and this
-    posterior. The incubation-scale explanation is the mechanism for \emph{this} result, not a
-    theorem for arbitrary time series or interventions.
+  \item \textbf{The 8--12-day advance is specific to this analysis.} Its direction is conditional
+    on the reset and switch conventions, the outbreak history and the posterior; it is not a
+    general result for arbitrary time series or interventions.
 \end{itemize}
 
 \begin{table}[htbp]
@@ -1399,7 +1300,7 @@ where they are furthest apart.
     \cmidrule(lr){3-4}\cmidrule(lr){5-6}
     & & day & date & day & date \\
     \midrule
-    1: naive, $k=\resultnum{naivemodelsfixedk.fixedk}$
+    1: infection-anchored, $k=\resultnum{naivemodelsfixedk.fixedk}$
       & \dlo{}   & \resultnum{naivemodelsfixedk.dlo.rac05.day}   & \resultnum{naivemodelsfixedk.dlo.rac05.date}
                  & \resultnum{naivemodelsfixedk.dlo.rac01.day}   & \resultnum{naivemodelsfixedk.dlo.rac01.date} \\
       & \sse{}   & \resultnum{naivemodelsfixedk.sse.rac05.day}   & \resultnum{naivemodelsfixedk.sse.rac05.date}
@@ -1407,7 +1308,7 @@ where they are furthest apart.
       & \ssi{}   & \resultnum{naivemodelsfixedk.ssi.rac05.day}   & \resultnum{naivemodelsfixedk.ssi.rac05.date}
                  & \resultnum{naivemodelsfixedk.ssi.rac01.day}   & \resultnum{naivemodelsfixedk.ssi.rac01.date} \\
     \addlinespace
-    2: naive, $k$ estimated
+    2: infection-anchored, $k$ estimated
       & \dlo{}   & \resultnum{naivemodelsestimatedk.dlo.rac05.day}   & \resultnum{naivemodelsestimatedk.dlo.rac05.date}
                  & \resultnum{naivemodelsestimatedk.dlo.rac01.day}   & \resultnum{naivemodelsestimatedk.dlo.rac01.date} \\
       & \sse{}   & \resultnum{naivemodelsestimatedk.sse.rac05.day}   & \resultnum{naivemodelsestimatedk.sse.rac05.date}
@@ -1448,10 +1349,10 @@ where they are furthest apart.
   \caption{\textbf{The gap between the risk of additional cases and the risk of additional
     transmission is the incubation pipeline, quantified.} \sseso{} and \ssiso{} with $k$ fixed
     at \resultnum{onsetmodelsfixedk.fixedk} (\textbf{A}) and estimated (\textbf{B}). Dashed:
-    $\RAC$. Solid: $\RAT$. The shaded region between them is the $M(t)e^{-c}$ term of
-    Proposition~\ref{prop:onset} --- individuals already infected on the conditioning day but not
-    yet symptomatic. Under the three infection-anchored models these two curves coincide by
-    assumption, which is the conflation being measured.}
+    $\RAC$. Solid: $\RAT$. The shaded region is generated by the incubation-pipeline term
+    $M(t)$ in Proposition~\ref{prop:onset}: individuals already infected on the conditioning day
+    but not yet symptomatic. Under the three infection-anchored models these two curves coincide
+    by assumption.}
   \label{fig:rat}
 \end{figure}
 
@@ -1494,44 +1395,39 @@ where they are furthest apart.
 \end{itemize}
 
 % =============================================================================================
-\section{Sensitivity analyses}
+\section{Planned sensitivity analyses}
 \label{sec:sensitivity}
 % =============================================================================================
 
-None of the following has been run. They are listed in rough order of how much each would add,
-with what it would resolve.
+The following analyses remain to be completed before drawing conclusions about robustness.
 
 \begin{enumerate}
   \item \textbf{Outbreak-specific serial interval} (mean
     \resultnum{delays.alternativeserialinterval.mean}\,d, standard deviation
     \resultnum{delays.alternativeserialinterval.sd}\,d) --- \emph{infection-anchored models
-    only}. Its much lighter tail materially lowers the risk after a long case-free period, and it
-    is the estimate that should be preferred where outbreak-specific contact-tracing data exist.
-    It is structurally inadmissible for the onset-anchored models
-    (Section~\ref{sec:serial-interval}), and that incompatibility should be reported rather than
-    worked around: it says something about how much structure the incubation/TOST decomposition
-    imposes.
-  \item \textbf{Incubation/TOST decomposition.} Hold $w$ fixed and re-run \sseso{} and \ssiso{}
-    under two or three other published Ebola incubation estimates, taking the matching TOST from
-    the variance budget each time. This bounds how much of the onset-anchoring result rests on
-    the particular split used here, which the serial interval alone does not identify.
-  \item \textbf{Filtering rather than smoothed latents.} Section~\ref{sec:smoothing} reports the
-    signed comparison at a fixed parameter vector; repeating it integrated over the parameter
-    posterior would turn the stated approximation into a quantified one for all three
-    latent-variable models.
+    only}. Its lighter tail may reduce the estimated risk after a long case-free period. It is
+    incompatible with the onset-anchored models under the independent incubation/TOST
+    decomposition because its variance is smaller than the incubation variance
+    (Section~\ref{sec:serial-interval}).
+  \item \textbf{Incubation/TOST decomposition.} Re-estimate \sseso{} and \ssiso{} under
+    alternative published Ebola incubation distributions while holding the onset-to-onset serial
+    interval fixed. This will quantify dependence on a decomposition that the serial interval
+    alone does not identify.
+  \item \textbf{Filtering rather than smoothed latent states.} Integrate the filtering comparison
+    of Section~\ref{sec:smoothing} over parameter uncertainty for all three latent-variable
+    models.
   \item \textbf{Shifted $R$-switch for the infection-anchored models.} The onset-anchoring
     comparison confounds model structure with the indexing convention for the intervention.
-    Re-running the naive models with the switch moved back by
-    $\mathbb{E}[A] = \resultnum{delays.incubation.mean}$ days separates them: any residual
-    difference from the onset-anchored models is then attributable to structure rather than to
-    indexing.
+    Moving the switch in the infection-anchored models back by
+    $\mathbb{E}[A] = \resultnum{delays.incubation.mean}$ days will help separate the effect of
+    intervention indexing from the effect of model structure.
   \item \textbf{Non-empty initial incubation pipeline} for the onset-anchored models. Seed one or
     two already-infected individuals at day~\resultnum{data.firstday} with residual incubation
-    drawn from $\finc$, and measure the effect on $\Rpre$ and on the risk curve. This is the
-    sensitivity that matters if the index case is not epidemiologically identified
+    drawn from $\finc$, and measure the effect on $\Rpre$ and the risk curve. This assesses
+    sensitivity to whether the first observed case is the epidemiological index case
     (Section~\ref{sec:outbreak}).
-  \item \textbf{Prior sensitivity}, in particular for $k$, whose prior is deliberately informative
-    and whose role differs between models.
+  \item \textbf{Prior sensitivity}, particularly for the informative prior on $k$, whose
+    interpretation differs between models.
 \end{enumerate}
 
 % =============================================================================================
@@ -1540,16 +1436,16 @@ with what it would resolve.
 \label{app:equivalence}
 % =============================================================================================
 
-This appendix proves Proposition~\ref{prop:equivalence} and records the extra step
-\eqref{eq:sseso-natural} needs. Throughout, the natural form is as defined in
+This appendix proves Proposition~\ref{prop:equivalence} and gives the additional argument needed
+for \eqref{eq:sseso-natural}. Throughout, the explicit infection-process form is as defined in
 Section~\ref{sec:onset-models}: infections $J_t$ are drawn from the model's offspring
 distribution, and the $J_u$ infections of day $u$ are allocated to onset days by the incubation
 split \eqref{eq:incubation-split}, of which only the totals $D_t$ are observed.
 
 \subsection*{Proof of Proposition~\ref{prop:equivalence}}
 
-By hypothesis $J_t \mid E_t \sim \Pois(E_t)$, with $E_t$ measurable with respect to the history
-before day $t$.
+By hypothesis $J_t \mid E_t \sim \Pois(E_t)$, with $E_t$ measurable after the day-$t$ onset
+cohort and any associated latent state have been determined.
 
 \emph{Step 1 --- Poisson thinning.} Multinomial splitting of a Poisson count yields
 \emph{independent} Poisson parts: conditional on $E_u$, $N_{u,a}\sim\Pois(E_u\finc_a)$
@@ -1562,7 +1458,8 @@ Poissons, hence $D_t \mid (E_u)_{u<t} \sim \Pois\bigl(\sum_{a\ge1}\finc_a E_{t-a
 is \eqref{eq:onset-step}.
 
 \emph{Step 3 --- the joint law, not just the marginal.} Because $\finc$ has no mass at lag~$0$,
-$E_{t-a}$ for $a\ge1$ is a function of $D_{0:t-1}$ only, so the display above is precisely the
+$E_{t-a}$ for $a\ge1$ depends only on onset cohorts and associated states dated no later than
+$t-1$, so the display above is precisely the
 conditional law $p(D_t \mid D_{0:t-1})$. The parts $\{N_{u,a} : u+a=t\}$ composing $D_t$ are
 disjoint from those composing any other $D_{t'}$, so distinct days' onsets are conditionally
 independent given the $E$s. Chaining $p(D_{0:T}) = \prod_t p(D_t\mid D_{0:t-1})$ gives equality
@@ -1587,29 +1484,16 @@ function of $D_{\le t}$, so the day-$t$ conditional still depends only on $D_{0:
 $\tilde\lambda_{<t}$ is integrated out. \hfill$\square$
 
 % =============================================================================================
-\section{Code and reproducibility}
+\section{Data and code availability}
 \label{app:reproducibility}
 % =============================================================================================
 
-The analysis is implemented in Python and orchestrated with Snakemake in three tiers --- model
-fitting, derived quantities, and figures --- so that a change at one tier does not re-run those
-above it. The committed repository contains the padded onset series, every posterior sample,
-every derived quantity, all figures and this document; \verb|snakemake| reproduces all of them
-from the raw data.
-
-\textbf{No number in this document is typed into the prose.} Each is a macro expanded from a
-generated file that a pipeline rule writes from the posterior samples and derived quantities, so
-a refit moves the numbers in the text as well as on the figures, and a key with no value is a
-compilation error rather than a blank. Quantities that are inputs rather than results --- the
-serial interval, the priors, the sampler settings --- are generated from the configuration file
-in the same way.
-
-The verification results quoted in Section~\ref{sec:verification} come from studies whose subject
-is the implementation rather than the outbreak, and whose full records are kept separately from
-the analysis outputs, in \file{validation/results/}: the sampler benchmark behind
-Section~\ref{sec:latent-block}, the risk-calculation cross-checks and the smoothing comparison of
-Section~\ref{sec:smoothing}, the marginal-likelihood checks of Section~\ref{sec:evidence}, and
-the onset-model particle-MCMC study.
+The accompanying repository contains the daily onset series, analysis configuration, source code,
+posterior samples, derived quantities, figures and this manuscript. The full analysis is
+reproducible from the onset data through a documented Snakemake workflow. Numerical values in the
+manuscript are generated from the saved analysis outputs so that text and figures remain
+synchronised. The repository also includes the simulation, particle-method and
+marginal-likelihood validation analyses described in Section~\ref{sec:verification}.
 
 % =============================================================================================
 \section*{References}
