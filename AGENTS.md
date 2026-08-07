@@ -231,6 +231,16 @@ What Stage 4 established (`validation/results/rac_validation.md`, and the checks
   `−RΛ ≤ Σ_j φ(μ_j) ≤ φ(Λ)` for `φ(μ) = −k log(1 + Rμ/k)` — is universal; the *direction* of
   the comparison with SSE is a property of a thin, spread-out profile, not a theorem, so do not
   restate it as one.
+- **SSI's RAC is *above* SSE's after the final case, and that is not a bug** (day 90: 0.123 vs
+  0.093). It reads like one — inferring that the late cases were not very infectious ought to
+  push SSI down — and it does, hard: `E[Λ_Y(t)]/Λ(t) ≈ 0.35` late in the series, worth −0.17 of
+  RAC at day 90. It is outweighed by §5.4's convexity, here with **SSE** in the pooled role
+  (+0.21). SSE's dispersion parameter is `kΛ(t)`, which shrinks with the transmission that
+  *remains* (0.040 by day 90); SSI's total shape is `k · Σ I_u = 9.7`, fixed by the individuals
+  who ever existed, so once each residual slice is small SSI collapses to the Poisson limit.
+  `R` works slightly against the gap (SSI's mean `R_pre` is 1.78 against SSE's 2.10). **Do not
+  present §5.4 as "DLO is the odd one out"** — DLO and SSI are on the same side of SSE, for the
+  same reason.
 - **The §5.6 gap has both signs, as §5.6 predicted.** Smoothed minus filtering is strongly
   positive early (up to +0.64 around day 2, where the filter has not yet seen the cases that
   reveal a high infectivity) and negative after the last case (mean −0.03, worst −0.15 around
