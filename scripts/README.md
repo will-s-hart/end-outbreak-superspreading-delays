@@ -11,12 +11,14 @@ in this tree — see `validation/` for benchmarks and cross-checks.
 | `run_naive_models_estimated_k.py` | 1 and 2 | the same, plus `results/naive_models_estimated_k/dispersion_posteriors.json` |
 | `run_onset_models_fixed_k.py` | 1 and 2 | the four-model fixed-`k` Analysis 3 outputs, including RAT in the SO-model RAC files |
 | `run_onset_models_estimated_k.py` | 1 and 2 | the four-model estimated-`k` Analysis 4 outputs and dispersion comparisons |
+| `run_delay_distributions.py` | 2 | `results/delay_distributions.csv` — the four distributions drawn in Supplementary Fig. S1 |
 | `run_report_numbers.py` | 2 | `results/report_numbers.tex` — every number the report quotes, as LaTeX macros |
 | `plot_naive_models_fixed_k.py` | 3 | `figures/naive_models_fixed_k/*.pdf`, `*.png` |
 | `plot_naive_models_estimated_k.py` | 3 | the same for `naive_models_estimated_k` |
 | `plot_onset_models_fixed_k.py` | 3 | `figures/onset_models_fixed_k/*.pdf`, `*.png` |
 | `plot_onset_models_estimated_k.py` | 3 | the same for `onset_models_estimated_k` |
-| `plot_onset_models_rat.py` | 3 | the two-panel supplementary RAC/RAT figure |
+| `plot_delay_distributions.py` | 3 | Supplementary Fig. S1: incubation, TOST and serial-interval distributions |
+| `plot_onset_models_rat.py` | 3 | Supplementary Fig. S2: the two-panel RAC/RAT comparison |
 | `figure_panels.py` | 3 | the panels the analysis figures are assembled from |
 | `utils.py` | — | presentation-only helpers shared by the plotting scripts |
 

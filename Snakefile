@@ -114,6 +114,10 @@ REPORT_NUMBERS_CORE = ["scripts/run_report_numbers.py"] + code(
 PLOT_CORE = code(
     "configuration", "outbreak_data", "model_specifications", "risk_of_additional_cases"
 ) + ["scripts/utils.py", "scripts/figure_panels.py"]
+DELAY_RESULTS_CORE = ["scripts/run_delay_distributions.py"] + code(
+    "configuration", "delay_distributions"
+)
+DELAY_FIGURE_CORE = code("configuration") + ["scripts/utils.py"]
 
 ANALYSES = config["analyses"]
 ONSETS_CSV = config["shared"]["data_file"]
@@ -196,6 +200,11 @@ MAIN_TARGETS = [
 RAT_FIGURE_TARGETS = [
     f"figures/onset_models_rat/onset_models_rat.{extension}" for extension in ("pdf", "png")
 ]
+DELAY_FIGURE_TARGETS = [
+    f"figures/delay_distributions/delay_distributions.{extension}"
+    for extension in ("pdf", "png")
+]
+SUPPLEMENTARY_FIGURE_TARGETS = DELAY_FIGURE_TARGETS + RAT_FIGURE_TARGETS
 # The compiled methods-and-results document, and the macro file every number in it expands from.
 REPORT_NUMBERS = "results/report_numbers.tex"
 REPORT_TARGET = "report/report.pdf"
@@ -204,7 +213,7 @@ REPORT_TARGET = "report/report.pdf"
 rule all:
     input:
         MAIN_TARGETS,
-        RAT_FIGURE_TARGETS,
+        SUPPLEMENTARY_FIGURE_TARGETS,
         REPORT_TARGET,
 
 
@@ -345,6 +354,21 @@ rule report_numbers:
         " --output {output}"
 
 
+rule delay_distributions:
+    input:
+        config=CONFIG_FILE,
+        script="scripts/run_delay_distributions.py",
+        code=DELAY_RESULTS_CORE,
+    output:
+        "results/delay_distributions.csv",
+    params:
+        shared=SHARED_PARAMS,
+    shell:
+        "python {input.script}"
+        " --config {input.config}"
+        " --output {output}"
+
+
 # ---------------------------------------------------------------------------------------
 # Tier 3 -- figures and the report
 # ---------------------------------------------------------------------------------------
@@ -399,6 +423,21 @@ rule rat_figure:
         " --output-png {output.png}"
 
 
+rule delay_figure:
+    input:
+        delays="results/delay_distributions.csv",
+        script="scripts/plot_delay_distributions.py",
+        code=DELAY_FIGURE_CORE,
+    output:
+        pdf="figures/delay_distributions/delay_distributions.pdf",
+        png="figures/delay_distributions/delay_distributions.png",
+    shell:
+        "python {input.script}"
+        " --delays {input.delays}"
+        " --output-pdf {output.pdf}"
+        " --output-png {output.png}"
+
+
 # The methods-and-results document. It is tier 3 like the figures: it consumes only the PDFs and
 # the macro file, and recompiling it can never re-run a fit.
 #
@@ -410,7 +449,9 @@ rule report:
         tex="report/report.tex",
         numbers=REPORT_NUMBERS,
         figures=[
-            target for target in MAIN_TARGETS + RAT_FIGURE_TARGETS if target.endswith(".pdf")
+            target
+            for target in MAIN_TARGETS + SUPPLEMENTARY_FIGURE_TARGETS
+            if target.endswith(".pdf")
         ],
     output:
         REPORT_TARGET,
@@ -449,10 +490,11 @@ rule results:
             for analysis in IMPLEMENTED_ANALYSES
             if estimates_dispersion(analysis)
         ],
+        "results/delay_distributions.csv",
         REPORT_NUMBERS,
 
 
 rule figures:
     input:
         MAIN_TARGETS,
-        RAT_FIGURE_TARGETS,
+        SUPPLEMENTARY_FIGURE_TARGETS,

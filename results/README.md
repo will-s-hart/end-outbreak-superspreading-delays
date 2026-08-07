@@ -7,6 +7,7 @@ Snakemake rule from a script in `scripts/`, and everything here feeds a figure o
 | `<analysis>/<model>_rac.csv` | Tier-2 RAC curve (plus RAT, for the onset-anchored models). |
 | `<analysis>/model_evidence.json` | Tier-2 marginal likelihoods and posterior model probabilities. |
 | `<analysis>/dispersion_posteriors.json` | Tier-2 `k` posterior summaries and their pairwise divergences — only for the analyses that estimate `k`. |
+| `delay_distributions.csv` | Tier-2 discrete incubation, TOST, target serial-interval and implied serial-interval distributions for Supplementary Fig. S1. |
 | `report_numbers.tex` | Tier-2 LaTeX macros: every number `report/report.tex` quotes, collected from the files above. Spans the analyses rather than sitting inside one, which is why it is not in a subdirectory. |
 
 The per-analysis subdirectories arrive one per stage: `naive_models_fixed_k/` with Stage 5,

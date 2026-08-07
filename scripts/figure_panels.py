@@ -138,7 +138,7 @@ def rac_rat_panel(
     letter: str,
     first_day: int | None = None,
 ) -> None:
-    """RAC and RAT for the onset-anchored models, with their pipeline gap shaded."""
+    """RAC and RAT for the onset-anchored models."""
     utils.plot_incidence(ax, data.dates, data.onsets)
     utils.mark_thresholds(ax)
     for model, frame in curves.items():
@@ -162,15 +162,6 @@ def rac_rat_panel(
             color=colour,
             label=f"{utils.model_label(model)} RAT",
             zorder=4,
-        )
-        ax.fill_between(
-            frame["date"],
-            frame[utils.TRANSMISSION_RISK_COLUMN],
-            frame[utils.RISK_COLUMN],
-            color=colour,
-            alpha=0.12,
-            linewidth=0,
-            zorder=2,
         )
     utils.mark_intervention_dates(
         ax,
