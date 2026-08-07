@@ -91,6 +91,7 @@
 \newcommand{\mssi}{\mathrm{SSI}}
 \newcommand{\msseso}{\mathrm{SSE\text{-}SO}}
 \newcommand{\mssiso}{\mathrm{SSI\text{-}SO}}
+\newcommand{\mcori}{\mathrm{Cori}}
 
 \title{End-of-outbreak decision-making under superspreading\\ and onset-date delays\\[4pt]
   \large The 2018 \'Equateur Province (DRC) Ebola outbreak}
@@ -319,103 +320,220 @@ mean $\alpha/\beta$.
 \subsection{Infection-anchored models}
 \label{sec:naive-models}
 
-\paragraph{\dlo{} --- day-level overdispersion.}
+All four infection-anchored models share one generative skeleton. Cases beget cases through the
+serial interval: an individual infected on day $u$ produces secondary infections that appear on
+day $u+\ell$ with probability $w_\ell$, and the reproduction number in force on the day a
+secondary case appears sets how many of them to expect. Write
 \begin{equation}
-  I_t \sim \NB\!\left(\text{mean}=R_t\textstyle\sum_{s\ge 1} w_s I_{t-s},\ \text{disp}=k\right).
+  \lambda_t = \sum_{s\ge 1} w_s I_{t-s}
+  \label{eq:naive-foi}
+\end{equation}
+for the force of infection driving day $t$. What distinguishes the models is the offspring law
+--- where, if anywhere, the excess variance sits.
+
+\paragraph{\cori{} --- the Poisson baseline.} An individual infected on day $u$ generates, at
+each lag $\ell$ and independently of every other, a Poisson number of offspring with mean
+$R_{u+\ell}w_\ell$. Poisson superposition then gives the day-$t$ total as
+\begin{equation}
+  \text{\cori{}}: \qquad I_t \mid \lambda_t \sim \Pois\!\left(R_t\lambda_t\right).
+  \label{eq:cori}
+\end{equation}
+This is the standard renewal model of Cori et al.\ (2013) and the model underlying most published
+end-of-outbreak risk calculations. It has no dispersion parameter, and its natural and
+inference-convenient forms coincide.
+
+\paragraph{\dlo{} --- day-level overdispersion.} The negative binomial is applied directly to the
+day's aggregate incidence, with the same dispersion on every day:
+\begin{equation}
+  \text{\dlo{}}: \qquad
+  I_t \mid \lambda_t \sim \NB\!\left(\text{mean}=R_t\lambda_t,\ \text{disp}=k\right).
   \label{eq:dlo}
 \end{equation}
-The dispersion is \emph{constant across days} and does not scale with the force of infection.
-That is the defining feature, and the reason the same numerical $k$ means something quite
-different here than in the two models below. There are no latent variables and the likelihood is
-closed-form.
+This model has no per-individual reading at all. The excess variance is a property of the day
+rather than of anybody in it, and it does not scale with how many people are infectious --- so
+$k$ here is a statement about day-to-day variability in aggregate incidence, not about how
+unequally individuals transmit. That is the defining feature, and the reason the same numerical
+$k$ means something quite different here than in the two models below. Its natural and
+inference-convenient forms also coincide, and the likelihood is closed form.
 
-\paragraph{\sse{} --- superspreading events.} With $\Lambda_t = \sum_{s\ge1} w_s I_{t-s}$,
+\paragraph{\sse{} --- superspreading events.} The offspring law is again negative binomial, but
+with a dispersion that \emph{does} scale with the force of infection:
 \begin{equation}
-  \lambda_t \sim \Gam\!\left(k\Lambda_t,\ k\right),
-  \qquad
-  I_t \sim \Pois\!\left(R_t\lambda_t\right).
+  \text{\sse{}}: \qquad
+  I_t \mid \lambda_t \sim \NB\!\left(\text{mean}=R_t\lambda_t,\ \text{disp}=k\lambda_t\right).
   \label{eq:sse}
 \end{equation}
-Marginalising $\lambda_t$ gives $I_t\sim\NB(\text{mean}=R_t\Lambda_t,\ \text{disp}=k\Lambda_t)$,
-so the dispersion \emph{scales with the force of infection}. That is what makes $k$ an
-individual-level offspring dispersion: each infector independently contributes
-$\NB(R_t w_\ell,\ k w_\ell)$ offspring at lag $\ell$, and these pool by negative binomial
-closure, since the success probability $k/(k+R_t)$ does not depend on $\ell$. Because the
-marginal is available in closed form, \sse{} needs no latent variables --- the only one of the
-five models with that property.
+That scaling is what makes $k$ an \emph{individual-level} offspring dispersion. Each infector
+independently contributes $\NB(R_t w_\ell,\ k w_\ell)$ offspring at lag $\ell$; these all share
+the success probability $k/(k+R_t)$, which does not depend on $\ell$, so by negative binomial
+closure they pool into exactly \eqref{eq:sse}, and each individual's own offspring total is
+$\NB(R,k)$. The decomposition is used again in Section~\ref{sec:naive-risk}.
 
-\paragraph{\ssi{} --- superspreading individuals.}
+For inference, \eqref{eq:sse} is un-marginalised into its Poisson--Gamma representation,
 \begin{equation}
+  \tilde\lambda_t \mid \lambda_t \sim \Gam\!\left(k\lambda_t,\ k\right),
+  \qquad
+  I_t \mid \tilde\lambda_t \sim \Pois\!\left(R_t\tilde\lambda_t\right),
+  \label{eq:sse-convenient}
+\end{equation}
+in which the day's transmission opportunity is inflated or deflated by a fresh Gamma factor. For
+\sse{} this is optional --- the marginal \eqref{eq:sse} is closed form, making \sse{} the only
+one of the five compared models that needs no latent variables --- but the same representation is
+what makes \sseso{} tractable below.
+
+\paragraph{\ssi{} --- superspreading individuals.} Heterogeneity is attached to people rather
+than to occasions. Each infected individual carries a latent infectivity drawn independently from
+$\Gam(k,k)$, with mean $1$ and variance $1/k$, so the aggregate infectivity of the day-$t$ cohort
+is $\Gam(kI_t,k)$ and infections arise as a Poisson process driven by past infectivity:
+\begin{equation}
+  \text{\ssi{}}: \qquad
   Y_t \mid I_t \sim \Gam\!\left(kI_t,\ k\right),
   \qquad
-  I_t \sim \Pois\!\left(R_t\textstyle\sum_{s\ge 1} w_s Y_{t-s}\right).
+  I_t \mid (Y_u)_{u<t} \sim \Pois\!\left(R_t\lambda^{Y}_t\right),
+  \qquad
+  \lambda^{Y}_t = \sum_{s\ge1} w_s Y_{t-s}.
   \label{eq:ssi}
 \end{equation}
-Each infected individual carries a latent infectivity with mean $1$ and variance $1/k$; $Y_t$ is
-the aggregate infectivity of the day-$t$ cohort, and $I_t = 0$ forces $Y_t = 0$. Marginally the
-offspring distribution is $\NB(R_t, k)$, the same as \sse{} --- the two models differ only in
-mechanism. On this series \ssi{} carries
-\resultnum{naivemodelsfixedk.ssi.latents.total} latent infectivities.
+Here $I_t = 0$ forces $Y_t = 0$. Marginally each individual's offspring total is $\NB(R,k)$, the
+same as under \sse{} --- the two models are calibrated to the same individual-level offspring
+distribution and differ only in mechanism. But the $Y_t$ cannot be integrated out of the joint
+law, so \eqref{eq:ssi} is both the natural and the inference-convenient form. On this series
+\ssi{} carries \resultnum{naivemodelsfixedk.ssi.latents.total} latent infectivities.
+
+\begin{remark}[The Poisson limit]
+\label{rmk:naive-limit}
+As $k\to\infty$ the negative binomial in \eqref{eq:sse} converges to the Poisson and the Gamma
+noise in \eqref{eq:ssi} degenerates to $Y_t = I_t$, so \sse{} and \ssi{} both collapse onto
+\cori{}. \dlo{} loses its excess variance in the same limit, but without the parameter ever
+having had an individual-level reading to lose.
+\end{remark}
 
 \subsection{Onset-anchored models}
 \label{sec:onset-models}
 
-Transmission is anchored to the infector's own onset through $\ftost$, and $\finc$ maps
-infections forward to onsets. This is appropriate for Ebola virus disease, where pre-symptomatic
-transmission is negligible. In the inference-convenient forms below, $E_t$ is the \emph{expected}
-number of infections on day $t$; the actual infection counts are marginalised out, which
-Appendix~\ref{app:equivalence} shows leaves the law of the observed onsets unchanged. All three
-share the map from expected infections to observed onsets,
+Transmission is now referenced to the infector's own symptom onset rather than to their
+unobserved infection time, which is appropriate for a disease with negligible pre-symptomatic
+transmission. Two things change. The serial interval is replaced by the TOST distribution, so the
+force of infection is a weighted sum of past \emph{onset} cohorts; and infection and onset become
+distinct events, separated by the incubation period. Each of the three models below is the exact
+onset-anchored counterpart of one of \eqref{eq:cori}, \eqref{eq:sse} and \eqref{eq:ssi}.
+
+Let $J_t$ denote the number of infections on day $t$ and $D_t$ the number of onsets. In all three
+models the day-$u$ infections are carried forward to their onset days by independent incubation
+draws,
 \begin{equation}
-  D_t \sim \Pois\!\left(\textstyle\sum_{a\ge 1}\finc_a E_{t-a}\right),
+  (N_{u,a})_{a\ge1} \mid J_u \sim \mathrm{Multinomial}\bigl(J_u,\ (\finc_a)\bigr),
+  \qquad
+  D_t = \sum_{a\ge1} N_{t-a,a},
+  \label{eq:incubation-split}
+\end{equation}
+and only the onsets are observed: the infection counts $J_t$ and their allocations $N_{u,a}$ are
+latent. That latent block is large, discrete and unnecessary, because it can be integrated out
+exactly.
+
+\begin{proposition}[Onsets alone suffice]
+\label{prop:equivalence}
+Suppose that, conditional on a non-negative day-$t$ rate $E_t$ that is a function of
+$D_{0:t-1}$ and of any latent variables attached to days $u < t$, the infections satisfy
+$J_t \mid E_t \sim \Pois(E_t)$, and that they are allocated to onset days by
+\eqref{eq:incubation-split}. Then that model and
+\begin{equation}
+  D_t \mid (E_u)_{u<t} \sim \Pois\!\left(\sum_{a\ge1}\finc_a E_{t-a}\right)
   \label{eq:onset-step}
 \end{equation}
-and differ only in how $E_t$ is formed:
-\begin{align}
-  \text{\coriso}: && E_t &= R_t\textstyle\sum_{s\ge 0}\ftost_s D_{t-s};
-    \label{eq:coriso} \\[2pt]
-  \text{\sseso}: &&
-    \tilde\lambda_t &\sim \Gam\!\left(k\textstyle\sum_{s\ge 0}\ftost_s D_{t-s},\ k\right),
-    \qquad E_t = R_t\tilde\lambda_t;
-    \label{eq:sseso} \\[2pt]
-  \text{\ssiso}: && Y_t \mid D_t &\sim \Gam\!\left(kD_t,\ k\right),
-    \qquad E_t = R_t\textstyle\sum_{s\ge 0}\ftost_s Y_{t-s}.
-    \label{eq:ssiso}
-\end{align}
+define the same joint law for the observed onset process $(D_t)$.
+\end{proposition}
 
-The latent cost is asymmetric. \ssiso{} carries one latent per day with an onset, the same
-\resultnum{onsetmodelsfixedk.ssiso.latents.total} as \ssi{}. \sseso{} carries one per day whose
-TOST-weighted onset sum is non-zero; because the index case contributes $\ftost_t D_0 > 0$ at
-every lag out to the truncation, that is \emph{every} inference day, or
-\resultnum{onsetmodelsfixedk.sseso.latents.total} latents.
-Section~\ref{sec:latent-block} describes how they are handled.
+\noindent
+The proof is in Appendix~\ref{app:equivalence}. It rests on Poisson thinning, which turns the
+multinomial split \eqref{eq:incubation-split} into independent Poisson parts, and on Poisson
+superposition, which recombines them into \eqref{eq:onset-step}; the same thinning argument
+supplies the incubation pipeline of Section~\ref{sec:onset-risk}. The hypothesis covers all three
+models: two have Poisson offspring outright, and \sseso{}'s negative binomial is Poisson
+conditional on its own Gamma factor, exactly as in \eqref{eq:sse-convenient}. Each model below is
+therefore given twice --- as it is defined, and as it is fitted.
 
-\begin{remark}[The observed onsets are not negative binomial]
-Unlike \sse{}, \sseso{} has no closed-form likelihood. Each $D_t$ pools contributions from many
-days, each carrying its own independent Gamma, so the $\tilde\lambda_t$ must be sampled. See
-Appendix~\ref{app:equivalence}.
-\end{remark}
-
-\subsection{The two Poisson limits}
-\label{sec:poisson-limits}
-
-Letting $k \to \infty$ removes the overdispersion from each family and leaves a common Poisson
-model. In the infection-anchored family, \eqref{eq:sse} and \eqref{eq:ssi} both collapse onto
+\paragraph{\coriso{} --- the onset-anchored Poisson baseline.} A case with onset on day $u$
+infects others $s$ days later with probability $\ftost_s$, in $\Pois(R_{u+s}\ftost_s)$ numbers
+and independently across lags and individuals. Summing over infectors,
 \begin{equation}
-  \text{\cori}: \qquad I_t \sim \Pois\!\left(R_t\textstyle\sum_{s\ge1} w_s I_{t-s}\right),
-  \label{eq:cori}
+  \text{\coriso{}}: \qquad
+  J_t \mid D_{0:t} \sim \Pois\!\left(R_t\lambda_t\right),
+  \qquad
+  \lambda_t = \sum_{s\ge0}\ftost_s D_{t-s},
+  \label{eq:coriso-natural}
 \end{equation}
-the standard renewal model of Cori et al.\ (2013) and the model underlying most published
-end-of-outbreak risk calculations. In the onset-anchored family, \eqref{eq:sseso} and
-\eqref{eq:ssiso} both collapse onto \coriso{} in \eqref{eq:coriso}. \dlo{} has no such limit in
-the same sense: its dispersion does not scale with the force of infection, so $k \to \infty$
-removes the excess variance without the parameter ever having had an individual-level reading.
+together with \eqref{eq:incubation-split}. Proposition~\ref{prop:equivalence} applies with
+$E_t = R_t\lambda_t$ and reduces this to
+\begin{equation}
+  D_t \mid D_{0:t-1} \sim
+  \Pois\!\left(\sum_{a\ge1}\finc_a R_{t-a}\sum_{s\ge0}\ftost_s D_{t-a-s}\right),
+  \label{eq:coriso-convenient}
+\end{equation}
+a deterministic recursion in the observed onsets with no latent variables at all.
 
-Neither \cori{} nor \coriso{} is one of the five compared models. They serve two purposes. They
-are the verification targets for the collapse checks of Section~\ref{sec:verification}, and
-\cori{} is the model whose published \'Equateur risk curve provides the external check of the
-risk calculation. They also fix the reference point for Section~\ref{sec:structure}: a
-mechanism's effect on the risk is most naturally read as its departure from the Poisson limit.
+\paragraph{\sseso{} --- superspreading events, onset-anchored.} The offspring law is negative
+binomial with a dispersion scaling with the force of infection, as in \eqref{eq:sse}:
+\begin{equation}
+  \text{\sseso{}}: \qquad
+  J_t \mid D_{0:t} \sim \NB\!\left(\text{mean}=R_t\lambda_t,\ \text{disp}=k\lambda_t\right),
+  \qquad
+  \lambda_t = \sum_{s\ge0}\ftost_s D_{t-s},
+  \label{eq:sseso-natural}
+\end{equation}
+together with \eqref{eq:incubation-split}. Writing the negative binomial as a Poisson--Gamma
+mixture puts a fresh Gamma factor on each day's transmission opportunity, and
+Proposition~\ref{prop:equivalence} then applies with $E_t = R_t\tilde\lambda_t$:
+\begin{equation}
+  \tilde\lambda_t \mid \lambda_t \sim \Gam\!\left(k\lambda_t,\ k\right),
+  \qquad
+  D_t \mid (\tilde\lambda_u)_{u<t} \sim
+  \Pois\!\left(\sum_{a\ge1}\finc_a R_{t-a}\tilde\lambda_{t-a}\right).
+  \label{eq:sseso-convenient}
+\end{equation}
+Here, unlike in \sse{}, the Gamma factor cannot be integrated out again: each $D_t$ pools
+contributions from many days, each carrying its own independent $\tilde\lambda$, so the onsets
+are \emph{not} marginally negative binomial and there is no closed-form likelihood. \sseso{}
+carries one latent per day whose TOST-weighted onset sum is non-zero; because the index case
+contributes $\ftost_t D_0 > 0$ at every lag out to the truncation, that is \emph{every} inference
+day --- \resultnum{onsetmodelsfixedk.sseso.latents.total} latents on this series.
+
+\paragraph{\ssiso{} --- superspreading individuals, onset-anchored.} Each case carries a latent
+infectivity drawn from $\Gam(k,k)$, so the day-$t$ onset cohort has aggregate infectivity
+$\Gam(kD_t,k)$ and drives a Poisson infection process, as in \eqref{eq:ssi}:
+\begin{equation}
+\begin{aligned}
+  \text{\ssiso{}}: \qquad
+  &Y_t \mid D_t \sim \Gam\!\left(kD_t,\ k\right),
+  \qquad
+  J_t \mid (Y_u)_{u\le t} \sim \Pois\!\left(R_t\lambda^{Y}_t\right), \\
+  &\lambda^{Y}_t = \sum_{s\ge0}\ftost_s Y_{t-s},
+\end{aligned}
+\label{eq:ssiso-natural}
+\end{equation}
+together with \eqref{eq:incubation-split}. Proposition~\ref{prop:equivalence} applies with
+$E_t = R_t\lambda^{Y}_t$ and gives
+\begin{equation}
+  Y_t \mid D_t \sim \Gam\!\left(kD_t,\ k\right),
+  \qquad
+  D_t \mid (Y_u)_{u<t} \sim
+  \Pois\!\left(\sum_{a\ge1}\finc_a R_{t-a}\sum_{s\ge0}\ftost_s Y_{t-a-s}\right).
+  \label{eq:ssiso-convenient}
+\end{equation}
+The latents are the same cohort infectivities as under \ssi{} ---
+\resultnum{onsetmodelsfixedk.ssiso.latents.total} of them here --- and, as there, they cannot be
+integrated out. Section~\ref{sec:latent-block} describes how the latent blocks of
+\eqref{eq:sseso-convenient} and \eqref{eq:ssiso-convenient} are handled.
+
+\begin{remark}[The Poisson limit, and the role of \cori{} and \coriso{}]
+\label{rmk:onset-limit}
+As in Remark~\ref{rmk:naive-limit}, $k\to\infty$ collapses \sseso{} and \ssiso{} onto \coriso{}.
+Neither \cori{} nor \coriso{} is one of the five compared models. They serve as the verification
+targets for the collapse checks of Section~\ref{sec:verification}; \cori{} is additionally the
+model whose published \'Equateur risk curve provides the external check of the risk calculation;
+and they fix the reference point for Section~\ref{sec:structure}, in which a mechanism's effect
+on the risk is read as its departure from the Poisson limit.
+\end{remark}
 
 \subsection{The five compared models}
 \label{sec:model-summary}
@@ -434,7 +552,7 @@ mechanism's effect on the risk is most naturally read as its departure from the 
 \end{tabular}
 \end{center}
 
-\subsection{When does $R$ switch?}
+\subsection{\texorpdfstring{When does $R$ switch?}{When does R switch?}}
 \label{sec:switch}
 
 $R$ switches from $\Rpre$ to $\Rpost$ on day~\resultnum{data.ertarrivalday}
@@ -533,10 +651,12 @@ transmission to come after day $t$; with $F_0 = 0$, the $u=t$ term enters with f
 \label{prop:naive}
 Conditional on one draw of the parameters and, for \ssi{}, the retained latent infectivities,
 \begin{align}
+  \Pr(\text{no further case after } t)_{\mcori} &= \exp\!\left(-\Rreset\Lambda(t)\right),
+  \label{eq:cori-risk}\\
   \Pr(\text{no further case after } t)_{\msse} &= \left(1+\Rreset/k\right)^{-k\Lambda(t)},
-  \\
+  \label{eq:sse-risk}\\
   \Pr(\text{no further case after } t)_{\mssi} &= \exp\!\left(-\Rreset\Lambda_Y(t)\right),
-  \\
+  \label{eq:ssi-risk}\\
   \Pr(\text{no further case after } t)_{\mdlo} &= \prod_{j>t}\left(1+\Rreset\mu_j/k\right)^{-k},
   \qquad \mu_j = \sum_{s\ge1} w_s I_{j-s},
   \label{eq:dlo-risk}
@@ -545,17 +665,25 @@ where in \eqref{eq:dlo-risk} the future counts are set to zero, $I_u := 0$ for $
 \end{proposition}
 
 \begin{proof}
-For \sse{}, each observed case contributes $\NB(\Rreset w_\ell,\ k w_\ell)$ offspring at lag
-$\ell$ independently; the contributions with $\ell > t-u$ are untouched by the conditioning and
-pool by negative binomial closure into $\NB(\Rreset\Lambda(t),\ k\Lambda(t))$, whose
-zero-probability is as stated. For \ssi{}, given the latents the same contributions are
-independent Poisson with rates $\Rreset w_\ell Y_u$, pooling into $\Pois(\Rreset\Lambda_Y(t))$.
-For \dlo{}, the future counts are negative binomial day by day with a dispersion that does not
-depend on the force of infection, so the zero-probabilities multiply over days.
+For \cori{}, each observed case contributes $\Pois(\Rreset w_\ell)$ offspring at lag $\ell$
+independently; the contributions with $\ell > t-u$ are untouched by the conditioning and pool by
+Poisson superposition into $\Pois(\Rreset\Lambda(t))$. For \sse{} the same contributions are
+$\NB(\Rreset w_\ell,\ k w_\ell)$ and pool by negative binomial closure into
+$\NB(\Rreset\Lambda(t),\ k\Lambda(t))$, whose zero-probability is as stated. For \ssi{}, given
+the latents they are again Poisson, with rates $\Rreset w_\ell Y_u$, pooling into
+$\Pois(\Rreset\Lambda_Y(t))$. For \dlo{}, the future counts are negative binomial day by day with
+a dispersion that does not depend on the force of infection, so the zero-probabilities multiply
+over days.
 \end{proof}
 
+\noindent
+\eqref{eq:cori-risk} is included because it is the reference the other three are read against
+(Section~\ref{sec:structure}), not because \cori{} is compared: it is the Poisson limit of
+\eqref{eq:sse-risk} and \eqref{eq:ssi-risk} as $k\to\infty$, and $\Lambda_Y(t) \to \Lambda(t)$.
+
 The \dlo{} product is finite in practice, since $\mu_j = 0$ once $j$ exceeds $t$ plus the support
-of $w$. Under all three, $\RAT = \RAC$.
+of $w$. Under every infection-anchored model $\RAT = \RAC$, because an infection and the case it
+produces fall on the same day by construction.
 
 \subsection{Onset-anchored models}
 \label{sec:onset-risk}
@@ -586,7 +714,9 @@ onset falls after it,
   M(t) = \sum_{u \le t} E_u\, \sinc_{t-u},
   \label{eq:pipeline}
 \end{equation}
-with $E_u$ the model's expected infections on day $u$, from \eqref{eq:coriso}--\eqref{eq:ssiso}
+with $E_u$ the model's conditional mean number of infections on day $u$ --- $R_u\lambda_u$ for
+\coriso{}, $R_u\tilde\lambda_u$ for \sseso{} and $R_u\lambda^{Y}_u$ for \ssiso{}, as in
+\eqref{eq:coriso-convenient}--\eqref{eq:ssiso-convenient} ---
 evaluated at the \emph{historical} $R_u$: the pipeline was filled before the reset.
 
 \paragraph{Per-case exponent.} Minus the log-probability that one future case, transmitting
@@ -650,6 +780,51 @@ $\mathbb{E}\bigl[(e^{-c})^{N}\bigr] = \exp\bigl(-M(t)(1-e^{-c})\bigr)$ by the Po
 function, and multiplying by $e^{-H(t)}$ gives \eqref{eq:log-no-transmission}.
 \end{proof}
 
+Treating the three models together is convenient for the derivation, but the quantity each one
+actually evaluates is a single expression in the observed onsets and the retained latent path.
+Substituting \eqref{eq:retained-weight}--\eqref{eq:retained-exponent} into
+Proposition~\ref{prop:onset} gives, with $\lambda_u$, $\lambda^Y_u$ and $\tilde\lambda_u$ as in
+Section~\ref{sec:onset-models}:
+\begin{align}
+  \text{\coriso{}}: \quad
+  \Pr(\text{no case})
+    &= \exp\biggl(-\Rreset\sum_{u\le t} D_u\,\stost_{t-u}
+       \;-\; \sum_{u\le t} R_u\lambda_u\,\sinc_{t-u}\biggr),
+  \label{eq:coriso-rac}\\
+  \Pr(\text{no transmission})
+    &= \exp\biggl(-\Rreset\sum_{u\le t} D_u\,\stost_{t-u}
+       \;-\; \bigl(1-e^{-\Rreset}\bigr)\sum_{u\le t} R_u\lambda_u\,\sinc_{t-u}\biggr);
+  \label{eq:coriso-rat}\\[6pt]
+  \text{\sseso{}}: \quad
+  \Pr(\text{no case})
+    &= \Bigl(1+\frac{\Rreset}{k}\Bigr)^{-k\sum_{u\le t} D_u\,\stost_{t-u}}
+       \exp\biggl(-\sum_{u\le t} R_u\tilde\lambda_u\,\sinc_{t-u}\biggr),
+  \label{eq:sseso-rac}\\
+  \Pr(\text{no transmission})
+    &= \Bigl(1+\frac{\Rreset}{k}\Bigr)^{-k\sum_{u\le t} D_u\,\stost_{t-u}}
+       \exp\biggl(-\Bigl[1-\bigl(1+\tfrac{\Rreset}{k}\bigr)^{-k}\Bigr]
+       \sum_{u\le t} R_u\tilde\lambda_u\,\sinc_{t-u}\biggr);
+  \label{eq:sseso-rat}\\[6pt]
+  \text{\ssiso{}}: \quad
+  \Pr(\text{no case})
+    &= \exp\biggl(-\Rreset\sum_{u\le t} Y_u\,\stost_{t-u}
+       \;-\; \sum_{u\le t} R_u\lambda^{Y}_u\,\sinc_{t-u}\biggr),
+  \label{eq:ssiso-rac}\\
+  \Pr(\text{no transmission})
+    &= \exp\biggl(-\Rreset\sum_{u\le t} Y_u\,\stost_{t-u}
+       \;-\; \Bigl[1-\bigl(1+\tfrac{\Rreset}{k}\bigr)^{-k}\Bigr]
+       \sum_{u\le t} R_u\lambda^{Y}_u\,\sinc_{t-u}\biggr).
+  \label{eq:ssiso-rat}
+\end{align}
+In each pair the first sum is the transmission still owed by onset cohorts observed through day
+$t$, and the second is the incubation pipeline. The two differ only in the factor multiplying the
+pipeline term: a further \emph{case} needs the pipeline to be empty, whereas a further
+\emph{transmission event} needs only that no pipeline member goes on to infect anyone. Deleting
+the pipeline term from \eqref{eq:sseso-rac} and \eqref{eq:ssiso-rac} leaves exactly the \sse{}
+and \ssi{} expressions of Proposition~\ref{prop:naive}, with the onset cohorts $D_u$ in place of
+the infection cohorts $I_u$ and the TOST survival function in place of $1-F$ --- which is the
+precise sense in which the infection-anchored models assume the pipeline away.
+
 \begin{remark}[Consequences worth stating]
 Three special cases follow immediately and are used as verification targets
 (Section~\ref{sec:verification}).
@@ -691,8 +866,9 @@ is convex with $\varphi(0) = 0$ and hence superadditive,
 \end{equation}
 Spreading the same total $\Lambda(t)$ across days \emph{dilutes} the overdispersion, so a value
 of $k$ calibrated as an individual-level offspring dispersion does far less work in \dlo{} than
-in \sse{} or \ssi{}. The lower bound is the Poisson limit: \dlo{}'s risk is squeezed towards
-\cori{}'s exactly when the future force of infection is thin and spread out.
+in \sse{} or \ssi{}. The lower bound is exactly the Poisson limit \eqref{eq:cori-risk}, so
+\dlo{}'s risk is squeezed towards \cori{}'s precisely when the future force of infection is thin
+and spread out.
 
 \begin{remark}
 The bounds \eqref{eq:dlo-bounds} hold always; the \emph{direction} of the comparison with \sse{}
@@ -1364,21 +1540,16 @@ with what it would resolve.
 \label{app:equivalence}
 % =============================================================================================
 
-The ``natural'' definition of an onset-anchored model generates latent infection counts and maps
-them forward to onsets; the inference-convenient forms of \eqref{eq:coriso}--\eqref{eq:ssiso}
-work directly with onsets. They define the same joint law for the observed onset process
-$(D_t)$.
+This appendix proves Proposition~\ref{prop:equivalence} and records the extra step
+\eqref{eq:sseso-natural} needs. Throughout, the natural form is as defined in
+Section~\ref{sec:onset-models}: infections $J_t$ are drawn from the model's offspring
+distribution, and the $J_u$ infections of day $u$ are allocated to onset days by the incubation
+split \eqref{eq:incubation-split}, of which only the totals $D_t$ are observed.
 
-In the natural form, with $\lambda_t = \sum_{s\ge0}\ftost_s D_{t-s}$ (\coriso{}, \sseso{}) or
-$\lambda_t = \sum_{s\ge0}\ftost_s Y_{t-s}$ (\ssiso{}): (i) infections $J_t$ are drawn from the
-model's offspring distribution with mean $R_t\lambda_t$; (ii) the $J_u$ infections of day $u$ are
-allocated to onset days by independent incubation draws,
-$(N_{u,a})_{a\ge1}\mid J_u \sim \mathrm{Multinomial}(J_u, (\finc_a))$; and (iii) onsets are
-$D_t = \sum_{a\ge1} N_{t-a,a}$.
+\subsection*{Proof of Proposition~\ref{prop:equivalence}}
 
-\subsection*{The Poisson case}
-
-Let $E_t = R_t\lambda_t$, so $J_t \mid E_t \sim \Pois(E_t)$.
+By hypothesis $J_t \mid E_t \sim \Pois(E_t)$, with $E_t$ measurable with respect to the history
+before day $t$.
 
 \emph{Step 1 --- Poisson thinning.} Multinomial splitting of a Poisson count yields
 \emph{independent} Poisson parts: conditional on $E_u$, $N_{u,a}\sim\Pois(E_u\finc_a)$
@@ -1397,25 +1568,23 @@ disjoint from those composing any other $D_{t'}$, so distinct days' onsets are c
 independent given the $E$s. Chaining $p(D_{0:T}) = \prod_t p(D_t\mid D_{0:t-1})$ gives equality
 of the full joint laws. \hfill$\square$
 
-\subsection*{\sseso{}}
+\subsection*{Why the hypothesis covers all three models}
 
-\emph{Step A --- Poisson--Gamma mixture.} If $\tilde\lambda_t\sim\Gam(k\lambda_t,k)$ and
+\coriso{} and \ssiso{} satisfy it directly, with $E_t = R_t\lambda_t$ and
+$E_t = R_t\lambda^{Y}_t$ respectively; under \ssiso{} the Gamma infectivities are explicit in
+both forms and the thinning and superposition arguments do not touch them.
+
+\sseso{} needs one further step, because its offspring law \eqref{eq:sseso-natural} is negative
+binomial rather than Poisson. If $\tilde\lambda_t \mid \lambda_t \sim \Gam(k\lambda_t,k)$ and
 $J_t\mid\tilde\lambda_t\sim\Pois(R_t\tilde\lambda_t)$, then
 $R_t\tilde\lambda_t\sim\Gam(k\lambda_t,\ k/R_t)$ and, marginally,
-$J_t\sim\NB(\text{mean}=R_t\lambda_t,\ \text{disp}=k\lambda_t)$, which is the natural-form
-offspring law. The inference-convenient form merely \emph{un-marginalises} the negative binomial
-into an explicit per-day Gamma random effect.
-
-\emph{Step B.} Conditional on $\tilde\lambda_t$ the infection counts are Poisson, so Steps 1--3
-apply verbatim. The $\tilde\lambda_t$ are independent across $t$ given $(\lambda_t)$, and each
-$\lambda_t$ is a function of $D_{\le t}$, so the day-$t$ conditional still depends only on
-$D_{0:t-1}$ once $\tilde\lambda_{<t}$ is integrated out. \hfill$\square$
-
-\subsection*{\ssiso{}}
-
-Identical to the Poisson case with $E_t = R_t\sum_{s\ge0}\ftost_s Y_{t-s}$. The Gamma
-infectivities are already explicit in both forms, and the thinning and superposition arguments do
-not touch them. \hfill$\square$
+$J_t\sim\NB(\text{mean}=R_t\lambda_t,\ \text{disp}=k\lambda_t)$ --- which is exactly
+\eqref{eq:sseso-natural}. So \eqref{eq:sseso-convenient} merely \emph{un-marginalises} the
+negative binomial into an explicit per-day Gamma random effect, after which $J_t$ is Poisson
+conditional on $\tilde\lambda_t$ and the proposition applies with $E_t = R_t\tilde\lambda_t$. The
+$\tilde\lambda_t$ are independent across $t$ given $(\lambda_t)$, and each $\lambda_t$ is a
+function of $D_{\le t}$, so the day-$t$ conditional still depends only on $D_{0:t-1}$ once
+$\tilde\lambda_{<t}$ is integrated out. \hfill$\square$
 
 % =============================================================================================
 \section{Code and reproducibility}
