@@ -420,14 +420,14 @@ def test_the_serial_interval_must_be_non_empty():
         _simulate("sse", serial_interval=np.array([]), n_replicates=5)
 
 
-def test_the_onset_anchored_simulators_are_not_here_yet():
+def test_the_naive_entry_point_redirects_onset_models_to_their_simulator():
     onset_model = ModelSpecification(
         name="ssi_so",
         label="SSI-SO",
         anchoring="onsets",
         overdispersion_level="individual",
         latent_variable="Y",
-        description="placeholder for the Stage-8 simulator",
+        description="onset model",
     )
-    with pytest.raises(NotImplementedError, match="Stage 8"):
+    with pytest.raises(ValueError, match="simulate_onset_anchored"):
         _simulate(onset_model, n_replicates=5)

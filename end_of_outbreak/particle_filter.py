@@ -1,4 +1,4 @@
-"""Bootstrap particle filter for the infection-anchored models, at fixed parameters.
+"""Bootstrap particle filters for the renewal models, at fixed parameters.
 
 Two jobs, and they are separate (§6.4):
 
@@ -47,12 +47,13 @@ import scipy.stats
 from numpy.typing import NDArray
 
 from end_of_outbreak import renewal
+from end_of_outbreak.delay_distributions import TOST_FIRST_LAG, OnsetAnchoredDelays
 from end_of_outbreak.model_specifications import (
     ModelSpecification,
     TransmissionParameters,
     specification_of,
 )
-from end_of_outbreak.risk_of_additional_cases import survival_weights
+from end_of_outbreak.risk_of_additional_cases import survival_weights, tost_survival_weights
 
 
 @dataclass(frozen=True)
@@ -84,6 +85,12 @@ class ParticleFilterResult:
 
     filtering_remaining_weight: NDArray[np.float64]
     """``(n_days, n_particles)``: ``Λ(t)`` under the **filtering** law at each day."""
+
+    expected_infection_paths: NDArray[np.float64] | None
+    """Smoothed ``E_t`` paths for onset models; ``None`` for infection-anchored models."""
+
+    filtering_pipeline_mean: NDArray[np.float64] | None
+    """Filtering incubation-pipeline mean for onset models; otherwise ``None``."""
 
     n_particles: int
 
@@ -146,9 +153,9 @@ def filter_naive(
     """
     specification = specification_of(model)
     if specification.anchoring != "infections":
-        raise NotImplementedError(
-            f"model {specification.name!r} is onset-anchored; its filter carries the incubation "
-            "pipeline as part of the state and arrives in Stage 8"
+        raise ValueError(
+            f"model {specification.name!r} is onset-anchored; use filter_onset_anchored so "
+            "the incubation pipeline is retained as part of the state"
         )
     counts = np.asarray(counts, dtype=np.int64)
     w = np.asarray(serial_interval, dtype=np.float64)
@@ -226,7 +233,17 @@ def filter_naive(
             driving[:, day] = rng.gamma(k * counts[day], 1.0 / k, size=n_particles)
         # else: Y_t | I_t = 0 is a point mass at zero, which the array already holds.
         lineage[:, day] = np.arange(n_particles, dtype=np.int64)
-        filtering_weight[day] = driving[:, : int(day) + 1] @ survival[: int(day) + 1][::-1]
+        current_weight = driving[:, : int(day) + 1] @ survival[: int(day) + 1][::-1]
+        # Adaptive resampling may leave the continuing particle cloud weighted.  The public
+        # filtering snapshots are consumed as equally weighted draws, so resample a *view* of
+        # that cloud even when the continuing filter correctly keeps its importance weights.
+        # This does not alter the likelihood estimator, the ancestry, or the smoother.
+        snapshot_indices = (
+            systematic_resample(np.exp(log_weights), rng)
+            if latent
+            else np.arange(n_particles, dtype=np.int64)
+        )
+        filtering_weight[day] = current_weight[snapshot_indices]
 
     # A final resample turns the weighted particle set into equally weighted smoothing draws,
     # unless the last step already did it.
@@ -245,8 +262,244 @@ def filter_naive(
         ),
         latent_paths=driving if latent else None,
         filtering_remaining_weight=filtering_weight,
+        expected_infection_paths=None,
+        filtering_pipeline_mean=None,
         n_particles=n_particles,
     )
+
+
+def filter_onset_anchored(
+    model: str | ModelSpecification,
+    counts: NDArray[np.int64],
+    parameters: TransmissionParameters,
+    *,
+    delays: OnsetAnchoredDelays,
+    switch_day: int,
+    n_particles: int = 1000,
+    resample_threshold: float = 0.5,
+    rng: np.random.Generator | None = None,
+) -> ParticleFilterResult:
+    """Run the onset-process filter for Cori-SO, SSE-SO or SSI-SO.
+
+    On day ``t`` the filter first weights by
+    ``D_t ~ Poisson(Σ_a f_inc,a E_{t-a})`` and then draws the day-``t`` latent from the Gamma
+    law driven by the now-observed onset. This ordering is valid because incubation has no
+    lag-0 mass. The final day's latent is drawn too: it cannot affect the fitted likelihood,
+    but it belongs to the reset state's incubation pipeline and is essential for RAC at the
+    boundary of the observation window.
+    """
+    specification = specification_of(model)
+    if specification.anchoring != "onsets":
+        raise ValueError(f"model {specification.name!r} is infection-anchored; use filter_naive")
+    counts = np.asarray(counts, dtype=np.int64)
+    if counts.ndim != 1 or counts.size < 2 or counts[0] < 1:
+        raise ValueError("counts must be a series of at least two days starting with a case")
+    if n_particles < 1:
+        raise ValueError("n_particles must be at least one")
+    if not 0.0 <= resample_threshold <= 1.0:
+        raise ValueError("resample_threshold must lie in [0, 1]")
+    rng = np.random.default_rng() if rng is None else rng
+
+    n_days = counts.size
+    k = parameters.require_k(specification) if specification.has_dispersion else None
+    R_by_day = renewal.reproduction_number_by_day(
+        parameters.R_pre, parameters.R_post, n_days=n_days, switch_day=switch_day
+    )
+    tost_sum = renewal.delay_weighted_sum(
+        counts.astype(np.float64), delays.tost, first_lag=TOST_FIRST_LAG
+    )
+    tost_survival = np.zeros(n_days, dtype=np.float64)
+    tost_reach = tost_survival_weights(delays.tost)[:n_days]
+    tost_survival[: tost_reach.size] = tost_reach
+    incubation_survival = np.zeros(n_days, dtype=np.float64)
+    incubation_reach = survival_weights(delays.incubation)[:n_days]
+    incubation_survival[: incubation_reach.size] = incubation_reach
+
+    latent = specification.latent_variable is not None
+    driving = np.zeros((n_particles, n_days), dtype=np.float64)
+    expected = np.zeros((n_particles, n_days), dtype=np.float64)
+    lineage = np.zeros((n_particles, n_days), dtype=np.int64)
+    filtering_weight = np.zeros((n_days, n_particles), dtype=np.float64)
+    filtering_pipeline = np.zeros((n_days, n_particles), dtype=np.float64)
+
+    _draw_onset_filter_state(
+        specification,
+        day=0,
+        count=int(counts[0]),
+        tost_sum=float(tost_sum[0]),
+        driving=driving,
+        expected=expected,
+        R=float(R_by_day[0]),
+        k=k,
+        tost=delays.tost,
+        rng=rng,
+    )
+    lineage[:, 0] = np.arange(n_particles, dtype=np.int64)
+    filtering_weight[0] = (
+        driving[:, 0] * tost_survival[0]
+        if specification.name == "ssi_so"
+        else float(counts[0]) * tost_survival[0]
+    )
+    filtering_pipeline[0] = expected[:, 0] * incubation_survival[0]
+
+    log_weights = np.full(n_particles, -np.log(n_particles))
+    days = np.arange(1, n_days, dtype=np.int64)
+    increments = np.zeros(days.size, dtype=np.float64)
+    ess = np.zeros(days.size, dtype=np.float64)
+    resampled = np.zeros(days.size, dtype=bool)
+
+    for position, day_value in enumerate(days):
+        day = int(day_value)
+        lags = min(day, delays.incubation.size)
+        mean_onsets = expected[:, day - lags : day] @ delays.incubation[:lags][::-1]
+        log_density = _poisson_log_density(int(counts[day]), mean_onsets)
+        increment = float(scipy.special.logsumexp(log_weights + log_density))
+        if not np.isfinite(increment):
+            raise ValueError(
+                f"every particle assigns zero probability to the {counts[day]} case(s) on "
+                f"day {day}; the parameters or the seeding cannot produce this series"
+            )
+        increments[position] = increment
+        log_weights = log_weights + log_density - increment
+
+        normalised = np.exp(log_weights)
+        ess[position] = 1.0 / float((normalised**2).sum())
+        if latent and ess[position] < resample_threshold * n_particles:
+            indices = systematic_resample(normalised, rng)
+            driving = driving[indices]
+            expected = expected[indices]
+            lineage = lineage[indices]
+            log_weights = np.full(n_particles, -np.log(n_particles))
+            resampled[position] = True
+
+        _draw_onset_filter_state(
+            specification,
+            day=day,
+            count=int(counts[day]),
+            tost_sum=float(tost_sum[day]),
+            driving=driving,
+            expected=expected,
+            R=float(R_by_day[day]),
+            k=k,
+            tost=delays.tost,
+            rng=rng,
+        )
+        lineage[:, day] = np.arange(n_particles, dtype=np.int64)
+        current_weight = (
+            driving[:, : day + 1] @ tost_survival[: day + 1][::-1]
+            if specification.name == "ssi_so"
+            else np.full(
+                n_particles,
+                float(counts[: day + 1] @ tost_survival[: day + 1][::-1]),
+                dtype=np.float64,
+            )
+        )
+        current_pipeline = expected[:, : day + 1] @ incubation_survival[: day + 1][::-1]
+        snapshot_indices = (
+            systematic_resample(np.exp(log_weights), rng)
+            if latent
+            else np.arange(n_particles, dtype=np.int64)
+        )
+        filtering_weight[day] = current_weight[snapshot_indices]
+        filtering_pipeline[day] = current_pipeline[snapshot_indices]
+
+    if latent and not (resampled.size > 0 and resampled[-1]):
+        indices = systematic_resample(np.exp(log_weights), rng)
+        driving = driving[indices]
+        expected = expected[indices]
+        lineage = lineage[indices]
+
+    return ParticleFilterResult(
+        days=days,
+        log_evidence_increments=increments,
+        effective_sample_size=ess,
+        resampled=resampled,
+        n_distinct=np.array(
+            [np.unique(lineage[:, day]).size for day in range(n_days)], dtype=np.int64
+        ),
+        latent_paths=driving if latent else None,
+        filtering_remaining_weight=filtering_weight,
+        expected_infection_paths=expected,
+        filtering_pipeline_mean=filtering_pipeline,
+        n_particles=n_particles,
+    )
+
+
+def filter_model(
+    model: str | ModelSpecification,
+    counts: NDArray[np.int64],
+    parameters: TransmissionParameters,
+    *,
+    delays: OnsetAnchoredDelays,
+    switch_day: int,
+    n_particles: int = 1000,
+    resample_threshold: float = 0.5,
+    rng: np.random.Generator | None = None,
+) -> ParticleFilterResult:
+    """Dispatch to the filter matching the model's anchoring convention."""
+    specification = specification_of(model)
+    if specification.anchoring == "onsets":
+        return filter_onset_anchored(
+            specification,
+            counts,
+            parameters,
+            delays=delays,
+            switch_day=switch_day,
+            n_particles=n_particles,
+            resample_threshold=resample_threshold,
+            rng=rng,
+        )
+    return filter_naive(
+        specification,
+        counts,
+        parameters,
+        serial_interval=delays.serial_interval,
+        switch_day=switch_day,
+        n_particles=n_particles,
+        resample_threshold=resample_threshold,
+        rng=rng,
+    )
+
+
+def _draw_onset_filter_state(
+    specification: ModelSpecification,
+    *,
+    day: int,
+    count: int,
+    tost_sum: float,
+    driving: NDArray[np.float64],
+    expected: NDArray[np.float64],
+    R: float,
+    k: float | None,
+    tost: NDArray[np.float64],
+    rng: np.random.Generator,
+) -> None:
+    """Draw the latent attached to an observed onset and set one column of ``E``."""
+    n_particles = driving.shape[0]
+    if specification.name == "cori_so":
+        driving[:, day] = float(count)
+        expected[:, day] = R * tost_sum
+        return
+    assert k is not None
+    if specification.name == "sse_so":
+        if tost_sum > 0.0:
+            driving[:, day] = rng.gamma(k * tost_sum, 1.0 / k, size=n_particles)
+        expected[:, day] = R * driving[:, day]
+        return
+    if count > 0:
+        driving[:, day] = rng.gamma(k * count, 1.0 / k, size=n_particles)
+    lags = min(day + 1, tost.size)
+    expected[:, day] = R * (driving[:, day + 1 - lags : day + 1] @ tost[:lags][::-1])
+
+
+def _poisson_log_density(count: int, mean: NDArray[np.float64]) -> NDArray[np.float64]:
+    """Poisson log density with the degenerate zero-mean case handled explicitly."""
+    density = np.zeros(mean.size, dtype=np.float64)
+    driven = mean > 0.0
+    density[driven] = scipy.stats.poisson.logpmf(count, mean[driven])
+    if count > 0:
+        density[~driven] = -np.inf
+    return density
 
 
 def _observation_log_density(

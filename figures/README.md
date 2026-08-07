@@ -4,7 +4,7 @@ what the tier-2 rules wrote to `results/`.
 | Path | What it is |
 | --- | --- |
 | `<analysis>/<analysis>.pdf`, `.png` | The analysis's main figure. |
-| `<analysis>/<analysis>_supplementary.pdf`, `.png` | A standalone panel displaced from the main figure, where there is one. |
+| `onset_models_rat/onset_models_rat.pdf`, `.png` | Supplementary RAC/RAT comparison and incubation-pipeline gap for Analyses 3–4. |
 
 Both formats are written from a single render, so they cannot disagree. Restyling is tier 3 and
 costs seconds: nothing here re-runs a fit.

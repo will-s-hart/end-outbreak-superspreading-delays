@@ -206,30 +206,49 @@ def command_rac(args: argparse.Namespace) -> None:
         negligible_latent_threshold=setting.negligible_latent_threshold,
         rng=setting.reconstruction_rng(model),
     )
-    log_probability = rac.log_probability_of_no_further_cases(
-        model,
-        counts=data.onsets,
-        serial_interval=setting.delays.serial_interval,
-        R_pre=state.R_pre,
-        k=state.k,
-        infectivity=state.infectivity,
-    )
+    if model.endswith("_so"):
+        probabilities = rac.onset_event_probabilities(
+            model,
+            counts=data.onsets,
+            delays=setting.delays,
+            switch_day=data.ert_arrival_day,
+            R_pre=state.R_pre,
+            R_post=state.R_post,
+            k=state.k,
+            latent=state.infectivity,
+        )
+        log_probability = probabilities.log_no_further_cases
+        log_no_transmission = probabilities.log_no_further_transmission
+    else:
+        log_probability = rac.log_probability_of_no_further_cases(
+            model,
+            counts=data.onsets,
+            serial_interval=setting.delays.serial_interval,
+            R_pre=state.R_pre,
+            k=state.k,
+            infectivity=state.infectivity,
+        )
+        log_no_transmission = None
     curve = rac.RiskCurve(
         days=data.day_index,
         risk=1.0 - np.exp(log_probability).mean(axis=0),
         n_draws=state.n_draws,
     )
-    frame = pd.DataFrame(
-        {
-            "date": [data.date_of(int(day)) for day in curve.days],
-            "day": curve.days,
-            "model": model,
-            "risk_of_additional_cases": curve.risk,
-            "monte_carlo_standard_error": rac.monte_carlo_standard_error(
-                log_probability, n_chains=state.n_chains
-            ),
-        }
-    )
+    columns = {
+        "date": [data.date_of(int(day)) for day in curve.days],
+        "day": curve.days,
+        "model": model,
+        "risk_of_additional_cases": curve.risk,
+        "monte_carlo_standard_error": rac.monte_carlo_standard_error(
+            log_probability, n_chains=state.n_chains
+        ),
+    }
+    if log_no_transmission is not None:
+        columns["risk_of_additional_transmission"] = 1.0 - np.exp(log_no_transmission).mean(axis=0)
+        columns["transmission_monte_carlo_standard_error"] = rac.monte_carlo_standard_error(
+            log_no_transmission, n_chains=state.n_chains
+        )
+    frame = pd.DataFrame(columns)
     frame.to_csv(configuration.ensure_parent(args.output), index=False)
 
     crossings = " ".join(

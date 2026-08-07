@@ -170,6 +170,28 @@ def test_the_smoothed_paths_carry_the_information_in_the_later_data():
     assert result.filtering_remaining_weight[0].mean() == pytest.approx(1.0, abs=0.05)
 
 
+def test_filtering_snapshots_retain_importance_weights_when_resampling_is_skipped():
+    """Stored snapshots are equal-weight draws even when the live filter stays weighted."""
+    counts = np.array([1, 2])
+    k = 0.5
+    R = 1.2
+    serial_interval = np.array([0.5, 0.5])
+    result = particle_filter.filter_naive(
+        "ssi",
+        counts,
+        TransmissionParameters(R_pre=R, R_post=R, k=k),
+        serial_interval=serial_interval,
+        switch_day=1,
+        n_particles=50_000,
+        resample_threshold=0.0,
+        rng=np.random.default_rng(61),
+    )
+    # D_1 updates Y_0 from Gamma(k, k) to Gamma(k + D_1, k + R w_1).
+    expected_Y_0 = (k + counts[1]) / (k + R * serial_interval[0])
+    expected_Lambda = serial_interval[1] * expected_Y_0 + counts[1]
+    assert result.filtering_remaining_weight[1].mean() == pytest.approx(expected_Lambda, abs=0.05)
+
+
 # --- degeneracy ------------------------------------------------------------------------------
 
 
@@ -239,8 +261,8 @@ def test_an_impossible_observation_is_reported_rather_than_silently_zeroed():
         )
 
 
-def test_the_onset_anchored_filters_are_not_here_yet():
-    with pytest.raises(NotImplementedError, match="Stage 8"):
+def test_the_naive_filter_redirects_onset_models_to_their_filter():
+    with pytest.raises(ValueError, match="filter_onset_anchored"):
         _filter("sse_so")
 
 

@@ -1,4 +1,4 @@
-"""Forward simulators for the infection-anchored models.
+"""Forward simulators for all renewal models.
 
 One vectorised simulator covers DLO, SSE, SSI and the Cori (``k → ∞``) limit. It is the
 generative counterpart of :mod:`end_of_outbreak.pymc_models`, and the pair is checked against
@@ -33,6 +33,20 @@ the naive Monte-Carlo marginalisation used in the tests unbiased.)
 infectivities from the prior would be answering a different question; passing the same ``Y``
 to the analytic calculator and to the simulator is what makes the §6.4 equality check a
 matched-conditioning comparison rather than a filtering-versus-smoothing one.
+
+Onset-anchored models
+---------------------
+The onset models have two interchangeable simulators, which are the computational version of
+the equivalence proof in §4 of the implementation plan:
+
+``simulate_onset_anchored_convenient``
+    Draws each onset directly from ``Poisson(Σ_a f_inc,a E_{t-a})``. This is the form used by
+    the PyMC builders and is the fastest way to generate synthetic onset histories.
+``simulate_onset_anchored_natural``
+    Draws explicit infection counts ``J_t ~ Poisson(E_t)`` and independently assigns them an
+    incubation delay. This exposes transmission events, and is therefore the form used to pin
+    the RAC/RAT distinction. Poisson splitting makes it exactly equivalent to the convenient
+    form, not an approximation.
 """
 
 from __future__ import annotations
@@ -43,6 +57,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from end_of_outbreak import renewal
+from end_of_outbreak.delay_distributions import OnsetAnchoredDelays
 from end_of_outbreak.model_specifications import (
     ModelSpecification,
     TransmissionParameters,
@@ -72,6 +87,41 @@ class NaiveSimulation:
     def total_cases(self) -> NDArray[np.int64]:
         """Outbreak size of each replicate."""
         return self.counts.sum(axis=1)
+
+
+@dataclass(frozen=True)
+class OnsetSimulation:
+    """Replicated trajectories from an onset-anchored model."""
+
+    onsets: NDArray[np.int64]
+    """``(n_replicates, n_days)`` symptom-onset counts, seeded prefix included."""
+
+    expected_infections: NDArray[np.float64]
+    """``E_t`` for every transmission day in the returned window."""
+
+    latent: NDArray[np.float64] | None
+    """``lambda_tilde`` (SSE-SO) or ``Y`` (SSI-SO); ``None`` for Cori-SO."""
+
+    infections: NDArray[np.int64] | None = None
+    """Explicit ``J_t`` in the natural form; ``None`` in the convenient form."""
+
+    @property
+    def counts(self) -> NDArray[np.int64]:
+        """Alias used by code that treats infection- and onset-anchored simulations alike."""
+        return self.onsets
+
+    @property
+    def n_replicates(self) -> int:
+        return int(self.onsets.shape[0])
+
+    @property
+    def n_days(self) -> int:
+        return int(self.onsets.shape[1])
+
+    @property
+    def total_cases(self) -> NDArray[np.int64]:
+        """Number of symptom onsets in each replicate."""
+        return self.onsets.sum(axis=1)
 
 
 def simulate_naive(
@@ -116,9 +166,9 @@ def simulate_naive(
     """
     specification = specification_of(model)
     if specification.anchoring != "infections":
-        raise NotImplementedError(
-            f"model {specification.name!r} is onset-anchored; the onset-anchored simulators "
-            "land in Stage 8"
+        raise ValueError(
+            f"model {specification.name!r} is onset-anchored; use "
+            "simulate_onset_anchored_convenient or simulate_onset_anchored_natural"
         )
     rng = np.random.default_rng() if rng is None else rng
     w = np.asarray(serial_interval, dtype=np.float64)
@@ -188,6 +238,342 @@ def simulate_naive(
             driving[:, day] = new_counts
 
     return NaiveSimulation(counts=counts, infectivity=infectivity)
+
+
+def simulate_onset_anchored(
+    model: str | ModelSpecification,
+    parameters: TransmissionParameters,
+    *,
+    delays: OnsetAnchoredDelays,
+    n_days: int,
+    switch_day: int,
+    initial_onsets: NDArray[np.int64] | tuple[int, ...] = (1,),
+    initial_latent: NDArray[np.float64] | None = None,
+    n_replicates: int = 1,
+    form: str = "convenient",
+    rng: np.random.Generator | None = None,
+) -> OnsetSimulation:
+    """Simulate ``sse_so``, ``ssi_so`` or ``cori_so`` in either equivalent form.
+
+    ``form="convenient"`` draws the onset process directly and accepts an observed prefix.
+    ``form="natural"`` exposes infection counts and consequently starts from the sole imported
+    index-case onset of §3.1; conditioning an explicit infection-allocation history on a longer
+    onset prefix would require that unobserved allocation history as additional state.
+    """
+    if form == "convenient":
+        return simulate_onset_anchored_convenient(
+            model,
+            parameters,
+            delays=delays,
+            n_days=n_days,
+            switch_day=switch_day,
+            initial_onsets=initial_onsets,
+            initial_latent=initial_latent,
+            n_replicates=n_replicates,
+            rng=rng,
+        )
+    if form == "natural":
+        return simulate_onset_anchored_natural(
+            model,
+            parameters,
+            delays=delays,
+            n_days=n_days,
+            switch_day=switch_day,
+            initial_onsets=initial_onsets,
+            initial_latent=initial_latent,
+            n_replicates=n_replicates,
+            rng=rng,
+        )
+    raise ValueError(f"form must be 'convenient' or 'natural', got {form!r}")
+
+
+def simulate_onset_anchored_convenient(
+    model: str | ModelSpecification,
+    parameters: TransmissionParameters,
+    *,
+    delays: OnsetAnchoredDelays,
+    n_days: int,
+    switch_day: int,
+    initial_onsets: NDArray[np.int64] | tuple[int, ...] = (1,),
+    initial_latent: NDArray[np.float64] | None = None,
+    n_replicates: int = 1,
+    rng: np.random.Generator | None = None,
+) -> OnsetSimulation:
+    """Simulate the inference-convenient onset recursion of §3.5.
+
+    The incubation period starts at lag one, so the onset on day ``t`` is drawn entirely from
+    ``E_{<t}``; its latent and ``E_t`` can then be drawn without an algebraic loop even though
+    the TOST distribution may carry mass at lag zero.
+    """
+    specification, seed, k, R_by_day, rng = _onset_simulation_inputs(
+        model,
+        parameters,
+        delays=delays,
+        n_days=n_days,
+        switch_day=switch_day,
+        initial_onsets=initial_onsets,
+        n_replicates=n_replicates,
+        rng=rng,
+    )
+    onsets = np.zeros((n_replicates, n_days), dtype=np.int64)
+    onsets[:, : seed.size] = seed
+    expected_infections = np.zeros((n_replicates, n_days), dtype=np.float64)
+    latent = (
+        None
+        if specification.latent_variable is None
+        else np.zeros((n_replicates, n_days), dtype=np.float64)
+    )
+
+    supplied = _validated_onset_seed_latent(
+        specification,
+        initial_latent,
+        seed,
+        delays=delays,
+        n_replicates=n_replicates,
+    )
+    for day in range(seed.size):
+        _draw_onset_latent_and_expected_infections(
+            specification,
+            day,
+            onsets=onsets,
+            latent=latent,
+            expected_infections=expected_infections,
+            R=float(R_by_day[day]),
+            k=k,
+            tost=delays.tost,
+            supplied=None if supplied is None else supplied[:, day],
+            rng=rng,
+        )
+
+    for day in range(seed.size, n_days):
+        lags = min(day, delays.incubation.size)
+        mean_onsets = expected_infections[:, day - lags : day] @ delays.incubation[:lags][::-1]
+        onsets[:, day] = rng.poisson(mean_onsets)
+        _draw_onset_latent_and_expected_infections(
+            specification,
+            day,
+            onsets=onsets,
+            latent=latent,
+            expected_infections=expected_infections,
+            R=float(R_by_day[day]),
+            k=k,
+            tost=delays.tost,
+            supplied=None,
+            rng=rng,
+        )
+
+    return OnsetSimulation(
+        onsets=onsets,
+        expected_infections=expected_infections,
+        latent=latent,
+    )
+
+
+def simulate_onset_anchored_natural(
+    model: str | ModelSpecification,
+    parameters: TransmissionParameters,
+    *,
+    delays: OnsetAnchoredDelays,
+    n_days: int,
+    switch_day: int,
+    initial_onsets: NDArray[np.int64] | tuple[int, ...] = (1,),
+    initial_latent: NDArray[np.float64] | None = None,
+    n_replicates: int = 1,
+    rng: np.random.Generator | None = None,
+) -> OnsetSimulation:
+    """Simulate explicit infections and their incubation allocations (§4).
+
+    Independent Poisson splitting is used in place of drawing ``J_t`` followed by one large
+    multinomial: the lag-specific counts are independent
+    ``Poisson(E_t f_inc,a)`` and their sum is exactly ``Poisson(E_t)``. The resulting onset
+    trajectory therefore has the same law as :func:`simulate_onset_anchored_convenient` while
+    retaining the actual transmission counts needed for RAT.
+    """
+    specification, seed, k, R_by_day, rng = _onset_simulation_inputs(
+        model,
+        parameters,
+        delays=delays,
+        n_days=n_days,
+        switch_day=switch_day,
+        initial_onsets=initial_onsets,
+        n_replicates=n_replicates,
+        rng=rng,
+    )
+    if seed.size != 1:
+        raise ValueError(
+            "the natural-form simulator needs the explicit infection-allocation state to "
+            "condition on more than the sole day-0 index case; use the convenient form for "
+            "an observed onset prefix"
+        )
+
+    onsets = np.zeros((n_replicates, n_days), dtype=np.int64)
+    onsets[:, 0] = seed[0]
+    expected_infections = np.zeros((n_replicates, n_days), dtype=np.float64)
+    infections = np.zeros((n_replicates, n_days), dtype=np.int64)
+    latent = (
+        None
+        if specification.latent_variable is None
+        else np.zeros((n_replicates, n_days), dtype=np.float64)
+    )
+    supplied = _validated_onset_seed_latent(
+        specification,
+        initial_latent,
+        seed,
+        delays=delays,
+        n_replicates=n_replicates,
+    )
+
+    for day in range(n_days):
+        _draw_onset_latent_and_expected_infections(
+            specification,
+            day,
+            onsets=onsets,
+            latent=latent,
+            expected_infections=expected_infections,
+            R=float(R_by_day[day]),
+            k=k,
+            tost=delays.tost,
+            supplied=(supplied[:, 0] if supplied is not None and day == 0 else None),
+            rng=rng,
+        )
+
+        # Draw every incubation allocation, including the portion that appears beyond this
+        # simulation window. Their sum is the explicit infection count J_t.
+        for offset, probability in enumerate(delays.incubation, start=1):
+            allocated = rng.poisson(expected_infections[:, day] * probability)
+            infections[:, day] += allocated
+            onset_day = day + offset
+            if onset_day < n_days:
+                onsets[:, onset_day] += allocated
+
+    return OnsetSimulation(
+        onsets=onsets,
+        expected_infections=expected_infections,
+        latent=latent,
+        infections=infections,
+    )
+
+
+def _onset_simulation_inputs(
+    model: str | ModelSpecification,
+    parameters: TransmissionParameters,
+    *,
+    delays: OnsetAnchoredDelays,
+    n_days: int,
+    switch_day: int,
+    initial_onsets: NDArray[np.int64] | tuple[int, ...],
+    n_replicates: int,
+    rng: np.random.Generator | None,
+) -> tuple[
+    ModelSpecification,
+    NDArray[np.int64],
+    float | None,
+    NDArray[np.float64],
+    np.random.Generator,
+]:
+    """Validate common onset-simulator inputs and resolve their derived values."""
+    specification = specification_of(model)
+    if specification.anchoring != "onsets":
+        raise ValueError(f"model {specification.name!r} is infection-anchored; use simulate_naive")
+    seed = np.asarray(initial_onsets, dtype=np.int64)
+    if seed.ndim != 1 or seed.size == 0:
+        raise ValueError("initial_onsets must be a non-empty one-dimensional array")
+    if (seed < 0).any() or seed[0] < 1:
+        raise ValueError("initial_onsets must be non-negative and start with at least one case")
+    if n_days < seed.size:
+        raise ValueError(f"n_days ({n_days}) is shorter than initial_onsets ({seed.size})")
+    if n_replicates < 1:
+        raise ValueError("n_replicates must be at least one")
+    for weights, name in ((delays.tost, "f_tost"), (delays.incubation, "f_inc")):
+        if weights.ndim != 1 or weights.size == 0 or (weights < 0).any():
+            raise ValueError(f"{name} must be a non-empty non-negative one-dimensional array")
+        if not np.isclose(weights.sum(), 1.0):
+            raise ValueError(f"{name} must sum to one")
+    k = parameters.require_k(specification) if specification.has_dispersion else None
+    R_by_day = renewal.reproduction_number_by_day(
+        parameters.R_pre, parameters.R_post, n_days=n_days, switch_day=switch_day
+    )
+    return (
+        specification,
+        seed,
+        k,
+        R_by_day,
+        np.random.default_rng() if rng is None else rng,
+    )
+
+
+def _draw_onset_latent_and_expected_infections(
+    specification: ModelSpecification,
+    day: int,
+    *,
+    onsets: NDArray[np.int64],
+    latent: NDArray[np.float64] | None,
+    expected_infections: NDArray[np.float64],
+    R: float,
+    k: float | None,
+    tost: NDArray[np.float64],
+    supplied: NDArray[np.float64] | None,
+    rng: np.random.Generator,
+) -> None:
+    """Draw one day's latent after its onset is known, then compute ``E_t``."""
+    lags = min(day + 1, tost.size)
+    if specification.name in ("sse_so", "cori_so"):
+        tost_sum = onsets[:, day + 1 - lags : day + 1] @ tost[:lags][::-1]
+        if specification.name == "cori_so":
+            expected_infections[:, day] = R * tost_sum
+            return
+        assert latent is not None and k is not None
+        if supplied is None:
+            positive = tost_sum > 0.0
+            latent[positive, day] = rng.gamma(
+                k * tost_sum[positive], 1.0 / k, size=int(positive.sum())
+            )
+        else:
+            latent[:, day] = supplied
+        expected_infections[:, day] = R * latent[:, day]
+        return
+
+    assert specification.name == "ssi_so" and latent is not None and k is not None
+    if supplied is None:
+        positive = onsets[:, day] > 0
+        latent[positive, day] = rng.gamma(
+            k * onsets[positive, day], 1.0 / k, size=int(positive.sum())
+        )
+    else:
+        latent[:, day] = supplied
+    expected_infections[:, day] = R * (latent[:, day + 1 - lags : day + 1] @ tost[:lags][::-1])
+
+
+def _validated_onset_seed_latent(
+    specification: ModelSpecification,
+    initial_latent: NDArray[np.float64] | None,
+    seed: NDArray[np.int64],
+    *,
+    delays: OnsetAnchoredDelays,
+    n_replicates: int,
+) -> NDArray[np.float64] | None:
+    """Broadcast and validate a retained latent path for the seeded onset prefix."""
+    if initial_latent is None:
+        return None
+    if specification.latent_variable is None:
+        raise ValueError(f"model {specification.name!r} has no latent block to seed")
+    supplied = np.asarray(initial_latent, dtype=np.float64)
+    if supplied.ndim == 1:
+        supplied = np.broadcast_to(supplied, (n_replicates, supplied.size))
+    if supplied.shape != (n_replicates, seed.size):
+        raise ValueError(
+            f"initial_latent must have shape ({seed.size},) or "
+            f"({n_replicates}, {seed.size}), got {supplied.shape}"
+        )
+    if (supplied < 0).any():
+        raise ValueError("initial_latent must be non-negative")
+    if specification.name == "ssi_so" and (supplied[:, seed == 0] != 0).any():
+        raise ValueError("SSI-SO initial_latent must vanish on days with no onsets")
+    if specification.name == "sse_so":
+        scale = renewal.delay_weighted_sum(seed.astype(np.float64), delays.tost, first_lag=0)
+        if (supplied[:, scale == 0.0] != 0).any():
+            raise ValueError("SSE-SO initial_latent must vanish where the TOST sum is zero")
+    return supplied
 
 
 def _validated_seed_infectivity(

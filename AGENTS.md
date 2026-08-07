@@ -110,8 +110,11 @@ anchoring from the shared delay triple. `fitting.fit_model` is the one place tha
 model into an `InferenceData`, and it records on the result the things the draws do not carry —
 the latent parameterisation, and the value of any parameter that was *fixed* rather than
 estimated (a fixed parameter is a constant in the graph, so it never appears in the posterior).
-`forward_simulation.simulate_naive` covers the naive models; the onset-anchored simulators
-arrive with Stage 8. Before extending any of them:
+`forward_simulation.simulate_naive` covers the naive models.
+`simulate_onset_anchored_convenient` draws the direct onset recursion used for inference;
+`simulate_onset_anchored_natural` additionally draws explicit infections and their incubation
+allocations. They are distributionally equivalent by Poisson splitting, and
+`simulate_onset_anchored` dispatches between them. Before extending any of them:
 
 - **`cori` and `cori_so` are not compared models.** They are the Poisson `k → ∞` limits,
   present as the targets of the collapse checks. Keep them out of the four analyses.
@@ -196,9 +199,10 @@ use it too, so it cannot drift from what they build.
 
 `risk_of_additional_cases.py` holds the estimand and nothing else: `pooled_remaining_weight`
 (Λ(t)), the closed forms of §5.3, the posterior averaging, the reconstruction the default
-parameterisation makes necessary, and `simulated_risk_curve`, which is the cross-check today
-and — for the onset-anchored models, which have no closed form — the actual estimator from
-Stage 8. Four things to know before touching it:
+parameterisation makes necessary, and the matched forward-simulation cross-checks. For the
+onset-anchored models, `onset_event_probabilities` analytically averages the conditional zero
+events over the reconstructed Poisson incubation pipeline and returns both RAC and RAT. Things
+to know before touching it:
 
 - **RAC(t) is one number per day, not a distribution.** It is a posterior *probability*, so the
   average over draws happens inside it: `risk_curve` returns `1 − mean_draws exp(log P)`. Use
@@ -210,13 +214,24 @@ Stage 8. Four things to know before touching it:
   turn DLO into a different model, and the §5.4 headline would vanish with it.
 - **A parameter that was *fixed* in the fit is not in the posterior.** Pass `fixed_k` for the
   fixed-`k` analyses, and `fixed_R_pre`/`fixed_R_post` too for the fixed-`θ` cross-checks.
+- **The onset reset state has two pieces.** Future transmission from retained onset cohorts and
+  the incubation pipeline of people infected by `t` but not yet symptomatic must both be
+  retained. `onset_event_probabilities` gives `log P(no RAC) = -H(t) - M(t)` and
+  `log P(no RAT) = -H(t) - M(t)[1 - exp(-c)]`; restarting from observed onsets alone drops
+  `M(t)` and understates RAC.
+- **SSE-SO needs its day-`T` boundary latent rebuilt too.** It cannot reach any fitted onset
+  because incubation starts at lag 1, but its infections belong to the day-`T` reset pipeline;
+  its conditional law is therefore its Gamma prior.
 - **`cori`/`cori_so` remain validation targets**, not compared models, here as everywhere.
 
 **Never compare a filtering RAC with a smoothed one and call agreement a pass.** The estimand
 resets from a smoothed state (§5.1, §5.6); a particle filter's forward pass gives filtering
 states. `particle_filter.ParticleFilterResult` names both — `latent_paths` are the ancestral
-(smoothing) draws, `filtering_remaining_weight` is Λ(t) under the filter — so the equality check
-uses the former and the §5.6 measurement uses the latter.
+(smoothing) draws, while `filtering_remaining_weight` and `filtering_pipeline_mean` are
+equal-weight filtering snapshots — so the equality check uses the former and the §5.6
+measurement uses the latter. Adaptive resampling may leave the live particle cloud weighted;
+do not replace the explicitly resampled filtering snapshots with an unweighted average of that
+live cloud.
 
 What Stage 4 established (`validation/results/rac_validation.md`, and the checks it summarises):
 
@@ -251,6 +266,20 @@ What Stage 4 established (`validation/results/rac_validation.md`, and the checks
   positive early (up to +0.64 around day 2, where the filter has not yet seen the cases that
   reveal a high infectivity) and negative after the last case (mean −0.03, worst −0.15 around
   day 70). Report it as measured, not as a claimed direction.
+
+What Stage 8 established (`validation/results/onset_particle_mcmc_validation.md`):
+
+- **Natural and convenient onset simulation agree**, and the deterministic one-day-incubation
+  limit recovers Cori/SSE/SSI after shifting the naive switch by one day.
+- **The pipeline reset is pinned independently.** With future `R = 0`, RAT is exactly zero and
+  RAC is exactly the probability that the retained Poisson incubation pipeline is non-empty;
+  explicit reset simulation agrees with both conditional zero-probabilities.
+- **The onset particle route is practical and independent.** At 250 particles the largest
+  measured `Var(log L_hat)` is 0.081; particle-smoothed and MCMC-smoothed RAC agree within
+  0.0214 on the real series; and PMMH/PyMC 95% intervals overlap for all six synthetic
+  parameter comparisons. Filtering remains a sensitivity estimand: filtering minus smoothed
+  RAC is strongly negative early (about −0.63 to −0.66 at its largest) and mildly positive
+  after the final onset (mean about +0.013).
 
 ### The analysis and plotting scripts — Stage 5
 
@@ -388,6 +417,39 @@ What Stage 7 measured on the real series, under the shared `LogNormal(0.18)` pri
   and DLO still never reaches 0.01 inside the window. The misapplication of a literature `k`
   makes the gap; the day-level *mechanism* keeps it.
 
+### The onset-anchored analyses — Stage 9
+
+Analyses 3 and 4 compare `sse`, `ssi`, `sse_so` and `ssi_so`; the headline main-figure curves
+are RAC, while `figures/onset_models_rat/` reports RAC and RAT together. Under estimated `k`:
+
+| | SSE | SSI | SSE-SO | SSI-SO |
+| --- | ---: | ---: | ---: | ---: |
+| posterior median `k` | 0.501 | 0.140 | 0.178 | 0.175 |
+| posterior median `R_post` | 0.634 | 0.731 | 0.279 | 0.255 |
+| RAC first below 0.05 | day 99 | day 96 | day 87 | day 88 |
+| RAC first below 0.01 | day 110 | day 107 | day 98 | day 99 |
+
+- **Onset anchoring advances the RAC crossings by 8–12 days.** SSI-SO crosses both thresholds
+  eight days before SSI; SSE-SO crosses both twelve days before SSE. This is close to the
+  11.4-day mean incubation period and is a report headline, not a plotting artefact.
+- **Why the direction is earlier.** The total onset-to-onset serial interval is shared, so this
+  is not caused by giving the SO models a shorter generation interval. The decomposition changes
+  which side of conditioning day `t` a transmission occupies. The SO models place infection at
+  transmission time: infections already generated under historical `R_post` stay in the
+  incubation pipeline when controls are reset, and the remaining TOST opportunity of older
+  cohorts is already largely exhausted. The naive models move those infection decisions to the
+  later symptom-onset date and apply the reset `R_pre` there, making residual transmission look
+  younger and persist longer. The same indexing error applies the ERT effect to onsets rather
+  than transmissions, explaining why naive `R_post` is much higher; post-arrival onsets that
+  arose from pre-arrival infections are otherwise charged to the controlled period.
+- **The Stage-7 attenuation prediction passes.** SSE-SO's `k` moves below SSE's towards 0.18
+  (median ratio 2.81, overlap 0.089, `P(k_SSE > k_SSE-SO) = 0.992`), whereas SSI changes much
+  less (overlap 0.750). Incubation convolution attenuates day-level dispersion when onsets are
+  treated as infections; individual-level dispersion is comparatively stable to regrouping.
+- **Do not universalise the 8–12-day direction.** It is measured under this reset convention,
+  switch convention, outbreak history and posterior. The incubation-scale explanation is the
+  mechanism for this result, not a theorem for arbitrary time series or interventions.
+
 ### Day indexing
 
 Day 0 is the first observed onset (5 April 2018). The ERT arrived on day 33 and withdrew on
@@ -453,21 +515,17 @@ model, named for the headline quantity.
 One tier-2 rule applies to only some analyses, and it keys off the config rather than a
 hard-coded list of names: `dispersion` runs where `fixed_k` is null (`estimates_dispersion`), and
 the `figure` rule picks its output up through `dispersion_summary_of`, which returns nothing for
-the fixed-`k` analyses. There is deliberately **no supplementary-figure rule yet** — Stage 7
-briefly had one and it was removed when Fig. 2 grew to five panels and stopped displacing
-anything. Stage 9 adds it back for the §5.5 RAT panel, which is the first supplement with content
-of its own.
+the fixed-`k` analyses. The separate `rat_figure` rule builds the §5.5 RAC/RAT supplement from
+the two onset analyses' derived CSVs; it performs no analysis of its own.
 
 Per-analysis parameters live in `config/config.yaml`, keyed per analysis so that tweaking the
 `k` prior for the estimated-`k` analyses does not invalidate the fixed-`k` fits. Seeds live
 there too.
 
 **`IMPLEMENTED_ANALYSES` at the top of the `Snakefile`, not `config["analyses"]`, is what the
-targets are built from.** The config describes all four analyses from the start; only the ones
-whose `run_`/`plot_` scripts exist can be built. `rule all` and the convenience aggregates
-(`fits`, `results`, `figures`) iterate the former. Add an analysis to it as its scripts land
-(Stage 9) — otherwise `snakemake fits` dies with a missing-input error naming a script nobody has
-written yet.
+targets are built from.** All four current analyses are implemented. `rule all` and the
+convenience aggregates (`fits`, `results`, `figures`) iterate the explicit list; keep future
+config-only analyses out of it until their `run_`/`plot_` scripts exist.
 
 **Any config value that changes a rule's output must appear in that rule's `params:`.** The
 default profile drops the `mtime` trigger, and the `input` trigger tracks the *set* of input
@@ -490,7 +548,7 @@ Cori), likelihood-vs-simulation agreement, and analytic-vs-particle-filter agree
 
 **Likelihood-vs-simulation, for models with latents.** For the closed-form models the check is
 direct: enumerate short histories, evaluate the built model's likelihood for each, compare with
-the simulator's frequencies. For SSI (and later the SO models) the simulator has to match the
+the simulator's frequencies. For SSI and the SO models the simulator has to match the
 *marginal* of the counts while the builder supplies the *joint* with the latents. The bridge is
 that the latent priors are conditionally independent given the counts —
 `p(I) = E_{Y ~ Π Gamma(k I_u, k)}[Π_t Poisson(...)]` — so a naive Monte-Carlo marginalisation is
@@ -513,11 +571,10 @@ them into one:
   approximation, and measuring it is the point. Don't "fix" it.
 
 PMMH mixes only if the variance of the estimated log-likelihood is roughly 1–3 at the mode.
-Measure it before writing the sampler; if it can't be reached at a tractable particle count,
-record that and keep the synthetic-data tiers. `particle_mcmc.py` is validation, not a results
-path — it stays out of `rule all` and out of every tier's dependency list. Stage 4 already
-measured `Var(log L̂)` for SSI on the real series — see `validation/results/rac_smc_variance.csv`
-— so that go/no-go does not need re-deriving.
+`particle_mcmc.py` is validation, not a results path — it stays out of `rule all` and out of
+every tier's dependency list. The go/no-go has been measured for both routes: Stage 4 covers SSI
+in `validation/results/rac_smc_variance.csv`; Stage 8 covers SSE-SO/SSI-SO in
+`validation/results/onset_smc_variance.csv`, with a maximum variance of 0.081 at 250 particles.
 
 The equality check itself lives in `validation/run_rac_validation.py` rather than in `tests/`
 where it needs MCMC on the real series; the tests carry the same comparisons on short
@@ -536,7 +593,9 @@ Do not silently revisit these; they are argued out in the implementation plan.
    supplementary analysis and its methodology. For the onset-anchored models compute **both**
    and report the gap between them.
 3. **Latents at the conditioning day.** Use the full-data (smoothed) posterior for every day —
-   one fit per model. The methods section must state the approximation and its downward bias.
+   one fit per model. The methods section must state the approximation and the measured signed
+   filtering comparison: smoothing is strongly upward early and mildly downward after the last
+   onset, not a universal one-direction bias.
 4. **`R` switch.** Day 33 in each model's own time index (see *Day indexing* above).
 5. **Naming.** The day-level negative-binomial model is `DLO`, not the older "CIO"; the package
    is `end_of_outbreak`.
@@ -560,12 +619,10 @@ Do not silently revisit these; they are argued out in the implementation plan.
   with mean 11.4 d and SD 8.1 d, which leaves a residual TOST of mean 3.9 d and SD 4.57 d.
   Configurable in `config/config.yaml`; `check_delay_budget` rejects any estimate whose
   variance exceeds the serial interval's.
-- **The two naive analyses are built; the onset-anchored ones are not.**
-  `naive_models_fixed_k` and `naive_models_estimated_k` run end to end — `pixi run pipeline`
-  reproduces both figure directories from the raw CSV in about a minute. Stage 9 adds the two
-  onset-anchored analyses; each needs a `run_`/`plot_` pair (the run script being a docstring and
-  an `ANALYSIS` constant over `scripts/analysis_driver.py`) and an entry in
-  `IMPLEMENTED_ANALYSES`.
+- **Stage 10 report.** All four analyses and the RAC/RAT supplement now run end to end. The
+  report should foreground the 8–12-day advance in RAC crossings under onset anchoring and tie
+  it to the incubation-scale switch/reset asymmetry above, alongside the measured changes in
+  `R_post` and `k`.
 - **Three optional follow-ups to the §5.4 finding, none scoped in and none required.** A second
   quantity for the Équateur data — `P(sustained transmission after ERT removal)`, i.e. the
   branching-process re-establishment probability, which is cheap given the RAC machinery and on
@@ -573,13 +630,6 @@ Do not silently revisit these; they are argued out in the implementation plan.
   project at `R_pre`), probably a methods sentence rather than a panel; and a regression test
   that our RAC reproduces `sse-ssi-pmo`'s ordering in its own regime. See "Optional extensions"
   at the end of §9 of the plan. **Do not add any of them unasked** — decide near Stage 10.
-- **Onset-anchored forward simulators** (`forward_simulation`) are still to come in Stage 8,
-  along with the onset-anchored RAC/RAT calculators, the onset-anchored particle filter and the
-  remaining §4.4 equivalence tests. The Stage-3 benchmark therefore has no synthetic SSE-SO arm
-  with a known truth; the truncated real series stands in as its second case. The naive-model
-  RAC calculators, simulators and filter all landed in Stage 4 and raise `NotImplementedError`
-  pointing at Stage 8 when handed an onset-anchored model, rather than quietly doing something
-  infection-anchored.
 ## Git workflow
 
 - Commit regularly with descriptive messages. Run `pixi run check` first.

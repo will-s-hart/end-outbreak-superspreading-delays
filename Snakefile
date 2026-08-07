@@ -65,6 +65,7 @@ RAC_CORE = RUN_DRIVER + code(
     "latent_parameterisations",
     "pymc_models",
     "forward_simulation",
+    "fitting",
 )
 EVIDENCE_CORE = RUN_DRIVER + code(
     "configuration",
@@ -100,10 +101,14 @@ PLOT_CORE = code(
 ANALYSES = config["analyses"]
 ONSETS_CSV = config["shared"]["data_file"]
 
-# Analyses whose run and plot scripts exist. Stage 9 adds the two onset-anchored ones; until
-# then, naming them in a target would only produce a missing-input error that says nothing
-# useful.
-IMPLEMENTED_ANALYSES = ["naive_models_fixed_k", "naive_models_estimated_k"]
+# Analyses whose run and plot scripts exist. Keep this explicit rather than deriving it from
+# the config: a configured future analysis must not become a target before its scripts land.
+IMPLEMENTED_ANALYSES = [
+    "naive_models_fixed_k",
+    "naive_models_estimated_k",
+    "onset_models_fixed_k",
+    "onset_models_estimated_k",
+]
 
 
 # Everything a rule's result depends on must appear in its `params:`. The default profile
@@ -118,6 +123,7 @@ def analysis_params(analysis):
         "k_prior": block.get("k_prior"),
         "sampler": block["sampler"],
         "latent_parameterisation": config.get("latent_parameterisation"),
+        "negligible_latent_threshold": config.get("negligible_latent_threshold"),
     }
 
 
@@ -171,11 +177,15 @@ MAIN_TARGETS = [
     for analysis in IMPLEMENTED_ANALYSES
     for extension in ("pdf", "png")
 ]
+RAT_FIGURE_TARGETS = [
+    f"figures/onset_models_rat/onset_models_rat.{extension}" for extension in ("pdf", "png")
+]
 
 
 rule all:
     input:
         MAIN_TARGETS,
+        RAT_FIGURE_TARGETS,
 
 
 # ---------------------------------------------------------------------------------------
@@ -305,6 +315,31 @@ rule figure:
         " --output-png {output.png}"
 
 
+rule rat_figure:
+    input:
+        racs=[
+            f"results/{analysis}/{model}_rac.csv"
+            for analysis in ("onset_models_fixed_k", "onset_models_estimated_k")
+            for model in ("sse_so", "ssi_so")
+        ],
+        data=ONSETS_CSV,
+        config=CONFIG_FILE,
+        script="scripts/plot_onset_models_rat.py",
+        code=PLOT_CORE,
+    output:
+        pdf="figures/onset_models_rat/onset_models_rat.pdf",
+        png="figures/onset_models_rat/onset_models_rat.png",
+    params:
+        shared=SHARED_PARAMS,
+    shell:
+        "python {input.script}"
+        " --results-root results"
+        " --data {input.data}"
+        " --config {input.config}"
+        " --output-pdf {output.pdf}"
+        " --output-png {output.png}"
+
+
 # ---------------------------------------------------------------------------------------
 # Convenience aggregates
 # ---------------------------------------------------------------------------------------
@@ -337,3 +372,4 @@ rule results:
 rule figures:
     input:
         MAIN_TARGETS,
+        RAT_FIGURE_TARGETS,

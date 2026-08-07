@@ -129,6 +129,64 @@ def risk_curve_panel(
     utils.panel_label(ax, letter)
 
 
+def rac_rat_panel(
+    ax: Axes,
+    curves: dict[str, pd.DataFrame],
+    data: outbreak_data.OutbreakData,
+    *,
+    title: str,
+    letter: str,
+    first_day: int | None = None,
+) -> None:
+    """RAC and RAT for the onset-anchored models, with their pipeline gap shaded."""
+    utils.plot_incidence(ax, data.dates, data.onsets)
+    utils.mark_thresholds(ax)
+    for model, frame in curves.items():
+        if utils.TRANSMISSION_RISK_COLUMN not in frame:
+            raise ValueError(
+                f"the {model} RAC file has no {utils.TRANSMISSION_RISK_COLUMN!r} column; "
+                "RAT is written only by the onset-anchored RAC tier"
+            )
+        colour = utils.model_colour(model)
+        ax.plot(
+            frame["date"],
+            frame[utils.RISK_COLUMN],
+            color=colour,
+            linestyle="--",
+            label=f"{utils.model_label(model)} RAC",
+            zorder=3,
+        )
+        ax.plot(
+            frame["date"],
+            frame[utils.TRANSMISSION_RISK_COLUMN],
+            color=colour,
+            label=f"{utils.model_label(model)} RAT",
+            zorder=4,
+        )
+        ax.fill_between(
+            frame["date"],
+            frame[utils.TRANSMISSION_RISK_COLUMN],
+            frame[utils.RISK_COLUMN],
+            color=colour,
+            alpha=0.12,
+            linewidth=0,
+            zorder=2,
+        )
+    utils.mark_intervention_dates(
+        ax,
+        arrival=data.date_of(data.ert_arrival_day),
+        withdrawal=data.date_of(data.ert_withdrawal_day),
+    )
+    utils.date_axis(ax)
+    ax.set_xlim(data.dates[first_day or 0], data.dates[-1])
+    ax.set_ylim(0.0, 1.0)
+    ax.set_xlabel("conditioning day $t$ (2018)")
+    ax.set_ylabel("posterior risk")
+    ax.set_title(title)
+    ax.legend(loc="center left", bbox_to_anchor=(0.015, 0.55), ncols=2)
+    utils.panel_label(ax, letter)
+
+
 def settling_day(frame: pd.DataFrame, threshold: float = SETTLING_THRESHOLD) -> int | None:
     """The first day a curve falls below ``threshold`` and stays there.
 

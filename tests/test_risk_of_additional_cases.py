@@ -544,8 +544,8 @@ def test_the_poisson_limit_takes_no_dispersion():
         rac.risk_curve("cori", counts=COUNTS, serial_interval=SERIAL_INTERVAL, R_pre=R_PRE, k=K)
 
 
-def test_the_onset_anchored_calculators_are_not_here_yet():
-    with pytest.raises(NotImplementedError, match="Stage 8"):
+def test_the_naive_calculator_redirects_onset_models_to_the_pipeline_calculator():
+    with pytest.raises(ValueError, match="onset_event_probabilities"):
         rac.risk_curve("sse_so", counts=COUNTS, serial_interval=SERIAL_INTERVAL, R_pre=R_PRE, k=K)
 
 

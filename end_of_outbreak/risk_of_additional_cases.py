@@ -48,7 +48,7 @@ concentrate the whole of ``Λ(t)`` into a day or two and the comparison with SSE
 
 Rebuilding the latents first
 ----------------------------
-For SSI (and, from Stage 8, the onset-anchored models) the retained state includes the latent
+For SSI and the onset-anchored models the retained state includes the latent
 infectivities, and the chosen ``marginalised_inverse_cdf`` parameterisation integrates some of
 them out exactly rather than sampling them. Those latents are **not** in ``idata.posterior``,
 and on the real series they are exactly the days from the last observed case onwards — the days
@@ -62,8 +62,8 @@ RAT
 ---
 The risk of additional *transmission* coincides with RAC under all three naive models — that
 identification is the conflation the project is about — and separates from it only under the
-onset-anchored models. The RAT calculators therefore arrive with the onset-anchored simulators
-in Stage 8, alongside the incubation-pipeline reconstruction they need.
+onset-anchored models. Their calculators live beside the incubation-pipeline reconstruction
+below.
 """
 
 from __future__ import annotations
@@ -77,6 +77,7 @@ from numpy.typing import NDArray
 from end_of_outbreak import forward_simulation, pymc_models, renewal
 from end_of_outbreak.delay_distributions import (
     SERIAL_INTERVAL_FIRST_LAG,
+    TOST_FIRST_LAG,
     OnsetAnchoredDelays,
     cumulative,
 )
@@ -203,8 +204,8 @@ def log_probability_of_no_further_cases(
     Parameters
     ----------
     model
-        One of ``dlo``, ``sse``, ``ssi``, ``cori``. The onset-anchored models have no closed
-        form and arrive in Stage 8.
+        One of ``dlo``, ``sse``, ``ssi``, ``cori``. Use
+        :func:`onset_event_probabilities` for an onset-anchored model; it also returns RAT.
     counts
         The observed series ``C_0, ..., C_T``, read as infections.
     serial_interval
@@ -226,10 +227,10 @@ def log_probability_of_no_further_cases(
     """
     specification = specification_of(model)
     if specification.anchoring != "infections":
-        raise NotImplementedError(
-            f"model {specification.name!r} is onset-anchored: it has no closed-form RAC, and "
-            "its Monte-Carlo calculators (with the incubation pipeline of §5.1) arrive in "
-            "Stage 8"
+        raise ValueError(
+            f"model {specification.name!r} is onset-anchored; use onset_event_probabilities, "
+            "which takes the incubation/TOST delays and R_post needed to rebuild the reset "
+            "pipeline"
         )
     counts = np.asarray(counts, dtype=np.int64)
     w = np.asarray(serial_interval, dtype=np.float64)
@@ -315,6 +316,241 @@ def _dlo_log_probability(
         k_chunk = k[start:stop, None, None]
         result[start:stop] = -(k_chunk * np.log1p(R_chunk * profile[None] / k_chunk)).sum(axis=2)
     return result
+
+
+# ---------------------------------------------------------------------------------------
+# Onset-anchored reset state: incubation pipeline, RAC and RAT (§5.1, §5.5)
+# ---------------------------------------------------------------------------------------
+
+
+def tost_survival_weights(tost: NDArray[np.float64]) -> NDArray[np.float64]:
+    """Probability that a cohort's transmission occurs *after* each attained age.
+
+    TOST is stored from lag zero, so a cohort observed on the conditioning day has already had
+    its lag-0 transmission opportunity. Consequently the first entry is ``1 - f_tost[0]``, in
+    contrast to :func:`survival_weights` for a lag-1 delay, whose first entry is one.
+    """
+    weights = np.asarray(tost, dtype=np.float64)
+    if weights.ndim != 1 or weights.size == 0:
+        raise ValueError("tost must be a non-empty one-dimensional array")
+    return np.clip(1.0 - np.cumsum(weights), 0.0, 1.0)
+
+
+def incubation_pipeline_mean(
+    expected_infections: NDArray[np.float64], incubation: NDArray[np.float64]
+) -> NDArray[np.float64]:
+    """Mean number infected by day ``t`` whose onset lies after ``t``, for every ``t``.
+
+    Given ``E_u``, independent Poisson splitting by incubation delay makes the retained
+    pipeline Poisson with this mean:
+
+    ``M(t) = Σ_{u≤t} E_u P(A > t-u)``.
+
+    A leading posterior-draw axis is carried through unchanged.
+    """
+    return pooled_remaining_weight(expected_infections, incubation)
+
+
+def remaining_tost_weight(
+    driving: NDArray[np.float64], tost: NDArray[np.float64]
+) -> NDArray[np.float64]:
+    """Driving weight assigned to transmission days strictly after ``t``.
+
+    ``driving`` is the observed onset series for SSE-SO/Cori-SO and the complete latent ``Y``
+    path for SSI-SO. TOST starts at lag zero, so this uses
+    :func:`tost_survival_weights` rather than the lag-1 serial-interval survival function.
+    """
+    driving = np.asarray(driving, dtype=np.float64)
+    if driving.ndim == 0:
+        raise ValueError("driving must have at least one axis, indexed by day")
+    operator = renewal.delay_design_matrix(
+        driving.shape[-1],
+        tost_survival_weights(tost),
+        first_lag=TOST_FIRST_LAG,
+        source_days=np.arange(driving.shape[-1], dtype=np.int64),
+    )
+    return driving @ operator.T
+
+
+@dataclass(frozen=True)
+class OnsetEventProbabilities:
+    """Per-draw zero-probabilities for onset-anchored RAC and RAT."""
+
+    days: NDArray[np.int64]
+    log_no_further_cases: NDArray[np.float64]
+    """``log P(no onset after t | posterior draw)``."""
+
+    log_no_further_transmission: NDArray[np.float64]
+    """``log P(no transmission event after t | posterior draw)``."""
+
+    @property
+    def n_draws(self) -> int:
+        return int(self.log_no_further_cases.shape[0])
+
+    def risk_of_additional_cases(self) -> RiskCurve:
+        return RiskCurve(
+            days=self.days,
+            risk=1.0 - np.exp(self.log_no_further_cases).mean(axis=0),
+            n_draws=self.n_draws,
+        )
+
+    def risk_of_additional_transmission(self) -> RiskCurve:
+        return RiskCurve(
+            days=self.days,
+            risk=1.0 - np.exp(self.log_no_further_transmission).mean(axis=0),
+            n_draws=self.n_draws,
+        )
+
+
+def onset_event_probabilities(
+    model: str | ModelSpecification,
+    *,
+    counts: NDArray[np.int64],
+    delays: OnsetAnchoredDelays,
+    switch_day: int,
+    R_pre: float | NDArray[np.float64],
+    R_post: float | NDArray[np.float64],
+    k: float | NDArray[np.float64] | None = None,
+    latent: NDArray[np.float64] | None = None,
+    reset_R: float | NDArray[np.float64] | None = None,
+    days: NDArray[np.int64] | None = None,
+) -> OnsetEventProbabilities:
+    """Conditional zero-probabilities defining RAC and RAT for an onset model.
+
+    The retained expected infections ``E_{u≤t}`` generate a Poisson incubation pipeline with
+    mean ``M(t)``. A no-further-case path requires that whole pipeline to be empty, whereas a
+    no-further-transmission path permits pipeline cases provided every one transmits zero
+    times. The latter contribution is the offspring zero-probability averaged over the
+    Poisson pipeline. This gives, conditional on one posterior draw,
+
+    ``log P(no case) = -H(t) - M(t)``
+
+    ``log P(no transmission) = -H(t) - M(t) [1 - exp(-c)]``
+
+    where ``H(t)`` is the zero-transmission exponent of the retained onset cohorts and ``c``
+    is the exponent for one future pipeline case. For Cori-SO/SSI-SO, ``H`` is respectively
+    ``R W_D``/``R W_Y``; for SSE-SO it is
+    ``k log(1 + R/k) W_D``. The same Gamma–Poisson mixture gives
+    ``c = k log(1 + R/k)`` for both overdispersed models and ``c = R`` for Cori-SO.
+
+    The posterior average is still Monte Carlo — these arrays hold one conditional probability
+    per draw — but evaluating the conditional zero event analytically avoids an unnecessary
+    second simulation layer and makes ``RAC >= RAT`` exact up to floating-point rounding.
+    """
+    specification = specification_of(model)
+    if specification.anchoring != "onsets":
+        raise ValueError(
+            f"model {specification.name!r} is infection-anchored; use risk_curve for RAC, "
+            "under which RAC and RAT coincide"
+        )
+    counts = np.asarray(counts, dtype=np.int64)
+    selected_days = (
+        np.arange(counts.size, dtype=np.int64) if days is None else np.asarray(days, dtype=np.int64)
+    )
+    if counts.ndim != 1 or counts.size == 0:
+        raise ValueError("counts must be a non-empty one-dimensional onset series")
+    if (selected_days < 0).any() or (selected_days >= counts.size).any():
+        raise ValueError("days must index the observed onset series")
+
+    R_pre_draws = _one_draw_axis(R_pre, "R_pre")
+    n_draws = R_pre_draws.size
+    R_post_draws = _broadcast_draws(R_post, "R_post", n_draws=n_draws)
+    reset_draws = (
+        R_pre_draws if reset_R is None else _broadcast_draws(reset_R, "reset_R", n_draws=n_draws)
+    )
+    dispersion = _dispersion_draws(specification, k, n_draws=n_draws)
+    R_history = np.where(
+        renewal.switch_index(counts.size, switch_day)[None, :] == 0,
+        R_pre_draws[:, None],
+        R_post_draws[:, None],
+    )
+
+    tost_operator = renewal.delay_design_matrix(
+        counts.size,
+        delays.tost,
+        first_lag=TOST_FIRST_LAG,
+        source_days=np.arange(counts.size, dtype=np.int64),
+    )
+    if specification.name == "cori_so":
+        if latent is not None:
+            raise ValueError("Cori-SO has no latent block; drop `latent`")
+        force = counts.astype(np.float64) @ tost_operator.T
+        expected_infections = R_history * force[None, :]
+        retained_exponent = (
+            reset_draws[:, None]
+            * remaining_tost_weight(counts.astype(np.float64), delays.tost)[None, :]
+        )
+        per_case_exponent = reset_draws
+    else:
+        if latent is None:
+            raise ValueError(
+                f"model {specification.name!r} needs the complete by-day latent paths from "
+                "posterior_state"
+            )
+        latent_paths = np.asarray(latent, dtype=np.float64)
+        if latent_paths.shape != (n_draws, counts.size):
+            raise ValueError(
+                f"latent must have shape {(n_draws, counts.size)}, got {latent_paths.shape}"
+            )
+        assert dispersion is not None
+        per_case_exponent = dispersion * np.log1p(reset_draws / dispersion)
+        if specification.name == "sse_so":
+            expected_infections = R_history * latent_paths
+            retained_exponent = (
+                per_case_exponent[:, None]
+                * remaining_tost_weight(counts.astype(np.float64), delays.tost)[None, :]
+            )
+        else:
+            force = latent_paths @ tost_operator.T
+            expected_infections = R_history * force
+            retained_exponent = reset_draws[:, None] * remaining_tost_weight(
+                latent_paths, delays.tost
+            )
+
+    pipeline = incubation_pipeline_mean(expected_infections, delays.incubation)
+    log_no_cases = -retained_exponent - pipeline
+    log_no_transmission = -retained_exponent - pipeline * (-np.expm1(-per_case_exponent))[:, None]
+    if np.any(log_no_transmission + 1e-12 < log_no_cases):
+        raise AssertionError("RAC/RAT zero-probability ordering was violated")
+    return OnsetEventProbabilities(
+        days=selected_days,
+        log_no_further_cases=log_no_cases[:, selected_days],
+        log_no_further_transmission=log_no_transmission[:, selected_days],
+    )
+
+
+def onset_log_probability_of_no_further_cases(
+    model: str | ModelSpecification, **kwargs: Any
+) -> NDArray[np.float64]:
+    """Convenience view of :func:`onset_event_probabilities` for headline RAC."""
+    return onset_event_probabilities(model, **kwargs).log_no_further_cases
+
+
+def onset_log_probability_of_no_further_transmission(
+    model: str | ModelSpecification, **kwargs: Any
+) -> NDArray[np.float64]:
+    """Convenience view of :func:`onset_event_probabilities` for supplementary RAT."""
+    return onset_event_probabilities(model, **kwargs).log_no_further_transmission
+
+
+def _one_draw_axis(value: float | NDArray[np.float64], name: str) -> NDArray[np.float64]:
+    """A scalar or one-dimensional posterior block, preserving a scalar as one draw."""
+    draws = np.atleast_1d(np.asarray(value, dtype=np.float64))
+    if draws.ndim != 1:
+        raise ValueError(f"{name} must be a scalar or a one-dimensional array of draws")
+    return draws
+
+
+def _broadcast_draws(
+    value: float | NDArray[np.float64], name: str, *, n_draws: int
+) -> NDArray[np.float64]:
+    """Broadcast a scalar parameter to the posterior draw count."""
+    draws = _one_draw_axis(value, name)
+    if draws.size == 1:
+        draws = np.repeat(draws, n_draws)
+    if draws.shape != (n_draws,):
+        raise ValueError(f"{name} must hold one value per draw ({n_draws}), got {draws.shape}")
+    return draws
 
 
 # ---------------------------------------------------------------------------------------
@@ -635,6 +871,20 @@ def reconstruct_latent_paths(
     )
     if rebuilt_days.size > 0:
         paths[:, rebuilt_days] = rng.gamma(shape, 1.0 / rate)
+
+    # SSE-SO's inference graph stops at transmission day T - 1: E_T cannot reach an observed
+    # onset because f_inc starts at lag one. The reset state at conditioning day T nevertheless
+    # needs E_T, whose infections are already in the incubation pipeline by the end of that
+    # day. It is independent of the fitted likelihood and therefore retains its prior exactly.
+    # Rebuild this predictive-boundary latent here so every returned path is genuinely complete
+    # by calendar day, just as the marginalised in-window block is.
+    if specification.name == "sse_so":
+        final_day = counts.size - 1
+        tost_sum = renewal.delay_weighted_sum(
+            counts.astype(np.float64), delays.tost, first_lag=TOST_FIRST_LAG
+        )[final_day]
+        if tost_sum > 0.0:
+            paths[:, final_day] = rng.gamma(k * tost_sum, 1.0 / k)
     return paths
 
 
@@ -702,6 +952,149 @@ def simulated_risk_curve(
         further = simulation.counts[:, int(t) + 1 :].sum(axis=1)
         risk[position] = float((further > 0).mean())
     return RiskCurve(days=days, risk=risk, n_draws=n_replicates)
+
+
+@dataclass(frozen=True)
+class OnsetRiskCurves:
+    """Matched onset-anchored RAC and RAT curves."""
+
+    rac: RiskCurve
+    rat: RiskCurve
+
+
+def simulated_onset_risk_curves(
+    model: str | ModelSpecification,
+    *,
+    counts: NDArray[np.int64],
+    delays: OnsetAnchoredDelays,
+    switch_day: int,
+    parameters: TransmissionParameters,
+    latent: NDArray[np.float64] | None = None,
+    reset_R: float | None = None,
+    days: NDArray[np.int64] | None = None,
+    n_replicates: int = 20_000,
+    rng: np.random.Generator | None = None,
+) -> OnsetRiskCurves:
+    """Forward-simulation check of onset RAC/RAT at one fixed retained state.
+
+    The incubation pipeline is constructed explicitly by Poisson splitting of every retained
+    ``E_u`` into onset days after ``t``. Future transmission is then simulated day by day from
+    that pipeline. Descendants of the first new infection need not be generated: once that
+    infection occurs both RAT and RAC are already true, while before it occurs the only future
+    onsets are exactly the retained pipeline just constructed.
+    """
+    specification = specification_of(model)
+    if specification.anchoring != "onsets":
+        raise ValueError(f"model {specification.name!r} is infection-anchored")
+    if n_replicates < 1:
+        raise ValueError("n_replicates must be at least one")
+    counts = np.asarray(counts, dtype=np.int64)
+    selected_days = (
+        np.arange(counts.size, dtype=np.int64) if days is None else np.asarray(days, dtype=np.int64)
+    )
+    rng = np.random.default_rng() if rng is None else rng
+    k = parameters.require_k(specification) if specification.has_dispersion else None
+    reset = parameters.R_pre if reset_R is None else float(reset_R)
+    if reset < 0.0:
+        raise ValueError("reset_R must be non-negative")
+
+    retained_latent = None if latent is None else np.asarray(latent, dtype=np.float64)
+    if specification.has_latents:
+        if retained_latent is None or retained_latent.shape != counts.shape:
+            raise ValueError(
+                f"{specification.name} needs one complete retained latent path of shape "
+                f"{counts.shape}"
+            )
+    elif retained_latent is not None:
+        raise ValueError(f"{specification.name} has no latent block")
+
+    R_history = renewal.reproduction_number_by_day(
+        parameters.R_pre,
+        parameters.R_post,
+        n_days=counts.size,
+        switch_day=switch_day,
+    )
+    tost_operator = renewal.delay_design_matrix(
+        counts.size,
+        delays.tost,
+        first_lag=TOST_FIRST_LAG,
+        source_days=np.arange(counts.size, dtype=np.int64),
+    )
+    if specification.name == "sse_so":
+        assert retained_latent is not None
+        expected_history = R_history * retained_latent
+    elif specification.name == "ssi_so":
+        assert retained_latent is not None
+        expected_history = R_history * (retained_latent @ tost_operator.T)
+    else:
+        expected_history = R_history * (counts.astype(np.float64) @ tost_operator.T)
+
+    rac_values = np.empty(selected_days.size, dtype=np.float64)
+    rat_values = np.empty(selected_days.size, dtype=np.float64)
+    for position, day_value in enumerate(selected_days):
+        t = int(day_value)
+        horizon = t + 1 + delays.incubation.size + delays.tost.size
+        simulated_onsets = np.zeros((n_replicates, horizon), dtype=np.int64)
+        simulated_onsets[:, : t + 1] = counts[: t + 1]
+
+        # Independent Poisson thinning builds the complete residual incubation pipeline.
+        for infection_day in range(t + 1):
+            for offset, probability in enumerate(delays.incubation, start=1):
+                onset_day = infection_day + offset
+                if onset_day <= t:
+                    continue
+                simulated_onsets[:, onset_day] += rng.poisson(
+                    expected_history[infection_day] * probability,
+                    size=n_replicates,
+                )
+        pipeline_case = simulated_onsets[:, t + 1 :].sum(axis=1) > 0
+
+        future_latent = (
+            None
+            if not specification.has_latents
+            else np.zeros((n_replicates, horizon), dtype=np.float64)
+        )
+        if future_latent is not None:
+            assert retained_latent is not None
+            future_latent[:, : t + 1] = retained_latent[: t + 1]
+
+        transmitted = np.zeros(n_replicates, dtype=bool)
+        for transmission_day in range(t + 1, horizon):
+            lags = min(transmission_day + 1, delays.tost.size)
+            if specification.name in ("sse_so", "cori_so"):
+                scale = (
+                    simulated_onsets[:, transmission_day + 1 - lags : transmission_day + 1]
+                    @ delays.tost[:lags][::-1]
+                )
+                if specification.name == "sse_so":
+                    assert future_latent is not None and k is not None
+                    positive = scale > 0.0
+                    future_latent[positive, transmission_day] = rng.gamma(
+                        k * scale[positive], 1.0 / k, size=int(positive.sum())
+                    )
+                    force = future_latent[:, transmission_day]
+                else:
+                    force = scale
+            else:
+                assert future_latent is not None and k is not None
+                new_onsets = simulated_onsets[:, transmission_day]
+                positive = new_onsets > 0
+                future_latent[positive, transmission_day] = rng.gamma(
+                    k * new_onsets[positive], 1.0 / k, size=int(positive.sum())
+                )
+                force = (
+                    future_latent[:, transmission_day + 1 - lags : transmission_day + 1]
+                    @ delays.tost[:lags][::-1]
+                )
+            transmitted |= rng.poisson(reset * force) > 0
+
+        rat_values[position] = float(transmitted.mean())
+        rac_values[position] = float((pipeline_case | transmitted).mean())
+
+    return OnsetRiskCurves(
+        rac=RiskCurve(days=selected_days, risk=rac_values, n_draws=n_replicates),
+        rat=RiskCurve(days=selected_days, risk=rat_values, n_draws=n_replicates),
+    )
 
 
 # ---------------------------------------------------------------------------------------

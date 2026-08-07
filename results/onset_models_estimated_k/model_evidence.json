@@ -1,0 +1,34 @@
+{
+  "analysis": "onset_models_estimated_k",
+  "models": [
+    "sse",
+    "ssi",
+    "sse_so",
+    "ssi_so"
+  ],
+  "estimator": "bridge_sampling",
+  "log_evidence": {
+    "sse": -99.37220406121905,
+    "ssi": -84.57608646095069,
+    "sse_so": -81.78820835717498,
+    "ssi_so": -81.77128398013309
+  },
+  "log_evidence_standard_error": {
+    "sse": 0.0014452749399578035,
+    "ssi": 0.021858068269543222,
+    "sse_so": 0.03791189502170953,
+    "ssi_so": 0.02011682014058321
+  },
+  "n_draws": {
+    "sse": 12000,
+    "ssi": 12000,
+    "sse_so": 12000,
+    "ssi_so": 12000
+  },
+  "posterior_model_probability": {
+    "sse": 1.110689256878952e-08,
+    "ssi": 0.029611799393407082,
+    "sse_so": 0.4810883888516909,
+    "ssi_so": 0.48929980064800876
+  }
+}
