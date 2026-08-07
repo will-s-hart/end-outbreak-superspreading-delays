@@ -171,6 +171,138 @@ def test_resetting_R_to_zero_leaves_only_the_incubation_pipeline():
     np.testing.assert_allclose(probabilities.log_no_further_transmission, 0.0)
 
 
+def _explicit_onset_zero_probabilities(
+    model: str, *, latent: np.ndarray | None, reset_R: float
+) -> tuple[np.ndarray, np.ndarray]:
+    """The closed forms of the report's §4.3, written out as plain double sums.
+
+    A transcription of the mathematics, not of the implementation: no design matrix, no
+    survival-weight helper, no vectorisation over draws. That is the point — the production
+    path composes ``delay_design_matrix`` with cumulative survival weights, so checking it
+    against a loop that only ever indexes ``f_tost`` and ``f_inc`` directly is a check of the
+    formulae rather than of a shared abstraction.
+
+        H(t)  = c_ret * Σ_{u≤t} driving_u  P(S > t−u)
+        M(t)  = Σ_{u≤t} E_u P(A > t−u),      E_u = R_u × (force on day u)
+        log P(no further case)        = −H(t) − M(t)
+        log P(no further transmission) = −H(t) − M(t)[1 − exp(−c)]
+
+    with ``c = R`` for the Poisson limit and ``c = k log(1 + R/k)`` otherwise, and the
+    retained coefficient ``c_ret`` equal to ``c`` for SSE-SO (whose remaining offspring pool
+    into one negative binomial) and to ``R`` for the two Poisson-offspring models.
+    """
+    n_days = COUNTS.size
+    tost, incubation = DELAYS.tost, DELAYS.incubation
+
+    def tost_survival(lag: int) -> float:
+        return max(0.0, 1.0 - sum(tost[: lag + 1]))
+
+    def incubation_survival(lag: int) -> float:
+        return max(0.0, 1.0 - sum(incubation[:lag]))
+
+    R_by_day = renewal.reproduction_number_by_day(
+        PARAMETERS.R_pre, PARAMETERS.R_post, n_days=n_days, switch_day=SWITCH_DAY
+    )
+    per_case = reset_R if model == "cori_so" else K * np.log1p(reset_R / K)
+
+    if model == "cori_so":
+        driving = COUNTS.astype(float)
+        retained_coefficient = reset_R
+    elif model == "ssi_so":
+        assert latent is not None
+        driving = latent
+        retained_coefficient = reset_R
+    else:
+        driving = COUNTS.astype(float)
+        retained_coefficient = per_case
+
+    # E_u, the expected infections on day u under the *historical* reproduction number: the
+    # pipeline it fills was generated before the reset, which is the asymmetry §4.3 turns on.
+    expected_infections = np.zeros(n_days)
+    for u in range(n_days):
+        if model == "sse_so":
+            assert latent is not None
+            force = latent[u]
+        else:
+            force = sum(tost[s] * driving[u - s] for s in range(u + 1))
+        expected_infections[u] = R_by_day[u] * force
+
+    log_no_cases = np.zeros(n_days)
+    log_no_transmission = np.zeros(n_days)
+    for t in range(n_days):
+        H = retained_coefficient * sum(driving[u] * tost_survival(t - u) for u in range(t + 1))
+        M = sum(expected_infections[u] * incubation_survival(t - u) for u in range(t + 1))
+        log_no_cases[t] = -H - M
+        log_no_transmission[t] = -H - M * (1.0 - np.exp(-per_case))
+    return log_no_cases, log_no_transmission
+
+
+@pytest.mark.parametrize("model", ["cori_so", "sse_so", "ssi_so"])
+def test_onset_zero_probabilities_match_the_closed_forms_written_out(model):
+    latent = _latent_path(model, np.random.default_rng(11))
+    probabilities = rac.onset_event_probabilities(
+        model,
+        counts=COUNTS,
+        delays=DELAYS,
+        switch_day=SWITCH_DAY,
+        R_pre=PARAMETERS.R_pre,
+        R_post=PARAMETERS.R_post,
+        k=None if model == "cori_so" else K,
+        latent=None if latent is None else latent[None, :],
+    )
+    expected_cases, expected_transmission = _explicit_onset_zero_probabilities(
+        model, latent=latent, reset_R=PARAMETERS.R_pre
+    )
+    np.testing.assert_allclose(probabilities.log_no_further_cases[0], expected_cases)
+    np.testing.assert_allclose(probabilities.log_no_further_transmission[0], expected_transmission)
+
+
+@pytest.mark.parametrize("model", ["cori_so", "sse_so", "ssi_so"])
+def test_degenerate_delays_collapse_the_closed_forms_to_one_line(model):
+    """All TOST mass at lag 0 and all incubation mass at lag 1, where the algebra is trivial.
+
+    Every retained cohort has already spent its whole transmission opportunity, so ``H(t) = 0``;
+    and only day ``t``'s own infections are still incubating, so ``M(t) = E_t``. RAC and RAT
+    then reduce to expressions that can be written down without any recursion at all, which is
+    what makes this an independent check of §4.3 rather than a rearrangement of it.
+    """
+    delays = dd.OnsetAnchoredDelays(
+        serial_interval=np.array([1.0]),
+        tost=np.array([1.0]),
+        incubation=np.array([1.0]),
+        tost_delay=DELAYS.tost_delay,
+        incubation_delay=DELAYS.incubation_delay,
+    )
+    latent = None
+    if model != "cori_so":
+        rng = np.random.default_rng(12)
+        scale = COUNTS.astype(float)  # f_tost puts everything at lag 0, so lambda_t = D_t
+        latent = np.where(scale > 0, rng.gamma(K * np.maximum(scale, 1e-12), 1.0 / K), 0.0)
+
+    probabilities = rac.onset_event_probabilities(
+        model,
+        counts=COUNTS,
+        delays=delays,
+        switch_day=SWITCH_DAY,
+        R_pre=PARAMETERS.R_pre,
+        R_post=PARAMETERS.R_post,
+        k=None if model == "cori_so" else K,
+        latent=None if latent is None else latent[None, :],
+    )
+    R_by_day = renewal.reproduction_number_by_day(
+        PARAMETERS.R_pre, PARAMETERS.R_post, n_days=COUNTS.size, switch_day=SWITCH_DAY
+    )
+    driving = COUNTS.astype(float) if model == "cori_so" else latent
+    assert driving is not None
+    expected_infections = R_by_day * driving
+    per_case = PARAMETERS.R_pre if model == "cori_so" else K * np.log1p(PARAMETERS.R_pre / K)
+    np.testing.assert_allclose(probabilities.log_no_further_cases[0], -expected_infections)
+    np.testing.assert_allclose(
+        probabilities.log_no_further_transmission[0],
+        -expected_infections * (1.0 - np.exp(-per_case)),
+    )
+
+
 def test_rac_is_never_below_rat():
     latent = _latent_path("sse_so", np.random.default_rng(7))
     assert latent is not None

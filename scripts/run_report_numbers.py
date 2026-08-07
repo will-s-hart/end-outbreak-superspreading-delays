@@ -142,6 +142,16 @@ def fixed(value: float, decimals: int) -> str:
     return f"{value:.{decimals}f}"
 
 
+def trimmed(value: float, decimals: int) -> str:
+    """``fixed``, with trailing zeros dropped: 11.40 becomes 11.4 and 4.57 stays 4.57.
+
+    Used for the delay distributions, which are quoted in running prose as ``a mean of 11.4
+    days`` rather than in a column of a table. A fixed number of decimals would either write
+    ``11.40`` there or lose the second digit of the TOST standard deviation.
+    """
+    return fixed(value, decimals).rstrip("0").rstrip(".")
+
+
 def interval(summary: pc.PosteriorSummary, decimals: int) -> str:
     """``median (lower--upper)``, the form the figures' legends use."""
     return (
@@ -270,9 +280,9 @@ def add_delays(numbers: NumberFile, config: dict[str, Any]) -> None:
         ("delays.tost", delays.tost_delay),
         ("delays.alternativeserialinterval", alternative),
     ):
-        numbers.set(f"{prefix}.mean", fixed(delay.mean, 2))
-        numbers.set(f"{prefix}.sd", fixed(delay.sd, 2))
-        numbers.set(f"{prefix}.variance", fixed(delay.variance, 2))
+        numbers.set(f"{prefix}.mean", trimmed(delay.mean, 2))
+        numbers.set(f"{prefix}.sd", trimmed(delay.sd, 2))
+        numbers.set(f"{prefix}.variance", trimmed(delay.variance, 2))
     numbers.set("delays.maxlag", str(int(shared["max_lag"])))
     numbers.set("delays.discrepancy", f"{delays.serial_interval_discrepancy():.5f}")
     numbers.set("delays.tolerance", fixed(float(shared["serial_interval_tolerance"]), 2))

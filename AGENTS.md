@@ -219,6 +219,15 @@ to know before touching it:
   retained. `onset_event_probabilities` gives `log P(no RAC) = -H(t) - M(t)` and
   `log P(no RAT) = -H(t) - M(t)[1 - exp(-c)]`; restarting from observed onsets alone drops
   `M(t)` and understates RAC.
+- **Those forms are exact and are written out in the report**, as Proposition 2 of
+  `report/report.tex` §4.3 with a proof: `W(t)` is the TOST-survival-weighted retained driving
+  series, `M(t)` the incubation-survival-weighted expected infections at the *historical* `R`,
+  and `c = k log(1 + R*/k)` (or `R*` in the Poisson limit) the per-case zero-offspring exponent,
+  with `H(t) = c·W(t)` for SSE-SO and `R*·W(t)` for Cori-SO/SSI-SO. **If you change the
+  arithmetic, change the proposition.** `tests/test_stage8_onset.py` pins them three ways: a
+  transcription of the proposition as plain double sums (no design matrices, so it checks the
+  formulae rather than a shared abstraction), a degenerate-delay case where they collapse to one
+  line, and the `R* = 0` case where RAT is exactly zero.
 - **SSE-SO needs its day-`T` boundary latent rebuilt too.** It cannot reach any fitted onset
   because incubation starts at lag 1, but its infections belong to the day-`T` reset pipeline;
   its conditional law is therefore its Gamma prior.
@@ -452,11 +461,25 @@ are RAC, while `figures/onset_models_rat/` reports RAC and RAT together. Under e
 
 ### The report — Stage 10
 
-`report/report.tex` is a detailed methods section (data, delays, the five models, the §4
-equivalence derivation, RAC/RAT, inference, evidence, validation) followed by one results section
-per analysis with bullet-point findings, a crossings table, the RAC/RAT supplement, and the
-sensitivity analyses listed but not run. It compiles to `report/report.pdf` through the `report`
-rule, which is tier 3 like the figures.
+`report/report.tex` is written as an **outward-facing paper skeleton**, not as a write-up of this
+codebase: abstract, short introduction, data and delays, models, the RAC/RAT estimand with its
+closed forms as propositions, inference, one results section per analysis with bullet findings, a
+crossings table, the RAC/RAT supplement, the sensitivity analyses listed but not run, and two
+appendices. It compiles to `report/report.pdf` through the `report` rule, which is tier 3 like the
+figures. Four structural rules hold it in that register:
+
+- **Implementation detail lives in Appendix B ("Code and reproducibility"), not in the methods.**
+  pixi, Snakemake, tiers, file layouts, the no-fallback rule, `validation/` — all of it belongs
+  there. A methods section that explains how *this repository* is arranged is the failure mode;
+  the companion project's `notes.tex` is the register to aim at.
+- **Derivations are `proposition`/`proof`/`remark` environments** (amsthm), numbered and
+  cross-referenced, with the §4 natural-vs-convenient equivalence in Appendix A.
+- **Both Poisson limits appear.** `cori` and `cori_so` are introduced together as the `k → ∞`
+  limits of the two families, named as the collapse-check targets and as the external-replication
+  model — they are still not fitted and still not compared models. Mentioning one without the
+  other reads as an oversight.
+- **Verification is stated as results of checks**, with tolerances, in one methods subsection.
+  The `validation/results/*.md` files are named once, in Appendix B.
 
 - **The report quotes no literal number.** It writes `\resultnum{<key>}`; the tier-2
   `report_numbers` rule runs `scripts/run_report_numbers.py`, which reads what the other tier-2

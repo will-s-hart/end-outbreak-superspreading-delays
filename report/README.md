@@ -2,8 +2,14 @@ The methods-and-results write-up, compiled by the `report` rule.
 
 | Path | What it is |
 | --- | --- |
-| `report.tex` | The document: a detailed methods section, then one results section per analysis with bullet-point findings. |
+| `report.tex` | The document: abstract, short introduction, methods, one results section per analysis with bullet-point findings, and two appendices. |
 | `report.pdf` | The compiled output, committed like `results/` and `figures/`. |
+
+**It is written as a paper, not as a description of this repository.** Implementation detail —
+pixi, Snakemake, tiers, the generated-numbers scheme, `validation/` — belongs in Appendix B,
+"Code and reproducibility". Derivations go in `proposition`/`proof`/`remark` environments, with
+the equivalence of the two onset-anchored forms in Appendix A. If a methods paragraph explains
+how the code is arranged, it is in the wrong file.
 
 **No number is typed into the prose.** `report.tex` writes `\resultnum{<key>}`, and
 `results/report_numbers.tex` — written by the tier-2 `report_numbers` rule from
