@@ -11,6 +11,7 @@ in this tree — see `validation/` for benchmarks and cross-checks.
 | `run_naive_models_estimated_k.py` | 1 and 2 | the same, plus `results/naive_models_estimated_k/dispersion_posteriors.json` |
 | `run_onset_models_fixed_k.py` | 1 and 2 | the four-model fixed-`k` Analysis 3 outputs, including RAT in the SO-model RAC files |
 | `run_onset_models_estimated_k.py` | 1 and 2 | the four-model estimated-`k` Analysis 4 outputs and dispersion comparisons |
+| `run_report_numbers.py` | 2 | `results/report_numbers.tex` — every number the report quotes, as LaTeX macros |
 | `plot_naive_models_fixed_k.py` | 3 | `figures/naive_models_fixed_k/*.pdf`, `*.png` |
 | `plot_naive_models_estimated_k.py` | 3 | the same for `naive_models_estimated_k` |
 | `plot_onset_models_fixed_k.py` | 3 | `figures/onset_models_fixed_k/*.pdf`, `*.png` |
@@ -21,7 +22,9 @@ in this tree — see `validation/` for benchmarks and cross-checks.
 
 Stage 9 added the two onset-anchored analyses to `IMPLEMENTED_ANALYSES` and the `rat_figure`
 rule for §5.5's supplementary comparison. That explicit list, not the config, remains what
-`rule all` and the convenience aggregates are built from.
+`rule all` and the convenience aggregates are built from — and Stage 10's `run_report_numbers.py`
+takes it on the command line rather than growing a second copy of it, because it is the one
+script that spans the analyses.
 
 Conventions, all of them load-bearing:
 
@@ -43,7 +46,9 @@ Conventions, all of them load-bearing:
   the text.
 - **A missing input fails loudly.** `utils.read_model_evidence` and `read_dispersion_summary`
   raise rather than falling back when their file is absent: a pie chart of placeholder numbers
-  is indistinguishable from a real one on the page.
+  is indistinguishable from a real one on the page. `run_report_numbers.read_json` does the same,
+  for the same reason — and the report's `\resultnum` raises a *LaTeX* error on an undefined key,
+  so the equivalent failure in the prose stops the build rather than printing nothing.
 
 **The run scripts are a docstring and an analysis name apiece** — Stage 7 factored the shared
 body into `analysis_driver.py`, once the second analysis made its real shape visible. It could

@@ -450,6 +450,51 @@ are RAC, while `figures/onset_models_rat/` reports RAC and RAT together. Under e
   switch convention, outbreak history and posterior. The incubation-scale explanation is the
   mechanism for this result, not a theorem for arbitrary time series or interventions.
 
+### The report — Stage 10
+
+`report/report.tex` is a detailed methods section (data, delays, the five models, the §4
+equivalence derivation, RAC/RAT, inference, evidence, validation) followed by one results section
+per analysis with bullet-point findings, a crossings table, the RAC/RAT supplement, and the
+sensitivity analyses listed but not run. It compiles to `report/report.pdf` through the `report`
+rule, which is tier 3 like the figures.
+
+- **The report quotes no literal number.** It writes `\resultnum{<key>}`; the tier-2
+  `report_numbers` rule runs `scripts/run_report_numbers.py`, which reads what the other tier-2
+  rules wrote and emits `results/report_numbers.tex` as `\defresultnum{key}{value}` lines. **An
+  undefined key is a LaTeX error, not a blank** — that is the whole point, and it is the same
+  no-fallback rule `utils.read_model_evidence` enforces for the figures. Values that look like
+  inputs rather than results (serial interval, priors, sampler settings, latent counts) are
+  macros too, so editing `config/config.yaml` edits the methods section.
+- **Keys carry no underscores**, because they are expanded through `\csname`: an analysis or
+  model name is slugged to letters and digits only (`onset_models_estimated_k` →
+  `onsetmodelsestimatedk`, `sse_so` → `sseso`). The mapping is mechanical, not a table.
+- **Rounding lives in the script, not in the prose**, so the same quantity cannot appear to two
+  decimal places in one section and three in another. Anything that can be negative goes through
+  `math_mode`, so TeX sets a minus rather than a hyphen.
+- **`run_report_numbers.py` computes nothing new.** Posterior summaries come from
+  `posterior_comparison.summarise_posterior` (the same call `dispersion_posteriors.json` makes)
+  and crossings from `RiskCurve.first_day_below` (the same call the figure markers make). The
+  three cross-analysis quantities it forms — the onset-vs-naive crossing shift, the fixed→estimated
+  log-evidence gain, and the RAC/RAT gap — are subtractions of numbers already in `results/`, done
+  there so no sentence has to do arithmetic.
+- **It takes `IMPLEMENTED_ANALYSES` on the command line.** The Snakefile owns that list; the
+  script must not grow a second copy.
+- **Validation numbers are the one exception and are always attributed.** `validation/` outputs
+  never feed `rule all`, so the report cannot depend on them; the few it quotes (the §5.6
+  filtering comparison, the PMMH and quadrature checks, the Thompson replication) name the
+  `validation/results/*.md` file they come from.
+- **`latexmk`/`pdflatex` are the pipeline's only external toolchain dependency.** pixi does not
+  provide TeX. The rule checks and says so rather than failing with "command not found".
+- `tests/test_report_numbers.py` checks the two committed files against each other — every key
+  used is defined, every included figure exists, every recorded source still exists — which is
+  Stage 10's acceptance criterion turned into a regression test.
+
+**Three optional follow-ups were declined at Stage 10**, per §9 of the plan, which asked for the
+decision to be taken here. The report does not reference the companion project, so neither the
+`P(sustained transmission)` panel nor the reset-convention panel would answer a question the
+document raises; both are recorded in §5.4 as prose instead. The `sse-ssi-pmo` regression test is
+the cheapest of the three and remains the one to do first if any is revisited.
+
 ### Day indexing
 
 Day 0 is the first observed onset (5 April 2018). The ERT arrived on day 33 and withdrew on
@@ -485,7 +530,7 @@ Two trees, and the split is by **purpose, not by cost**:
 | | Report analyses | Validation studies |
 | --- | --- | --- |
 | Scripts | `scripts/run_*.py`, `scripts/plot_*.py` | `validation/run_*.py` |
-| Outputs | `results/<analysis>/`, `figures/<analysis>/` | `validation/results/` |
+| Outputs | `results/<analysis>/`, `figures/<analysis>/`, `report/` | `validation/results/` |
 | Driven by | a Snakemake rule | run on demand |
 | In `rule all` / a tier's dependency list | yes | **never** |
 
@@ -502,11 +547,12 @@ just stays out of every rule's dependency list).
 
 ### Pipeline
 
-`Snakefile` drives everything in three tiers — `fit` (MCMC, minutes–hours), `rac`/`evidence`
-(seconds–minutes), `figure` (seconds) — so a change at one tier never re-runs the tiers above
-it. When adding a module, **add it to the right dependency list at the top of the `Snakefile`**
-(`FIT_CORE`, `RAC_CORE`, `EVIDENCE_CORE`, `PLOT_CORE`); Snakemake's `code` trigger hashes only
-a rule's own body and does not follow Python imports.
+`Snakefile` drives everything in three tiers — `fit` (MCMC, minutes–hours), `rac`/`evidence`/
+`dispersion`/`report_numbers` (seconds–minutes), `figure`/`report` (seconds) — so a change at one
+tier never re-runs the tiers above it. When adding a module, **add it to the right dependency
+list at the top of the `Snakefile`** (`FIT_CORE`, `RAC_CORE`, `EVIDENCE_CORE`,
+`DISPERSION_CORE`, `REPORT_NUMBERS_CORE`, `PLOT_CORE`); Snakemake's `code` trigger hashes only a
+rule's own body and does not follow Python imports.
 
 The `rac` rule writes `results/<analysis>/<model>_rac.csv`. That file carries the
 supplementary **RAT** column too, for the onset-anchored models — one derived-results file per
@@ -516,7 +562,9 @@ One tier-2 rule applies to only some analyses, and it keys off the config rather
 hard-coded list of names: `dispersion` runs where `fixed_k` is null (`estimates_dispersion`), and
 the `figure` rule picks its output up through `dispersion_summary_of`, which returns nothing for
 the fixed-`k` analyses. The separate `rat_figure` rule builds the §5.5 RAC/RAT supplement from
-the two onset analyses' derived CSVs; it performs no analysis of its own.
+the two onset analyses' derived CSVs; it performs no analysis of its own. Two rules span the
+analyses rather than sitting inside one: `report_numbers` (tier 2) and `report` (tier 3) — see
+*The report* above.
 
 Per-analysis parameters live in `config/config.yaml`, keyed per analysis so that tweaking the
 `k` prior for the estimated-`k` analyses does not invalidate the fixed-`k` fits. Seeds live
@@ -580,6 +628,13 @@ The equality check itself lives in `validation/run_rac_validation.py` rather tha
 where it needs MCMC on the real series; the tests carry the same comparisons on short
 histories, which is what keeps `pixi run test` quick.
 
+**Two committed text files are checked against each other**, in `tests/test_report_numbers.py`:
+every `\resultnum` key `report/report.tex` uses must be defined in `results/report_numbers.tex`,
+every figure it includes must exist, and every file the macros were read from must still be
+there. That is Stage 10's acceptance criterion as a regression test, and it needs no MCMC. It is
+also the only test that loads a `scripts/` program — by path, with `importlib`, since `scripts/`
+is deliberately not a package.
+
 ## Decisions already taken
 
 Do not silently revisit these; they are argued out in the implementation plan.
@@ -612,6 +667,9 @@ Do not silently revisit these; they are argued out in the implementation plan.
    Validated in Stage 6; see *Model evidence* above.
 10. **Fits are stored as NETCDF4 via xarray**, engine `h5netcdf`, read back with
     `xr.open_datatree`. See *The analysis and plotting scripts* above.
+11. **The report quotes no literal number.** Every figure in the prose is a `\resultnum{<key>}`
+    expanded from `results/report_numbers.tex`, which a tier-2 rule generates from the other
+    tier-2 outputs; an undefined key is a compile error. See *The report* above.
 
 ## Open items
 
@@ -619,17 +677,16 @@ Do not silently revisit these; they are argued out in the implementation plan.
   with mean 11.4 d and SD 8.1 d, which leaves a residual TOST of mean 3.9 d and SD 4.57 d.
   Configurable in `config/config.yaml`; `check_delay_budget` rejects any estimate whose
   variance exceeds the serial interval's.
-- **Stage 10 report.** All four analyses and the RAC/RAT supplement now run end to end. The
-  report should foreground the 8–12-day advance in RAC crossings under onset anchoring and tie
-  it to the incubation-scale switch/reset asymmetry above, alongside the measured changes in
-  `R_post` and `k`.
-- **Three optional follow-ups to the §5.4 finding, none scoped in and none required.** A second
-  quantity for the Équateur data — `P(sustained transmission after ERT removal)`, i.e. the
-  branching-process re-establishment probability, which is cheap given the RAC machinery and on
-  which the SSE/SSI ordering reverses; the reset-convention sensitivity (condition at `R_post`,
-  project at `R_pre`), probably a methods sentence rather than a panel; and a regression test
-  that our RAC reproduces `sse-ssi-pmo`'s ordering in its own regime. See "Optional extensions"
-  at the end of §9 of the plan. **Do not add any of them unasked** — decide near Stage 10.
+- **The six sensitivity analyses, listed in §11 of the report and none of them run.** In the
+  plan's order of value: the outbreak-specific serial interval (naive models only — it is
+  structurally inadmissible for the onset-anchored ones, and saying so is itself a result); the
+  incubation/TOST decomposition; filtering rather than smoothed latents, integrated over the
+  parameter posterior; the shifted `R`-switch that separates structure from indexing; a non-empty
+  initial incubation pipeline; and prior sensitivity. The first, second, fourth and fifth are one
+  config value apiece and no new code.
+- **Three optional follow-ups to the §5.4 finding were declined at Stage 10** and stay declined
+  unless asked for. See *The report* above for why, and "Optional extensions" at the end of §9 of
+  the plan for what they are.
 ## Git workflow
 
 - Commit regularly with descriptive messages. Run `pixi run check` first.

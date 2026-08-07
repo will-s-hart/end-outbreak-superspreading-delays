@@ -57,8 +57,12 @@ The environment is managed by [pixi](https://pixi.sh):
 pixi install
 pixi run check           # format, lint, typecheck, test
 pixi run pipeline-dry    # what the pipeline would do, and why
-pixi run pipeline        # reproduce every result and figure
+pixi run pipeline        # reproduce every result, figure and the report
 ```
+
+Compiling `report/report.pdf` needs `latexmk` and `pdflatex` from a TeX distribution (MacTeX,
+TeX Live). That is the pipeline's only external toolchain dependency, and the `report` rule says
+so plainly if it is missing; every other rule runs without it.
 
 `results/` and `figures/` are committed, but git does not preserve modification times, so a
 fresh clone can look stale to Snakemake. The default profile
@@ -72,19 +76,26 @@ config/            pipeline configuration, keyed per analysis, and the Snakemake
 data/              the padded daily onset series, with provenance in data/README.md
 end_of_outbreak/   the package: models, delays, inference, RAC/RAT, evidence
 scripts/           one compute-and-save script and one load-and-plot script per analysis
-results/           committed analysis outputs
+results/           committed analysis outputs, including the report's numbers as LaTeX macros
 figures/           committed figures (PDF + PNG)
-report/            LaTeX methods and results
+report/            LaTeX methods and results, and the compiled PDF
 tests/             pytest suite
+validation/        benchmarks and cross-checks: subject is the implementation, not the outbreak
 Snakefile          pipeline entry point (three tiers: fit -> derive -> plot)
 ```
 
 See `AGENTS.md` for conventions and the development workflow.
 
+The report quotes **no number of its own**: `report/report.tex` writes `\resultnum{<key>}` and
+`results/report_numbers.tex` says what each key expands to, so a refit that moves a number moves
+it in the prose too. See `report/README.md`.
+
 ## Status
 
-Under construction. Data handling and delay distributions are in place; the model
-implementations, inference and analyses are being added stage by stage.
+Complete through Stage 10. All four analyses, the supplementary RAC/RAT comparison and the
+methods-and-results report run end to end from the raw CSV: `pixi run pipeline` reproduces
+everything in `results/`, `figures/` and `report/`. The sensitivity analyses listed at the end
+of the report have not been run.
 
 ## References
 

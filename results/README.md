@@ -7,9 +7,16 @@ Snakemake rule from a script in `scripts/`, and everything here feeds a figure o
 | `<analysis>/<model>_rac.csv` | Tier-2 RAC curve (plus RAT, for the onset-anchored models). |
 | `<analysis>/model_evidence.json` | Tier-2 marginal likelihoods and posterior model probabilities. |
 | `<analysis>/dispersion_posteriors.json` | Tier-2 `k` posterior summaries and their pairwise divergences — only for the analyses that estimate `k`. |
+| `report_numbers.tex` | Tier-2 LaTeX macros: every number `report/report.tex` quotes, collected from the files above. Spans the analyses rather than sitting inside one, which is why it is not in a subdirectory. |
 
 The per-analysis subdirectories arrive one per stage: `naive_models_fixed_k/` with Stage 5,
-`naive_models_estimated_k/` with Stage 7, and the two onset-anchored ones with Stage 9.
+`naive_models_estimated_k/` with Stage 7, and the two onset-anchored ones with Stage 9;
+`report_numbers.tex` arrives with Stage 10.
+
+`report_numbers.tex` is a results file that happens to be written in LaTeX syntax, not a
+document: it holds only `\defresultnum{key}{value}` lines and a header recording the files each
+value was read from. The macro machinery that consumes it lives in `report/report.tex`, which
+raises a compile error on a key this file does not define. See `report/README.md`.
 
 **Validation studies live in `validation/`, not here** — sampler benchmarks, the RAC
 cross-checks, and the particle-MCMC check write to `validation/results/` with a written summary

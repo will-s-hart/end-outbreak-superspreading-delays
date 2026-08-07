@@ -9,7 +9,9 @@
 #   2. rac        results/<analysis>/<model>_rac.csv              seconds-minutes
 #      evidence   results/<analysis>/model_evidence.json
 #      dispersion results/<analysis>/dispersion_posteriors.json   (analyses that estimate k)
+#   2. report_numbers  results/report_numbers.tex                  seconds (spans the analyses)
 #   3. figure     figures/<analysis>/*.pdf, *.png                 seconds
+#      report     report/report.pdf                               seconds (needs latexmk)
 #
 # Tier 1 carries the model in a wildcard rather than fitting a whole analysis at once, so
 # re-fitting SSE-SO does not re-fit SSI.
@@ -87,6 +89,21 @@ DISPERSION_CORE = RUN_DRIVER + code(
     "delay_distributions",
     "model_specifications",
     "fitting",
+)
+# The report quotes no number of its own: `scripts/run_report_numbers.py` collects them all from
+# what the other tier-2 rules wrote and emits LaTeX macros, and `report.tex` expands those. That
+# makes it a tier-2 rule like the rest -- it opens posteriors and summarises them -- so it lists
+# the modules it summarises with. `posterior_comparison` and `risk_of_additional_cases` are here
+# for the same reason they are elsewhere: the medians and the "settles below" rule the report
+# quotes have to be the ones the pipeline computed.
+REPORT_NUMBERS_CORE = ["scripts/run_report_numbers.py"] + code(
+    "configuration",
+    "outbreak_data",
+    "delay_distributions",
+    "model_specifications",
+    "posterior_comparison",
+    "risk_of_additional_cases",
+    "pymc_models",
 )
 # The figure tier is deliberately the narrowest list. A plotting script reads what tier 2 wrote
 # and decides what it looks like; the one piece of *method* it borrows is
@@ -170,8 +187,7 @@ def racs_of(wildcards):
 # Targets
 # ---------------------------------------------------------------------------------------
 
-# One main figure per implemented analysis. Grows with `IMPLEMENTED_ANALYSES`; the §5.5 RAT
-# supplement of the onset-anchored analyses and the compiled report join it at Stages 9 and 10.
+# One main figure per implemented analysis. Grows with `IMPLEMENTED_ANALYSES`.
 MAIN_TARGETS = [
     f"figures/{analysis}/{analysis}.{extension}"
     for analysis in IMPLEMENTED_ANALYSES
@@ -180,12 +196,16 @@ MAIN_TARGETS = [
 RAT_FIGURE_TARGETS = [
     f"figures/onset_models_rat/onset_models_rat.{extension}" for extension in ("pdf", "png")
 ]
+# The compiled methods-and-results document, and the macro file every number in it expands from.
+REPORT_NUMBERS = "results/report_numbers.tex"
+REPORT_TARGET = "report/report.pdf"
 
 
 rule all:
     input:
         MAIN_TARGETS,
         RAT_FIGURE_TARGETS,
+        REPORT_TARGET,
 
 
 # ---------------------------------------------------------------------------------------
@@ -286,8 +306,47 @@ rule dispersion:
         " --output {output}"
 
 
+# Every number the report quotes, in one macro file. It spans the analyses rather than sitting
+# inside one, so it takes the implemented list on the command line: the Snakefile owns that list
+# and the script must not grow a second copy of it.
+rule report_numbers:
+    input:
+        posteriors=[
+            f"results/{analysis}/{model}_posterior.nc"
+            for analysis in IMPLEMENTED_ANALYSES
+            for model in models_of(analysis)
+        ],
+        racs=[
+            f"results/{analysis}/{model}_rac.csv"
+            for analysis in IMPLEMENTED_ANALYSES
+            for model in models_of(analysis)
+        ],
+        evidence=[f"results/{analysis}/model_evidence.json" for analysis in IMPLEMENTED_ANALYSES],
+        dispersion=[
+            f"results/{analysis}/dispersion_posteriors.json"
+            for analysis in IMPLEMENTED_ANALYSES
+            if estimates_dispersion(analysis)
+        ],
+        data=ONSETS_CSV,
+        config=CONFIG_FILE,
+        code=REPORT_NUMBERS_CORE,
+    output:
+        REPORT_NUMBERS,
+    params:
+        analyses=IMPLEMENTED_ANALYSES,
+        per_analysis={analysis: analysis_params(analysis) for analysis in IMPLEMENTED_ANALYSES},
+        shared=SHARED_PARAMS,
+    shell:
+        "python scripts/run_report_numbers.py"
+        " --analyses {params.analyses}"
+        " --data {input.data}"
+        " --config {input.config}"
+        " --results-root results"
+        " --output {output}"
+
+
 # ---------------------------------------------------------------------------------------
-# Tier 3 -- figures
+# Tier 3 -- figures and the report
 # ---------------------------------------------------------------------------------------
 
 
@@ -340,6 +399,29 @@ rule rat_figure:
         " --output-png {output.png}"
 
 
+# The methods-and-results document. It is tier 3 like the figures: it consumes only the PDFs and
+# the macro file, and recompiling it can never re-run a fit.
+#
+# `latexmk` and `pdflatex` come from a TeX distribution, which pixi does not manage -- this is
+# the one rule in the pipeline with an external toolchain dependency, so it says so rather than
+# failing with a bare "command not found".
+rule report:
+    input:
+        tex="report/report.tex",
+        numbers=REPORT_NUMBERS,
+        figures=[
+            target for target in MAIN_TARGETS + RAT_FIGURE_TARGETS if target.endswith(".pdf")
+        ],
+    output:
+        REPORT_TARGET,
+    shell:
+        "command -v latexmk >/dev/null || {{ "
+        "echo 'latexmk not found: the report rule needs a TeX distribution (e.g. MacTeX or "
+        "TeX Live), which pixi does not provide. Everything else in the pipeline runs without "
+        "it.' >&2; exit 1; }}; "
+        "latexmk -pdf -interaction=nonstopmode -halt-on-error -cd {input.tex}"
+
+
 # ---------------------------------------------------------------------------------------
 # Convenience aggregates
 # ---------------------------------------------------------------------------------------
@@ -367,6 +449,7 @@ rule results:
             for analysis in IMPLEMENTED_ANALYSES
             if estimates_dispersion(analysis)
         ],
+        REPORT_NUMBERS,
 
 
 rule figures:
