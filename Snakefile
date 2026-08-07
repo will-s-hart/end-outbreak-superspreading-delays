@@ -58,13 +58,34 @@ RAC_CORE = code(
     "pymc_models",
     "forward_simulation",
 )
-EVIDENCE_CORE = code("configuration", "model_evidence", "renewal", "delay_distributions")
-# Stage 5 adds `scripts/utils.py` here for the presentation-only helpers the plotting scripts
-# share; the config parsing they also need is in the package, so every tier can name it.
-PLOT_CORE = code("configuration", "outbreak_data")
+EVIDENCE_CORE = code(
+    "configuration",
+    "model_evidence",
+    "renewal",
+    "delay_distributions",
+    "outbreak_data",
+    "model_specifications",
+    "latent_parameterisations",
+    "pymc_models",
+    "fitting",
+)
+# The figure tier is deliberately the narrowest list. A plotting script reads what tier 2 wrote
+# and decides what it looks like; the one piece of *method* it borrows is
+# `RiskCurve.first_day_below`, the rule for when a curve has settled below a threshold, which
+# the report quotes and so must not be reimplemented beside the panel. `risk_of_additional_cases`
+# is named for that and not for its own imports: nothing else in the modelling stack can change
+# a figure without first changing a results file.
+PLOT_CORE = code(
+    "configuration", "outbreak_data", "model_specifications", "risk_of_additional_cases"
+) + ["scripts/utils.py"]
 
 ANALYSES = config["analyses"]
 ONSETS_CSV = config["shared"]["data_file"]
+
+# Analyses whose run and plot scripts exist. Stage 7 adds the estimated-`k` naive analysis and
+# Stage 9 the two onset-anchored ones; until then, naming them in a target would only produce a
+# missing-input error that says nothing useful.
+IMPLEMENTED_ANALYSES = ["naive_models_fixed_k"]
 
 
 # Everything a rule's result depends on must appear in its `params:`. The default profile
@@ -113,9 +134,13 @@ def racs_of(wildcards):
 # Targets
 # ---------------------------------------------------------------------------------------
 
-# Empty until Stage 5 lands the first analysis scripts; populated then with the four main
-# figures, the supplementary figures and the compiled report.
-MAIN_TARGETS = []
+# The main figures. Grows with `IMPLEMENTED_ANALYSES`; the supplementary figures and the
+# compiled report join it at Stage 10.
+MAIN_TARGETS = [
+    f"figures/{analysis}/{analysis}.{extension}"
+    for analysis in IMPLEMENTED_ANALYSES
+    for extension in ("pdf", "png")
+]
 
 
 rule all:
@@ -234,7 +259,7 @@ rule fits:
     input:
         [
             f"results/{analysis}/{model}_posterior.nc"
-            for analysis in ANALYSES
+            for analysis in IMPLEMENTED_ANALYSES
             for model in models_of(analysis)
         ],
 
@@ -243,12 +268,12 @@ rule results:
     input:
         [
             f"results/{analysis}/{model}_rac.csv"
-            for analysis in ANALYSES
+            for analysis in IMPLEMENTED_ANALYSES
             for model in models_of(analysis)
         ],
-        [f"results/{analysis}/model_evidence.json" for analysis in ANALYSES],
+        [f"results/{analysis}/model_evidence.json" for analysis in IMPLEMENTED_ANALYSES],
 
 
 rule figures:
     input:
-        [f"figures/{analysis}/{analysis}.pdf" for analysis in ANALYSES],
+        [f"figures/{analysis}/{analysis}.pdf" for analysis in IMPLEMENTED_ANALYSES],

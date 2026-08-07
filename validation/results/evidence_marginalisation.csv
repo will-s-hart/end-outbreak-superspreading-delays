@@ -1,0 +1,3 @@
+latent_parameterisation,free_coordinates,log_evidence,standard_error,seconds,difference,difference_in_standard_errors
+marginalised_inverse_cdf,32,-84.7719118046204,0.007552556886606853,10.04946204193402,-0.01465670438909683,1.2973502221228332
+inverse_cdf,33,-84.7572551002313,0.008401814052778756,13.338560750009492,,

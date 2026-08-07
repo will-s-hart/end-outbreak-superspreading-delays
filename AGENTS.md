@@ -236,6 +236,77 @@ What Stage 4 established (`validation/results/rac_validation.md`, and the checks
   reveal a high infectivity) and negative after the last case (mean −0.03, worst −0.15 around
   day 70). Report it as measured, not as a claimed direction.
 
+### The analysis and plotting scripts — Stage 5
+
+`scripts/run_<analysis>.py` carries **one subcommand per pipeline tier** — `fit`, `rac`,
+`evidence` — and each Snakemake rule invokes exactly one of them. `scripts/plot_<analysis>.py`
+reads what those wrote and draws it. Four things worth knowing before writing the next pair:
+
+- **Everything that varies between the four analyses comes from `config/config.yaml`,** keyed by
+  a module-level `ANALYSIS` constant. So the Stage-7 and Stage-9 scripts differ from
+  `run_naive_models_fixed_k.py` in that constant and in their docstrings, and nothing else. That
+  duplication stands until the second one lands; factor then, with the real shape visible. It
+  cannot be factored into `scripts/utils.py`, which is in `PLOT_CORE` — fit-driving logic there
+  would make every restyle a reason to re-run MCMC.
+- **The RAC step writes the Monte-Carlo standard error beside the curve.** RAC(t) is a posterior
+  *average*, so it carries Monte-Carlo error, and a curve published without it cannot be
+  compared with another one. The curve and the error come from a single evaluation of the
+  per-draw log-probabilities — call `posterior_state` then
+  `log_probability_of_no_further_cases`, rather than `risk_curve_from_posterior`, which discards
+  them.
+- **The latent reconstruction needs a seed, and a different stream per model.** It is a Monte
+  Carlo draw like any other; `reconstruction_rng` derives it from the analysis's sampler seed
+  and the model's index, so curves that are meant to be independent are not silently correlated
+  through a shared stream. (Stage 4 hit exactly that bug in the matched-pair check.)
+- **A fit is an `xarray.DataTree`, and its I/O is xarray's.** `arviz.InferenceData` is a
+  deprecated alias for `xr.DataTree` in arviz 1.x, so `fitting.save_fit`/`load_fit` use
+  `DataTree.to_netcdf` and `xr.open_datatree`, both pinned to `fitting.NETCDF_ENGINE`
+  (`h5netcdf` — a fit has groups, so it is NETCDF4 and needs an HDF5 backend). `load_fit` loads
+  eagerly rather than leaving a lazy handle on a results file. Keep using arviz for what it is
+  still for — `az.summary` and the rest of the diagnostics.
+- **A plotting script computes nothing and fabricates nothing.** `utils.read_model_evidence`
+  raises when `model_evidence.json` is absent instead of falling back: a pie chart of
+  placeholder numbers is indistinguishable from a real one on the page. The single piece of
+  method the plot scripts borrow is `RiskCurve.first_day_below`, because "the day a curve
+  settles below a threshold" is a definition the report quotes, and it must not drift between
+  the marker on the panel and the number in the text. That is why `risk_of_additional_cases` is
+  the one tier-2 module in `PLOT_CORE`.
+
+### Model evidence — Stage 6
+
+`model_evidence.py` computes `p(D_{1:110} | model)` with the parameters *and* the latents
+integrated out, and turns a set of them into posterior model probabilities under §6.2's uniform
+prior over models. Four things to know:
+
+- **The density being normalised is the built model's own joint log-density.** The module calls
+  `pymc_models.build_model` with the arguments the fit was run with rather than writing the
+  likelihood out again, so the integral estimated is the one that was sampled. That is why
+  `R_pre`, `R_post` and `k` must be passed **exactly as they were passed to `fit_model`** — a
+  `float` where the parameter was fixed (no prior factor) and a `LogNormalPrior` where it was
+  estimated. The prior is part of the question and is not recoverable from the draws.
+- **The integral is done in PyMC's unconstrained coordinates, Jacobian included.**
+  `UnconstrainedTarget` is the one place that knows this. Getting the transform's *direction*
+  wrong shifts every evidence by a constant — a perfectly plausible number and a wrong Bayes
+  factor — so it is pinned against `compile_joint_logp` in the tests rather than trusted.
+- **Bridge sampling is the default**; prior Monte Carlo and importance sampling are the §6.5
+  agreement checks, and `log_evidence_by_quadrature` is the deterministic answer for a model
+  with at most three free coordinates. Do not add a harmonic-mean estimator.
+- **Exact latent marginalisation does not change the evidence** and nothing needs reconstructing
+  here — unlike the RAC calculators, which do need the removed latents back.
+
+What Stage 6 established (`validation/results/evidence_validation.md`):
+
+- **Bridge sampling reproduces deterministic quadrature** for DLO and SSE on the real series to
+  1.1 × 10⁻³ and 2.9 × 10⁻³ nats (1.4 and 2.6 standard errors), with the quadrature box's
+  boundary density 41–44 nats below its peak. This is the only check in the stage that is not
+  sampler-against-sampler.
+- **The three estimators agree on real-series SSI**, all within their own error bars. Importance
+  sampling sits 2.1 combined s.e. below bridge sampling — a pass, but the largest discrepancy
+  anywhere in the study; treat a future move past ~3 as a regression, not as noise.
+- **The evidence is invariant to the latent parameterisation** (32 vs 33 free coordinates,
+  1.3 combined s.e. apart), which is what shows the marginalisation `pm.Potential` carries the
+  whole removed factor and not just its shape.
+
 ### Day indexing
 
 Day 0 is the first observed onset (5 April 2018). The ERT arrived on day 33 and withdrew on
@@ -259,7 +330,7 @@ Flat package `end_of_outbreak/` (no `src/`), with `scripts/` for analysis and pl
   (`configuration.py`): both script trees need it, and the Snakemake rules have to be able
   to name it in their `input:` lists, which they cannot do for a file under `scripts/`.
   Presentation-only helpers — figure styling and the like — go in `scripts/utils.py`, which
-  arrives with the plotting scripts in Stage 5.
+  computes nothing: every number a figure draws was written to `results/` by a tier-2 rule.
 - Strict split between **compute-and-save** scripts and **load-and-plot** scripts, so
   restyling a figure never re-runs MCMC.
 - Analysis scripts are named for what they do, never for figure numbers.
@@ -301,6 +372,13 @@ model, named for the headline quantity.
 Per-analysis parameters live in `config/config.yaml`, keyed per analysis so that tweaking the
 `k` prior for the estimated-`k` analyses does not invalidate the fixed-`k` fits. Seeds live
 there too.
+
+**`IMPLEMENTED_ANALYSES` at the top of the `Snakefile`, not `config["analyses"]`, is what the
+targets are built from.** The config describes all four analyses from the start; only the ones
+whose `run_`/`plot_` scripts exist can be built. `rule all` and the convenience aggregates
+(`fits`, `results`, `figures`) iterate the former. Add an analysis to it as its scripts land
+(Stage 7, Stage 9) — otherwise `snakemake fits` dies with a missing-input error naming a script
+nobody has written yet.
 
 **Any config value that changes a rule's output must appear in that rule's `params:`.** The
 default profile drops the `mtime` trigger, and the `input` trigger tracks the *set* of input
@@ -381,6 +459,11 @@ Do not silently revisit these; they are argued out in the implementation plan.
    (`validation/results/sampler_benchmark.md`). `negligible_latent_threshold` is `0.0` — the
    approximation it offered is unnecessary once the uncoupled latents are integrated out
    exactly. See *The latent block* above.
+9. **Model evidence by bridge sampling**, with prior Monte Carlo and importance sampling kept as
+   the §6.5 agreement checks and quadrature as the exact answer where the space is small enough.
+   Validated in Stage 6; see *Model evidence* above.
+10. **Fits are stored as NETCDF4 via xarray**, engine `h5netcdf`, read back with
+    `xr.open_datatree`. See *The analysis and plotting scripts* above.
 
 ## Open items
 
@@ -388,6 +471,10 @@ Do not silently revisit these; they are argued out in the implementation plan.
   with mean 11.4 d and SD 8.1 d, which leaves a residual TOST of mean 3.9 d and SD 4.57 d.
   Configurable in `config/config.yaml`; `check_delay_budget` rejects any estimate whose
   variance exceeds the serial interval's.
+- **Analysis 1 is the only one built.** `naive_models_fixed_k` runs end to end —
+  `pixi run pipeline` reproduces `figures/naive_models_fixed_k/` from the raw CSV in about a
+  minute. Stage 7 adds `naive_models_estimated_k` and Stage 9 the two onset-anchored analyses;
+  each needs a `run_`/`plot_` pair and an entry in `IMPLEMENTED_ANALYSES`.
 - **Onset-anchored forward simulators** (`forward_simulation`) are still to come in Stage 8,
   along with the onset-anchored RAC/RAT calculators, the onset-anchored particle filter and the
   remaining §4.4 equivalence tests. The Stage-3 benchmark therefore has no synthetic SSE-SO arm

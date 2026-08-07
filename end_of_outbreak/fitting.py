@@ -1,4 +1,4 @@
-"""One place that turns a model description plus data into an ``InferenceData``.
+"""One place that turns a model description plus data into a posterior ``DataTree``.
 
 Every analysis is a single fit to the complete record — days 0–110 — because RAC is a
 retrospective quantity and one fit serves every conditioning day (§5.1, §5.6). So this module
@@ -19,9 +19,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-import arviz as az
 import numpy as np
 import pymc as pm
+import xarray as xr
 from numpy.typing import NDArray
 
 from end_of_outbreak import latent_parameterisations as lp
@@ -38,6 +38,15 @@ PARAMETERISATION_ATTRIBUTE = "latent_parameterisation"
 FIXED_DISPERSION_ATTRIBUTE = "fixed_k"
 SWITCH_DAY_ATTRIBUTE = "switch_day"
 THRESHOLD_ATTRIBUTE = "negligible_latent_threshold"
+
+NETCDF_ENGINE = "h5netcdf"
+"""A fit has groups, so it is written as NETCDF4, which needs an HDF5 backend.
+
+Named rather than left to xarray's default so that reading and writing cannot end up on
+different engines, and so the dependency the pipeline actually rests on is visible from the code
+that rests on it. PyMC returns an ``xarray.DataTree`` — ``arviz.InferenceData`` is a deprecated
+alias for exactly that in arviz 1.x — so the I/O here is xarray's, not arviz's.
+"""
 
 
 @dataclass(frozen=True)
@@ -75,7 +84,7 @@ def fit_model(
     negligible_latent_threshold: float = 0.0,
     sampler: SamplerSettings | None = None,
     progressbar: bool = False,
-) -> az.InferenceData:
+) -> xr.DataTree:
     """Fit one model to the whole series and return the draws, self-describing.
 
     Parameters
@@ -173,26 +182,31 @@ def _initial_values(
     )
 
 
-def save_fit(idata: az.InferenceData, path: str | Path) -> Path:
+def save_fit(idata: xr.DataTree, path: str | Path) -> Path:
     """Write a fit to netCDF, creating the directory if need be. Attributes travel with it."""
     destination = Path(path)
     destination.parent.mkdir(parents=True, exist_ok=True)
-    idata.to_netcdf(str(destination))
+    idata.to_netcdf(str(destination), engine=NETCDF_ENGINE)
     return destination
 
 
-def load_fit(path: str | Path) -> az.InferenceData:
-    """Read a fit back, with the attributes :func:`fit_model` recorded on it."""
-    return az.from_netcdf(str(path))
+def load_fit(path: str | Path) -> xr.DataTree:
+    """Read a fit back, with the attributes :func:`fit_model` recorded on it.
+
+    Loaded eagerly rather than left lazy. A fit is a few megabytes, and a lazily-open handle on
+    a results file is a standing invitation to the classic bug where re-running the rule that
+    produced it truncates the file out from under a reader.
+    """
+    return xr.open_datatree(str(path), engine=NETCDF_ENGINE).load()
 
 
-def fitted_parameterisation(idata: az.InferenceData) -> str | None:
+def fitted_parameterisation(idata: xr.DataTree) -> str | None:
     """The latent parameterisation a fit was run under, or ``None`` if it had no latents."""
     name = idata.attrs.get(PARAMETERISATION_ATTRIBUTE, "")
     return str(name) or None
 
 
-def fitted_dispersion(idata: az.InferenceData) -> float | None:
+def fitted_dispersion(idata: xr.DataTree) -> float | None:
     """The value ``k`` was fixed at, or ``None`` if it was estimated (or absent)."""
     value = idata.attrs.get(FIXED_DISPERSION_ATTRIBUTE, np.nan)
     return None if value is None or np.isnan(float(value)) else float(value)
