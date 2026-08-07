@@ -1,0 +1,29 @@
+{
+  "analysis": "naive_models_estimated_k",
+  "models": [
+    "dlo",
+    "sse",
+    "ssi"
+  ],
+  "estimator": "bridge_sampling",
+  "log_evidence": {
+    "dlo": -93.1993215512868,
+    "sse": -99.37397376464527,
+    "ssi": -84.51712267777408
+  },
+  "log_evidence_standard_error": {
+    "dlo": 0.0015114940091329819,
+    "sse": 0.0015078932074588398,
+    "ssi": 0.022874718688599593
+  },
+  "n_draws": {
+    "dlo": 12000,
+    "sse": 12000,
+    "ssi": 12000
+  },
+  "posterior_model_probability": {
+    "dlo": 0.00016954896567322348,
+    "sse": 3.529212110115777e-07,
+    "ssi": 0.9998300981131089
+  }
+}

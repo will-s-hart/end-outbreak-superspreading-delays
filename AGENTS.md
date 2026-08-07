@@ -249,15 +249,19 @@ What Stage 4 established (`validation/results/rac_validation.md`, and the checks
 ### The analysis and plotting scripts — Stage 5
 
 `scripts/run_<analysis>.py` carries **one subcommand per pipeline tier** — `fit`, `rac`,
-`evidence` — and each Snakemake rule invokes exactly one of them. `scripts/plot_<analysis>.py`
-reads what those wrote and draws it. Four things worth knowing before writing the next pair:
+`evidence`, and `dispersion` where `k` is estimated — and each Snakemake rule invokes exactly one
+of them. `scripts/plot_<analysis>.py` reads what those wrote and draws it. Four things worth
+knowing before writing the next pair:
 
 - **Everything that varies between the four analyses comes from `config/config.yaml`,** keyed by
-  a module-level `ANALYSIS` constant. So the Stage-7 and Stage-9 scripts differ from
-  `run_naive_models_fixed_k.py` in that constant and in their docstrings, and nothing else. That
-  duplication stands until the second one lands; factor then, with the real shape visible. It
-  cannot be factored into `scripts/utils.py`, which is in `PLOT_CORE` — fit-driving logic there
-  would make every restyle a reason to re-run MCMC.
+  a module-level `ANALYSIS` constant. Stage 7 factored the rest into `scripts/analysis_driver.py`,
+  so a run script is now a docstring, that constant, and a one-line `main`. The driver could not
+  go in `scripts/utils.py`, which is in `PLOT_CORE` — fit-driving logic there would make every
+  restyle a reason to re-run MCMC — so it is named in `FIT_CORE`, `RAC_CORE`, `EVIDENCE_CORE` and
+  `DISPERSION_CORE` instead. The **plot** scripts stay one per analysis, because what differs
+  between figures is the panel *arrangement*; the panels themselves are in
+  `scripts/figure_panels.py` (in `PLOT_CORE`), which is also the one place under `scripts/` that
+  imports `risk_of_additional_cases`.
 - **The RAC step writes the Monte-Carlo standard error beside the curve.** RAC(t) is a posterior
   *average*, so it carries Monte-Carlo error, and a curve published without it cannot be
   compared with another one. The curve and the error come from a single evaluation of the
@@ -274,13 +278,14 @@ reads what those wrote and draws it. Four things worth knowing before writing th
   (`h5netcdf` — a fit has groups, so it is NETCDF4 and needs an HDF5 backend). `load_fit` loads
   eagerly rather than leaving a lazy handle on a results file. Keep using arviz for what it is
   still for — `az.summary` and the rest of the diagnostics.
-- **A plotting script computes nothing and fabricates nothing.** `utils.read_model_evidence`
-  raises when `model_evidence.json` is absent instead of falling back: a pie chart of
-  placeholder numbers is indistinguishable from a real one on the page. The single piece of
-  method the plot scripts borrow is `RiskCurve.first_day_below`, because "the day a curve
-  settles below a threshold" is a definition the report quotes, and it must not drift between
-  the marker on the panel and the number in the text. That is why `risk_of_additional_cases` is
-  the one tier-2 module in `PLOT_CORE`.
+- **A plotting script computes nothing and fabricates nothing.** `utils.read_model_evidence` and
+  `utils.read_dispersion_summary` raise when their file is absent instead of falling back: a pie
+  chart of placeholder numbers is indistinguishable from a real one on the page, and so is a
+  legend quoting a median the figure worked out for itself. The single piece of method the
+  figure tier borrows is `RiskCurve.first_day_below`, because "the day a curve settles below a
+  threshold" is a definition the report quotes, and it must not drift between the marker on the
+  panel and the number in the text. That is why `risk_of_additional_cases` is the one tier-2
+  module in `PLOT_CORE`.
 
 ### Model evidence — Stage 6
 
@@ -316,6 +321,41 @@ What Stage 6 established (`validation/results/evidence_validation.md`):
 - **The evidence is invariant to the latent parameterisation** (32 vs 33 free coordinates,
   1.3 combined s.e. apart), which is what shows the marginalisation `pm.Potential` carries the
   whole removed factor and not just its shape.
+
+### The dispersion posteriors — Stage 7
+
+`posterior_comparison.py` summarises one positive scalar's posterior and measures how far two of
+them differ, and the `dispersion` rule turns the `k` draws of an estimated-`k` analysis into
+`results/<analysis>/dispersion_posteriors.json`. Three measures, because none of them says
+enough alone: the **median ratio** (location, but not width), the **overlap** `∫ min(p_a, p_b)`
+(scale-free, symmetric, and finite where a KL divergence would not be), and
+**`P(k_a > k_b)`** for independent draws. All are computed on the log scale, as the density plots
+are; the overlap is invariant to that choice, since both densities pick up the same Jacobian.
+Every *pair* is compared rather than a designated reference model, so the same file serves
+Analysis 4, which has no DLO.
+
+What Stage 7 measured on the real series, under the shared `LogNormal(0.18)` prior:
+
+| | DLO | SSE | SSI |
+| --- | --- | --- | --- |
+| posterior median `k` (95% CrI) | 0.38 (0.23–0.63) | 0.50 (0.31–0.85) | 0.14 (0.07–0.27) |
+| log evidence, `k` fixed → estimated | −97.1 → −93.2 | −106.8 → −99.4 | −84.8 → −84.5 |
+| RAC first below 0.05 | day 107 | day 99 | day 96 |
+| RAC first below 0.01 | **never** | day 110 | day 107 |
+
+- **The divergence is real but it is not DLO against the rest.** DLO vs SSI: overlap 0.094,
+  median ratio 2.7, `P(k_DLO > k_SSI) = 0.99`. SSE vs SSI: overlap 0.032, ratio 3.6, 0.999. But
+  **DLO vs SSE: overlap 0.59** and `P(k_DLO > k_SSE) = 0.22` — the two are barely distinguishable.
+  Do not write this up as "DLO's `k` is the odd one out"; SSI's is, and DLO and SSE agree.
+- **Only SSI's posterior is compatible with the literature `k = 0.18`.** DLO's and SSE's both sit
+  above the prior's own 97.5th percentile (0.36) despite it being deliberately informative. The
+  evidence gains say the same thing more sharply: letting `k` move is worth **7.4 nats to SSE and
+  3.9 to DLO but only 0.26 to SSI**, so Analysis 1 was charging DLO and SSE for a value that was
+  never theirs — and `k = 0.18` really is SSI's number on this series.
+- **The §5.4 effect survives estimating `k`, which is the point of the Fig. 1 / Fig. 2 pair.**
+  Each model at its own best `k` still puts eleven days between DLO's and SSI's 0.05 crossing,
+  and DLO still never reaches 0.01 inside the window. The misapplication of a literature `k`
+  makes the gap; the day-level *mechanism* keeps it.
 
 ### Day indexing
 
@@ -379,6 +419,13 @@ The `rac` rule writes `results/<analysis>/<model>_rac.csv`. That file carries th
 supplementary **RAT** column too, for the onset-anchored models — one derived-results file per
 model, named for the headline quantity.
 
+Two tier-2 rules apply to only some analyses, and both key off the config rather than a hard-coded
+list of names: `dispersion` runs where `fixed_k` is null (`estimates_dispersion`), and the
+`figure` rule picks its output up through `dispersion_summary_of`, which returns nothing for the
+fixed-`k` analyses. `supplementary_figure` invokes the same plot script with `--figure
+supplementary`, for the analyses named in `SUPPLEMENTARY_ANALYSES` — one script per analysis, so
+a displaced panel cannot drift out of step with the figure it was displaced from.
+
 Per-analysis parameters live in `config/config.yaml`, keyed per analysis so that tweaking the
 `k` prior for the estimated-`k` analyses does not invalidate the fixed-`k` fits. Seeds live
 there too.
@@ -387,8 +434,8 @@ there too.
 targets are built from.** The config describes all four analyses from the start; only the ones
 whose `run_`/`plot_` scripts exist can be built. `rule all` and the convenience aggregates
 (`fits`, `results`, `figures`) iterate the former. Add an analysis to it as its scripts land
-(Stage 7, Stage 9) — otherwise `snakemake fits` dies with a missing-input error naming a script
-nobody has written yet.
+(Stage 9) — otherwise `snakemake fits` dies with a missing-input error naming a script nobody has
+written yet.
 
 **Any config value that changes a rule's output must appear in that rule's `params:`.** The
 default profile drops the `mtime` trigger, and the `input` trigger tracks the *set* of input
@@ -481,10 +528,12 @@ Do not silently revisit these; they are argued out in the implementation plan.
   with mean 11.4 d and SD 8.1 d, which leaves a residual TOST of mean 3.9 d and SD 4.57 d.
   Configurable in `config/config.yaml`; `check_delay_budget` rejects any estimate whose
   variance exceeds the serial interval's.
-- **Analysis 1 is the only one built.** `naive_models_fixed_k` runs end to end —
-  `pixi run pipeline` reproduces `figures/naive_models_fixed_k/` from the raw CSV in about a
-  minute. Stage 7 adds `naive_models_estimated_k` and Stage 9 the two onset-anchored analyses;
-  each needs a `run_`/`plot_` pair and an entry in `IMPLEMENTED_ANALYSES`.
+- **The two naive analyses are built; the onset-anchored ones are not.**
+  `naive_models_fixed_k` and `naive_models_estimated_k` run end to end — `pixi run pipeline`
+  reproduces both figure directories from the raw CSV in about a minute. Stage 9 adds the two
+  onset-anchored analyses; each needs a `run_`/`plot_` pair (the run script being a docstring and
+  an `ANALYSIS` constant over `scripts/analysis_driver.py`) and an entry in
+  `IMPLEMENTED_ANALYSES`.
 - **Onset-anchored forward simulators** (`forward_simulation`) are still to come in Stage 8,
   along with the onset-anchored RAC/RAT calculators, the onset-anchored particle filter and the
   remaining §4.4 equivalence tests. The Stage-3 benchmark therefore has no synthetic SSE-SO arm
@@ -492,11 +541,6 @@ Do not silently revisit these; they are argued out in the implementation plan.
   RAC calculators, simulators and filter all landed in Stage 4 and raise `NotImplementedError`
   pointing at Stage 8 when handed an onset-anchored model, rather than quietly doing something
   infection-anchored.
-- **Analysis and plotting scripts** (`run_*`/`plot_*`, and the `MAIN_TARGETS` list at the top of
-  the `Snakefile`) arrive with Stage 5. `fitting.fit_model` and
-  `risk_of_additional_cases.risk_curve_from_posterior` are the two calls a run script needs;
-  `validation/run_rac_validation.py` is a worked example of both.
-
 ## Git workflow
 
 - Commit regularly with descriptive messages. Run `pixi run check` first.
