@@ -352,7 +352,23 @@ What Stage 7 measured on the real series, under the shared `LogNormal(0.18)` pri
 - **The divergence is real but it is not DLO against the rest.** DLO vs SSI: overlap 0.094,
   median ratio 2.7, `P(k_DLO > k_SSI) = 0.99`. SSE vs SSI: overlap 0.032, ratio 3.6, 0.999. But
   **DLO vs SSE: overlap 0.59** and `P(k_DLO > k_SSE) = 0.22` — the two are barely distinguishable.
-  Do not write this up as "DLO's `k` is the odd one out"; SSI's is, and DLO and SSE agree.
+  Do not write this up as "DLO's `k` is the odd one out"; SSI's is, and DLO and SSE agree. That
+  split is along the line aim 3 predicts, not aim 2's — see the next bullet.
+- **The split is day-level against individual-level, which is where onset-as-infection bites
+  hardest.** DLO and SSE both attach their excess variance to a **day**: DLO to the day's
+  aggregate incidence, SSE to the day's pooled transmission through a freshly drawn `λ_t`. SSI
+  attaches it to the **individual**. The series being fitted is *onsets*, and the incubation
+  period (mean 11.4 d, SD 8.1 d) scatters each day's infections forward over a wide kernel — so a
+  naive model reading onsets as infections sees day-to-day variation that the convolution has
+  already largely averaged out, and answers with a larger `k` (less overdispersion) than the
+  infection process carried. **Day-level dispersion is attenuated by the conflation itself.**
+  SSI is close to invariant to it, because the convolution *regroups* individuals across days and
+  the aggregate infectivity of `n` i.i.d. individuals is `Gamma(kn, k)` whichever `n` they are:
+  regrouping moves the cohorts, not the variance. This is a mechanism for the measurement, not a
+  second measurement — Analysis 2 has no non-naive arm, so it cannot separate this from the
+  purely structural difference of §5.4. **Stage 9 is the test:** it predicts SSE-SO's `k`
+  posterior sits *below* naive SSE's, towards SSI's and towards the literature 0.18. Record the
+  comparison there whichever way it comes out.
 - **Only SSI's posterior is compatible with the literature `k = 0.18`.** DLO's and SSE's both sit
   above the prior's own 97.5th percentile (0.36) despite it being deliberately informative. The
   evidence gains say the same thing more sharply: letting `k` move is worth **7.4 nats to SSE and

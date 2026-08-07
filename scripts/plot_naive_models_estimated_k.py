@@ -21,6 +21,14 @@ Panel B carries each posterior's median and 95% credible interval in its legend,
 pairwise divergence — median ratio, posterior overlap, ``P(k_a > k_b)`` — which is where the
 report's quantification of the disagreement comes from. Nothing here recomputes them.
 
+**What the panel shows, and the line it falls along.** DLO (0.38) and SSE (0.50) are barely
+distinguishable from each other and sit three times above SSI (0.14), which is the only one
+compatible with the literature 0.18. The split is *day-level against individual-level*: DLO and
+SSE both attach their excess variance to a day, and the series being fitted is onsets, so the
+incubation period has already smoothed away much of the day-to-day variation their ``k`` is
+estimated from. SSI's variance is attached to individuals, which the same convolution merely
+regroups. Fig. 4 tests that reading, where SSE-SO models the incubation explicitly.
+
 Two invocations, one per figure::
 
     python scripts/plot_naive_models_estimated_k.py --figure main \\
