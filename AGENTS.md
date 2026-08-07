@@ -232,15 +232,21 @@ What Stage 4 established (`validation/results/rac_validation.md`, and the checks
   the comparison with SSE is a property of a thin, spread-out profile, not a theorem, so do not
   restate it as one.
 - **SSI's RAC is *above* SSE's after the final case, and that is not a bug** (day 90: 0.123 vs
-  0.093). It reads like one — inferring that the late cases were not very infectious ought to
-  push SSI down — and it does, hard: `E[Λ_Y(t)]/Λ(t) ≈ 0.35` late in the series, worth −0.17 of
-  RAC at day 90. It is outweighed by §5.4's convexity, here with **SSE** in the pooled role
-  (+0.21). SSE's dispersion parameter is `kΛ(t)`, which shrinks with the transmission that
-  *remains* (0.040 by day 90); SSI's total shape is `k · Σ I_u = 9.7`, fixed by the individuals
-  who ever existed, so once each residual slice is small SSI collapses to the Poisson limit.
-  `R` works slightly against the gap (SSI's mean `R_pre` is 1.78 against SSE's 2.10). **Do not
-  present §5.4 as "DLO is the odd one out"** — DLO and SSI are on the same side of SSE, for the
-  same reason.
+  0.093). Both differences flow from one fact: **SSI's heterogeneity is attached to people you
+  have been watching; SSE's is attached to events that have not happened yet.** So SSI's
+  residual risk is revised downwards by weeks of silence and SSE's is not (`E[Λ_Y]/Λ ≈ 0.35`
+  late in the series), while at matched means SSE's remaining risk is a rare burst and SSI's is
+  spread over 54 people who all still exist. At day 90, matched at 0.40 expected further cases:
+  SSE has a 9% chance of anything at all but ~4.3 cases if it fires; SSI has a 32% chance of
+  typically 1.2. RAC asks only "any further case?", so it reads 9% against 32%. See §5.4 for the
+  full decomposition. **Do not present §5.4 as "DLO is the odd one out"** — DLO and SSI are on
+  the same side of SSE, for the same reason.
+- **The ordering is specific to RAC and to this setting** — check both before claiming it
+  anywhere. Ask "would transmission re-establish?" instead of "any further case?" and it
+  reverses on the same data (SSI 0.021 against SSE 0.036), because a burst of four re-establishes
+  far more readily than a lone case. Run our own RAC code on the companion project's regime — one
+  index case, `R = 2` throughout, no intervention — and SSI comes out *below* SSE at 0.37 of it,
+  matching `sse-ssi-pmo` Fig. 1. Neither difference flips the ordering alone; §5.4 has the 2×2.
 - **The §5.6 gap has both signs, as §5.6 predicted.** Smoothed minus filtering is strongly
   positive early (up to +0.64 around day 2, where the filter has not yet seen the cases that
   reveal a high infectivity) and negative after the last case (mean −0.03, worst −0.15 around
@@ -534,6 +540,13 @@ Do not silently revisit these; they are argued out in the implementation plan.
   onset-anchored analyses; each needs a `run_`/`plot_` pair (the run script being a docstring and
   an `ANALYSIS` constant over `scripts/analysis_driver.py`) and an entry in
   `IMPLEMENTED_ANALYSES`.
+- **Three optional follow-ups to the §5.4 finding, none scoped in and none required.** A second
+  quantity for the Équateur data — `P(sustained transmission after ERT removal)`, i.e. the
+  branching-process re-establishment probability, which is cheap given the RAC machinery and on
+  which the SSE/SSI ordering reverses; the reset-convention sensitivity (condition at `R_post`,
+  project at `R_pre`), probably a methods sentence rather than a panel; and a regression test
+  that our RAC reproduces `sse-ssi-pmo`'s ordering in its own regime. See "Optional extensions"
+  at the end of §9 of the plan. **Do not add any of them unasked** — decide near Stage 10.
 - **Onset-anchored forward simulators** (`forward_simulation`) are still to come in Stage 8,
   along with the onset-anchored RAC/RAT calculators, the onset-anchored particle filter and the
   remaining §4.4 equivalence tests. The Stage-3 benchmark therefore has no synthetic SSE-SO arm
