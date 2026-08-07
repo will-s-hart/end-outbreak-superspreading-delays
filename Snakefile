@@ -105,11 +105,6 @@ ONSETS_CSV = config["shared"]["data_file"]
 # useful.
 IMPLEMENTED_ANALYSES = ["naive_models_fixed_k", "naive_models_estimated_k"]
 
-# Analyses whose plot script draws a second, standalone figure. Fig. 2 spends its second panel
-# on the `k` posteriors, which is the new result of estimating `k`; the post-ERT reproduction
-# number it displaces becomes this supplement rather than being dropped.
-SUPPLEMENTARY_ANALYSES = ["naive_models_estimated_k"]
-
 
 # Everything a rule's result depends on must appear in its `params:`. The default profile
 # drops the `mtime` rerun trigger (committed outputs lose their mtimes on clone), and the
@@ -169,18 +164,11 @@ def racs_of(wildcards):
 # Targets
 # ---------------------------------------------------------------------------------------
 
-# The main figures, one per implemented analysis, plus the standalone supplements. Grows with
-# `IMPLEMENTED_ANALYSES`; the compiled report joins it at Stage 10.
+# One main figure per implemented analysis. Grows with `IMPLEMENTED_ANALYSES`; the §5.5 RAT
+# supplement of the onset-anchored analyses and the compiled report join it at Stages 9 and 10.
 MAIN_TARGETS = [
     f"figures/{analysis}/{analysis}.{extension}"
     for analysis in IMPLEMENTED_ANALYSES
-    for extension in ("pdf", "png")
-]
-
-SUPPLEMENTARY_TARGETS = [
-    f"figures/{analysis}/{analysis}_supplementary.{extension}"
-    for analysis in IMPLEMENTED_ANALYSES
-    if analysis in SUPPLEMENTARY_ANALYSES
     for extension in ("pdf", "png")
 ]
 
@@ -188,7 +176,6 @@ SUPPLEMENTARY_TARGETS = [
 rule all:
     input:
         MAIN_TARGETS,
-        SUPPLEMENTARY_TARGETS,
 
 
 # ---------------------------------------------------------------------------------------
@@ -318,34 +305,6 @@ rule figure:
         " --output-png {output.png}"
 
 
-# A standalone supplementary figure, for the analyses whose main figure had to displace a panel
-# to make room for a new result. Same script and the same tier-2 inputs as `figure`; only the
-# `--figure` selector and the output names differ, so the supplement cannot drift out of step
-# with the figure it was displaced from.
-rule supplementary_figure:
-    input:
-        racs=racs_of,
-        posteriors=posteriors_of,
-        evidence="results/{analysis}/model_evidence.json",
-        dispersion=dispersion_summary_of,
-        data=ONSETS_CSV,
-        config=CONFIG_FILE,
-        script=lambda wildcards: ANALYSES[wildcards.analysis]["plot_script"],
-        code=PLOT_CORE,
-    output:
-        pdf="figures/{analysis}/{analysis}_supplementary.pdf",
-        png="figures/{analysis}/{analysis}_supplementary.png",
-    params:
-        shared=SHARED_PARAMS,
-    shell:
-        "python {input.script} --figure supplementary"
-        " --results-dir results/{wildcards.analysis}"
-        " --data {input.data}"
-        " --config {input.config}"
-        " --output-pdf {output.pdf}"
-        " --output-png {output.png}"
-
-
 # ---------------------------------------------------------------------------------------
 # Convenience aggregates
 # ---------------------------------------------------------------------------------------
@@ -378,4 +337,3 @@ rule results:
 rule figures:
     input:
         MAIN_TARGETS,
-        SUPPLEMENTARY_TARGETS,

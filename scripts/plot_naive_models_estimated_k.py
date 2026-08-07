@@ -1,42 +1,43 @@
-"""Figure 2 — the three naive models with ``k`` estimated, and its supplementary panel.
+"""Figure 2 — the three naive models with ``k`` estimated.
 
-Four panels, reading left to right and then down::
+Five panels, reading left to right and then down::
 
-    A  pre-ERT reproduction number    B  dispersion $k$    C  model probability
-    D  risk of additional cases over time, with the onset series behind it
+    A  pre-ERT reproduction number   B  post-ERT reproduction number   C  dispersion $k$
+    D  model probability             E  risk of additional cases over time
 
-**The panel swap against Fig. 1, and why this way round.** Fig. 1 spends its second panel on the
-post-ERT reproduction number; here that slot goes to the ``k`` posteriors, and ``R_post`` becomes
-the standalone supplementary figure this script also draws. The three models are given the *same*
-prior on ``k`` (§6.2) and land in different places, which is aim 2 measured rather than
-demonstrated — so panel B is the new result of this analysis. ``R_post`` is the panel that loses
-least by being displaced: it enters no headline quantity (the RAC resets ``R`` to ``R_pre``,
-§5.1), it barely separates the models, and it barely moves between the two analyses. ``R_pre``
-cannot go, because it is what panel D projects forward with; panel C cannot go either, since with
-``k`` estimated under a common prior the model probabilities become the closer thing to a
-comparison of mechanisms that Fig. 1C explicitly is not.
+**What differs from Fig. 1, and why.** Estimating ``k`` adds a third parameter posterior to
+show, so this figure carries five panels where Fig. 1 carries four: the three parameters keep
+the top row, and the model-probability pie drops to the bottom row beside the RAC curves. Panel
+E also starts at the ERT's arrival rather than at the first onset. All three curves sit flat at
+1 until well past the last observed case, so on a panel that now shares its row the run-up from
+day 0 would compress the descent — the part the figure is about — into the right-hand third.
+The curves themselves are drawn over the whole window either way; only the view is trimmed.
 
-Panel B carries each posterior's median and 95% credible interval in its legend, read from the
-``dispersion_posteriors.json`` the tier-2 ``dispersion`` rule wrote. That file also holds every
+Panel C is the new result of this analysis. The three models are given the *same* prior on ``k``
+(§6.2) and land in different places, which is aim 2 measured rather than demonstrated. Each
+posterior's median and 95% credible interval appear in the legend, read from the
+``dispersion_posteriors.json`` the tier-2 ``dispersion`` rule wrote; that file also holds every
 pairwise divergence — median ratio, posterior overlap, ``P(k_a > k_b)`` — which is where the
 report's quantification of the disagreement comes from. Nothing here recomputes them.
 
-**What the panel shows, and the line it falls along.** DLO (0.38) and SSE (0.50) are barely
-distinguishable from each other and sit three times above SSI (0.14), which is the only one
-compatible with the literature 0.18. The split is *day-level against individual-level*: DLO and
-SSE both attach their excess variance to a day, and the series being fitted is onsets, so the
-incubation period has already smoothed away much of the day-to-day variation their ``k`` is
-estimated from. SSI's variance is attached to individuals, which the same convolution merely
-regroups. Fig. 4 tests that reading, where SSE-SO models the incubation explicitly.
+**The line the split falls along.** DLO (0.38) and SSE (0.50) are barely distinguishable from
+each other and sit three times above SSI (0.14), which is the only one compatible with the
+literature 0.18. The division is *day-level against individual-level*: DLO and SSE both attach
+their excess variance to a day, and the series being fitted is onsets, so the incubation period
+has already smoothed away much of the day-to-day variation their ``k`` is estimated from. SSI's
+variance is attached to individuals, which the same convolution merely regroups. Fig. 4 tests
+that reading, where SSE-SO models the incubation explicitly.
 
-Two invocations, one per figure::
+Panel D is the closer thing to a comparison of mechanisms that Fig. 1C explicitly is not — with
+``k`` estimated under a common prior, the models are no longer being charged for a dispersion
+value that was never theirs. It still reports the models *as specified, priors included* (§6.5).
 
-    python scripts/plot_naive_models_estimated_k.py --figure main \\
+Loads only what the tier-2 rules wrote, so a restyle costs seconds rather than an MCMC run::
+
+    python scripts/plot_naive_models_estimated_k.py \\
+        --results-dir results/naive_models_estimated_k \\
         --output-pdf figures/naive_models_estimated_k/naive_models_estimated_k.pdf \\
         --output-png figures/naive_models_estimated_k/naive_models_estimated_k.png
-    python scripts/plot_naive_models_estimated_k.py --figure supplementary \\
-        --output-pdf figures/.../naive_models_estimated_k_supplementary.pdf \\
-        --output-png figures/.../naive_models_estimated_k_supplementary.png
 """
 
 from __future__ import annotations
@@ -57,12 +58,8 @@ from end_of_outbreak.model_specifications import LogNormalPrior
 
 ANALYSIS = "naive_models_estimated_k"
 
-MAIN_FIGURE = "main"
-SUPPLEMENTARY_FIGURE = "supplementary"
-FIGURES = (MAIN_FIGURE, SUPPLEMENTARY_FIGURE)
 
-
-def build_main_figure(
+def build_figure(
     *,
     curves: dict[str, pd.DataFrame],
     posteriors: dict[str, xr.DataTree],
@@ -70,16 +67,25 @@ def build_main_figure(
     dispersion: dict[str, Any],
     data: outbreak_data.OutbreakData,
     R_pre_prior: LogNormalPrior,
+    R_post_prior: LogNormalPrior,
     k_prior: LogNormalPrior,
 ) -> Figure:
-    """Assemble the four panels of Fig. 2."""
+    """Assemble the five panels into one figure.
+
+    A grid per row rather than one shared grid: the top row wants three equal columns and the
+    bottom row an uneven two, since the pie reads at a quarter of the width and the RAC curves
+    want the rest. Nesting keeps each row's spacing its own, and keeps the top row's at Fig. 1's
+    value so the two figures' parameter panels sit at the same size.
+    """
     utils.apply_house_style()
     figure = plt.figure(figsize=(9.4, 6.4))
-    grid = figure.add_gridspec(2, 3, height_ratios=[1.0, 1.2], hspace=0.6, wspace=0.35)
+    rows = figure.add_gridspec(2, 1, height_ratios=[1.0, 1.15], hspace=0.42)
+    top = rows[0].subgridspec(1, 3, wspace=0.35)
+    bottom = rows[1].subgridspec(1, 2, width_ratios=[1.15, 3.0], wspace=0.22)
     models = list(curves)
 
     figure_panels.parameter_posterior_panel(
-        figure.add_subplot(grid[0, 0]),
+        figure.add_subplot(top[0]),
         {model: utils.posterior_draws(posteriors[model], "R_pre") for model in models},
         prior=R_pre_prior,
         xlabel="$R_{\\mathrm{pre}}$",
@@ -88,43 +94,35 @@ def build_main_figure(
         legend=True,
     )
     figure_panels.parameter_posterior_panel(
-        figure.add_subplot(grid[0, 1]),
+        figure.add_subplot(top[1]),
+        {model: utils.posterior_draws(posteriors[model], "R_post") for model in models},
+        prior=R_post_prior,
+        xlabel="$R_{\\mathrm{post}}$",
+        title="After ERT arrival",
+        letter="B",
+    )
+    figure_panels.parameter_posterior_panel(
+        figure.add_subplot(top[2]),
         {model: utils.posterior_draws(posteriors[model], "k") for model in models},
         prior=k_prior,
         xlabel="$k$",
         title="Dispersion, under a shared prior",
-        letter="B",
+        letter="C",
         labels=figure_panels.credible_interval_labels(dispersion["posterior"]),
         legend=True,
     )
     figure_panels.model_probability_panel(
-        figure.add_subplot(grid[0, 2]), evidence, models, letter="C"
+        figure.add_subplot(bottom[0]), evidence, models, letter="D"
     )
-    figure_panels.risk_curve_panel(figure.add_subplot(grid[1, :]), curves, data, letter="D")
+    figure_panels.risk_curve_panel(
+        figure.add_subplot(bottom[1]),
+        curves,
+        data,
+        letter="E",
+        first_day=data.ert_arrival_day,
+    )
 
     figure.suptitle("Équateur 2018: naive (onset-as-infection) models, $k$ estimated", fontsize=9.5)
-    return figure
-
-
-def build_supplementary_figure(
-    *, posteriors: dict[str, xr.DataTree], R_post_prior: LogNormalPrior
-) -> Figure:
-    """The post-ERT reproduction number, displaced from Fig. 2 by the ``k`` panel.
-
-    Kept as a figure of its own rather than dropped: ``R_post`` is what the ERT's arrival is
-    supposed to have changed, so a reader is entitled to see that the three mechanisms agree
-    about it — and that agreement is itself the reason the panel could be displaced.
-    """
-    utils.apply_house_style()
-    figure = plt.figure(figsize=(4.0, 3.2))
-    figure_panels.parameter_posterior_panel(
-        figure.add_subplot(1, 1, 1),
-        {model: utils.posterior_draws(idata, "R_post") for model, idata in posteriors.items()},
-        prior=R_post_prior,
-        xlabel="$R_{\\mathrm{post}}$",
-        title="After ERT arrival, $k$ estimated",
-        legend=True,
-    )
     return figure
 
 
@@ -134,23 +132,17 @@ def main(argv: list[str] | None = None) -> None:
     analysis = configuration.analysis_config(config, ANALYSIS)
     models = list(analysis["models"])
     priors = analysis["shared"]["priors"]
-    posteriors = utils.read_posteriors(args.results_dir, models)
 
-    if args.figure == MAIN_FIGURE:
-        figure = build_main_figure(
-            curves=utils.read_risk_curves(args.results_dir, models),
-            posteriors=posteriors,
-            evidence=utils.read_model_evidence(args.results_dir),
-            dispersion=utils.read_dispersion_summary(args.results_dir),
-            data=outbreak_data.load_onset_data(args.data),
-            R_pre_prior=LogNormalPrior.from_config(priors["R_pre"]),
-            k_prior=LogNormalPrior.from_config(analysis["k_prior"]),
-        )
-    else:
-        figure = build_supplementary_figure(
-            posteriors=posteriors,
-            R_post_prior=LogNormalPrior.from_config(priors["R_post"]),
-        )
+    figure = build_figure(
+        curves=utils.read_risk_curves(args.results_dir, models),
+        posteriors=utils.read_posteriors(args.results_dir, models),
+        evidence=utils.read_model_evidence(args.results_dir),
+        dispersion=utils.read_dispersion_summary(args.results_dir),
+        data=outbreak_data.load_onset_data(args.data),
+        R_pre_prior=LogNormalPrior.from_config(priors["R_pre"]),
+        R_post_prior=LogNormalPrior.from_config(priors["R_post"]),
+        k_prior=LogNormalPrior.from_config(analysis["k_prior"]),
+    )
     utils.save_figure(figure, pdf=args.output_pdf, png=args.output_png)
     print(f"wrote {args.output_pdf} and {args.output_png}")
 
@@ -164,12 +156,6 @@ def parse_arguments(argv: list[str] | None = None) -> argparse.Namespace:
         type=Path,
         default=configuration.REPO_ROOT / "results" / ANALYSIS,
         help="where the tier-2 rules wrote this analysis's RAC curves, evidence and k summaries",
-    )
-    parser.add_argument(
-        "--figure",
-        choices=FIGURES,
-        default=MAIN_FIGURE,
-        help="which of this analysis's two figures to draw",
     )
     parser.add_argument("--output-pdf", type=Path, required=True)
     parser.add_argument("--output-png", type=Path, required=True)

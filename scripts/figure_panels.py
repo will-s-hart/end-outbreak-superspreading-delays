@@ -78,12 +78,19 @@ def risk_curve_panel(
     data: outbreak_data.OutbreakData,
     *,
     letter: str,
+    first_day: int | None = None,
 ) -> None:
     """RAC over the conditioning days, with the onset series behind it.
 
     The marker on each curve is the day it settles below :data:`SETTLING_THRESHOLD` — the date
     an end-of-outbreak declaration would be made on — which is the summary the report compares
     across models and across analyses.
+
+    ``first_day`` trims the *view*, not the curves: every model is still drawn over the whole
+    window and the settling markers are unaffected, so a trimmed panel cannot show a different
+    crossing date from an untrimmed one. It exists because the interesting part of the curve is
+    its descent, and on a figure where this panel shares its row the run-up from day 0 — where
+    all three models sit flat at 1 — compresses that descent into the right-hand third.
     """
     utils.plot_incidence(ax, data.dates, data.onsets)
     utils.mark_thresholds(ax)
@@ -111,7 +118,7 @@ def risk_curve_panel(
         withdrawal=data.date_of(data.ert_withdrawal_day),
     )
     utils.date_axis(ax)
-    ax.set_xlim(data.dates[0], data.dates[-1])
+    ax.set_xlim(data.dates[first_day or 0], data.dates[-1])
     ax.set_ylim(0.0, 1.0)
     ax.set_xlabel("conditioning day $t$ (2018)")
     ax.set_ylabel("risk of additional cases")

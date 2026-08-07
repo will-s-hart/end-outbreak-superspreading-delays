@@ -10,15 +10,16 @@ in this tree — see `validation/` for benchmarks and cross-checks.
 | `run_naive_models_fixed_k.py` | 1 and 2 | `results/naive_models_fixed_k/{model}_posterior.nc`, `..._rac.csv`, `model_evidence.json` |
 | `run_naive_models_estimated_k.py` | 1 and 2 | the same, plus `results/naive_models_estimated_k/dispersion_posteriors.json` |
 | `plot_naive_models_fixed_k.py` | 3 | `figures/naive_models_fixed_k/*.pdf`, `*.png` |
-| `plot_naive_models_estimated_k.py` | 3 | the same for `naive_models_estimated_k`, plus `*_supplementary.*` |
+| `plot_naive_models_estimated_k.py` | 3 | the same for `naive_models_estimated_k` |
 | `figure_panels.py` | 3 | the panels the analysis figures are assembled from |
 | `utils.py` | — | presentation-only helpers shared by the plotting scripts |
 
 Stage 9 adds the two onset-anchored analyses. Add each to `IMPLEMENTED_ANALYSES` at the top of
 the `Snakefile` as it lands — that list, not the config, is what `rule all` and the convenience
 aggregates are built from, so an analysis whose scripts do not yet exist cannot turn a target
-into a missing-input error. An analysis whose plot script draws a second, standalone figure
-goes in `SUPPLEMENTARY_ANALYSES` beside it.
+into a missing-input error. Stage 9 also brings back the `supplementary_figure` rule, for the
+§5.5 RAT panel; Stage 7 had one for a day, until Fig. 2 grew to five panels and stopped
+displacing anything.
 
 Conventions, all of them load-bearing:
 

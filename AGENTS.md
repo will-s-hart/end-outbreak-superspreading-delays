@@ -268,6 +268,15 @@ knowing before writing the next pair:
   between figures is the panel *arrangement*; the panels themselves are in
   `scripts/figure_panels.py` (in `PLOT_CORE`), which is also the one place under `scripts/` that
   imports `risk_of_additional_cases`.
+- **The layout follows the number of parameter posteriors, and the RAC panel's *view* follows the
+  layout.** A fixed-`k` figure has two (`R_pre`, `R_post`), so it is four panels with the RAC
+  spanning the bottom row; an estimated-`k` figure has three, so it is five, with the pie dropping
+  beside the RAC curves. Where the RAC panel shares its row it starts at the ERT's arrival
+  (`risk_curve_panel(first_day=...)`), because all the curves sit flat at 1 until well past the
+  last case and the run-up from day 0 would otherwise squeeze the descent into the right-hand
+  third. **`first_day` trims the view only** — every curve is still drawn over the whole window
+  and the settling markers are untouched, so a trimmed panel can never show a different crossing
+  date from an untrimmed one. Figs. 3 and 4 take the same two layouts.
 - **The RAC step writes the Monte-Carlo standard error beside the curve.** RAC(t) is a posterior
   *average*, so it carries Monte-Carlo error, and a curve published without it cannot be
   compared with another one. The curve and the error come from a single evaluation of the
@@ -441,12 +450,13 @@ The `rac` rule writes `results/<analysis>/<model>_rac.csv`. That file carries th
 supplementary **RAT** column too, for the onset-anchored models — one derived-results file per
 model, named for the headline quantity.
 
-Two tier-2 rules apply to only some analyses, and both key off the config rather than a hard-coded
-list of names: `dispersion` runs where `fixed_k` is null (`estimates_dispersion`), and the
-`figure` rule picks its output up through `dispersion_summary_of`, which returns nothing for the
-fixed-`k` analyses. `supplementary_figure` invokes the same plot script with `--figure
-supplementary`, for the analyses named in `SUPPLEMENTARY_ANALYSES` — one script per analysis, so
-a displaced panel cannot drift out of step with the figure it was displaced from.
+One tier-2 rule applies to only some analyses, and it keys off the config rather than a
+hard-coded list of names: `dispersion` runs where `fixed_k` is null (`estimates_dispersion`), and
+the `figure` rule picks its output up through `dispersion_summary_of`, which returns nothing for
+the fixed-`k` analyses. There is deliberately **no supplementary-figure rule yet** — Stage 7
+briefly had one and it was removed when Fig. 2 grew to five panels and stopped displacing
+anything. Stage 9 adds it back for the §5.5 RAT panel, which is the first supplement with content
+of its own.
 
 Per-analysis parameters live in `config/config.yaml`, keyed per analysis so that tweaking the
 `k` prior for the estimated-`k` analyses does not invalidate the fixed-`k` fits. Seeds live

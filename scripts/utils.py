@@ -305,7 +305,11 @@ def plot_model_probability_pie(
         handletextpad=0.5,
         labelspacing=0.3,
     )
+    # An equal aspect shrinks the axes box to a square, and matplotlib centres the result in its
+    # grid cell. Anchoring north instead keeps the title and the panel letter level with the
+    # panels beside it, which is otherwise wrong wherever the cell is taller than it is wide.
     ax.set_aspect("equal")
+    ax.set_anchor("N")
 
 
 def _probability_text(probability: float, minimum_label: float) -> str:
