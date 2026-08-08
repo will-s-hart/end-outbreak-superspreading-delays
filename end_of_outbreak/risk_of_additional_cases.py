@@ -1,18 +1,22 @@
 """The risk of additional cases (RAC), and the reset state it is computed from.
 
-RAC is the project's headline quantity. It is a **retrospective reset posterior predictive**
-(§5.1 of the implementation plan), not a filtering probability, and it is best read as a
-procedure:
+RAC is the project's headline quantity, and it is a **real-time reset posterior predictive**:
 
-    Fit the parameters *and the latents* to the complete record, days 0–110. Then, for each
-    day ``t``: retain the inferred state attached to the history through day ``t``, discard
+    Fit the parameters *and the latents* to the record through day ``t`` alone. Then discard
     the realised trajectory after ``t``, reset ``R`` to ``R_pre`` from day ``t + 1`` onwards,
     and simulate a counterfactual future. RAC(t) is the posterior probability that this
     replicated future contains at least one further case.
 
-Two consequences the shorthand ``P(· | data up to day t)`` hides: the parameters come from all
-111 days by design, and for the latent models the retained state is **smoothed** — informed by
-data after day ``t`` — because one fit serves every day of the curve (§5.6).
+So ``P(· | data up to day t)`` is the right reading, and every conditioning day gets its own
+fit. ``R`` and the latents are correlated in the posterior, so re-using a full-record parameter
+posterior alongside a filtered latent state is a different quantity, not a cheaper route to this
+one; :mod:`end_of_outbreak.refit_risk` drives the fits and
+:mod:`end_of_outbreak.filtered_risk` is the deliberately approximate comparison.
+
+This module holds the estimand and nothing else: the closed forms, the exact marginalisation of
+the latents the fit integrated out, and the posterior averaging. The curve container the figure
+and report tiers consume lives in :mod:`end_of_outbreak.risk_curves`, so that editing a
+presentation-facing definition does not invalidate every fit.
 
 What the three naive models need
 --------------------------------
@@ -46,17 +50,33 @@ headline of §5.4: a ``k`` calibrated as an individual-level offspring dispersio
 work in DLO than in SSE/SSI. It is a property of the profile rather than a universal ordering —
 concentrate the whole of ``Λ(t)`` into a day or two and the comparison with SSE reverses.
 
-Rebuilding the latents first
-----------------------------
-For SSI and the onset-anchored models the retained state includes the latent
-infectivities, and the chosen ``marginalised_inverse_cdf`` parameterisation integrates some of
-them out exactly rather than sampling them. Those latents are **not** in ``idata.posterior``,
-and on the real series they are exactly the days from the last observed case onwards — the days
-a late conditioning day needs. :func:`reconstruct_latent_paths` rebuilds them from the closed
-form of :func:`end_of_outbreak.pymc_models.marginalised_latent_conditional`, once per posterior
-draw rather than once per conditioning day, and every calculator here consumes the complete
-by-day path it returns. Reading the posterior array directly would silently truncate the state
-and understate RAC.
+The latents the fit integrated out
+---------------------------------
+For SSI and the onset-anchored models the retained state includes the latent infectivities, and
+the chosen ``marginalised_inverse_cdf`` parameterisation integrates some of them out exactly
+rather than sampling them. Those latents are **not** in ``idata.posterior``, and they are
+exactly the days from the last observed case onwards — the days a late conditioning day needs.
+Reading the posterior array directly would silently truncate the state and understate RAC.
+
+They do not have to be drawn back. In every model the retained state enters the risk only
+through *linear* functionals of the latent path, so
+
+    ``log P(no further event after t | θ, Y) = −(α(θ) + Σ_u β_u(θ) Y_u)``
+
+with ``β_u ≥ 0`` (:func:`latent_risk_basis`). The removed latents are conditionally independent
+``Gamma(A_u, B_u)`` given ``θ``, so the Gamma moment generating function integrates them out in
+closed form,
+
+    ``E[exp(−β_u Y_u) | θ] = (1 + β_u / B_u)^(−A_u)``,
+
+which is what :func:`marginalised_risk_correction` evaluates and
+:func:`risk_log_probabilities` adds to the closed form of the sampled block. That is a third
+exact marginalisation, composing with the two the fit already performs: the likelihood
+integrates the uncoupled latents out of the observation density, and this integrates the same
+latents out of the risk. It is exact rather than Monte Carlo, so no random stream is involved.
+
+:func:`reconstruct_latent_paths` still draws them, because the matched-conditioning
+forward-simulation check needs an explicit path, but nothing on the results path calls it.
 
 RAT
 ---
@@ -79,7 +99,8 @@ from end_of_outbreak.delay_distributions import (
     SERIAL_INTERVAL_FIRST_LAG,
     TOST_FIRST_LAG,
     OnsetAnchoredDelays,
-    cumulative,
+    survival_weights,
+    tost_survival_weights,
 )
 from end_of_outbreak.latent_parameterisations import LatentParameterisation
 from end_of_outbreak.model_specifications import (
@@ -87,25 +108,90 @@ from end_of_outbreak.model_specifications import (
     TransmissionParameters,
     specification_of,
 )
+from end_of_outbreak.risk_curves import RiskCurve
 
 _DRAW_CHUNK_ELEMENTS = 2_000_000
 """Rough size of the temporary the DLO profile calculation is allowed to build, in floats."""
 
 
 # ---------------------------------------------------------------------------------------
-# The remaining-transmission weight and the future force of infection
+# What every calculator here returns
 # ---------------------------------------------------------------------------------------
 
 
-def survival_weights(serial_interval: NDArray[np.float64]) -> NDArray[np.float64]:
-    """``1 − F_r`` for ``r = 0, 1, ...``: the chance a case's transmission is still to come.
+@dataclass(frozen=True)
+class DailyRiskEstimate:
+    """Per-draw conditional zero-probabilities for RAC and RAT, by conditioning day.
 
-    ``F_r = Σ_{s ≤ r} w_s`` with ``F_0 = 0``, so ``survival[0] = 1``: a case appearing on the
-    conditioning day itself still has *all* of its transmission ahead of it. Stored densely
-    from lag 0, so it composes with :func:`end_of_outbreak.renewal.delay_design_matrix` under
-    ``first_lag=0``.
+    Every route to the estimand produces this — refitting per day, the filtering
+    approximation, and the particle checks — so they are directly comparable. The posterior
+    average is taken in :meth:`risk_of_additional_cases`, because RAC(t) is a posterior
+    *probability* and the average over draws belongs inside it.
+
+    Under the three naive models RAC and RAT coincide by assumption, and the two arrays are
+    equal; they separate only under the onset-anchored models, where the gap is the
+    contribution of the latent incubation pipeline.
     """
-    return np.clip(1.0 - cumulative(np.asarray(serial_interval, dtype=np.float64)), 0.0, 1.0)
+
+    days: NDArray[np.int64]
+    log_no_further_cases: NDArray[np.float64]
+    """``(n_draws, n_days)``: ``log P(no onset after t | posterior draw)``."""
+
+    log_no_further_transmission: NDArray[np.float64]
+    """``(n_draws, n_days)``: ``log P(no transmission event after t | posterior draw)``."""
+
+    n_chains: int = 1
+    """Chains the draws came from, stacked chain-major, which is what lets
+    :func:`monte_carlo_standard_error` recover the between-chain spread."""
+
+    @property
+    def n_draws(self) -> int:
+        return int(self.log_no_further_cases.shape[0])
+
+    def risk_of_additional_cases(self) -> RiskCurve:
+        return RiskCurve(
+            days=self.days,
+            risk=1.0 - np.exp(self.log_no_further_cases).mean(axis=0),
+            n_draws=self.n_draws,
+        )
+
+    def risk_of_additional_transmission(self) -> RiskCurve:
+        return RiskCurve(
+            days=self.days,
+            risk=1.0 - np.exp(self.log_no_further_transmission).mean(axis=0),
+            n_draws=self.n_draws,
+        )
+
+    def standard_errors(self) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
+        """Monte-Carlo standard errors of the two curves, from the between-chain spread."""
+        return (
+            monte_carlo_standard_error(self.log_no_further_cases, n_chains=self.n_chains),
+            monte_carlo_standard_error(self.log_no_further_transmission, n_chains=self.n_chains),
+        )
+
+    @classmethod
+    def concatenate(cls, parts: list[DailyRiskEstimate]) -> DailyRiskEstimate:
+        """Join per-day estimates into one curve. Every part must share a chain count."""
+        if not parts:
+            raise ValueError("no per-day estimates to concatenate")
+        chains = {part.n_chains for part in parts}
+        if len(chains) != 1:
+            raise ValueError(f"the per-day estimates disagree on the chain count: {sorted(chains)}")
+        return cls(
+            days=np.concatenate([part.days for part in parts]),
+            log_no_further_cases=np.concatenate(
+                [part.log_no_further_cases for part in parts], axis=1
+            ),
+            log_no_further_transmission=np.concatenate(
+                [part.log_no_further_transmission for part in parts], axis=1
+            ),
+            n_chains=parts[0].n_chains,
+        )
+
+
+# ---------------------------------------------------------------------------------------
+# The remaining-transmission weight and the future force of infection
+# ---------------------------------------------------------------------------------------
 
 
 def pooled_remaining_weight(
@@ -323,19 +409,6 @@ def _dlo_log_probability(
 # ---------------------------------------------------------------------------------------
 
 
-def tost_survival_weights(tost: NDArray[np.float64]) -> NDArray[np.float64]:
-    """Probability that a cohort's transmission occurs *after* each attained age.
-
-    TOST is stored from lag zero, so a cohort observed on the conditioning day has already had
-    its lag-0 transmission opportunity. Consequently the first entry is ``1 - f_tost[0]``, in
-    contrast to :func:`survival_weights` for a lag-1 delay, whose first entry is one.
-    """
-    weights = np.asarray(tost, dtype=np.float64)
-    if weights.ndim != 1 or weights.size == 0:
-        raise ValueError("tost must be a non-empty one-dimensional array")
-    return np.clip(1.0 - np.cumsum(weights), 0.0, 1.0)
-
-
 def incubation_pipeline_mean(
     expected_infections: NDArray[np.float64], incubation: NDArray[np.float64]
 ) -> NDArray[np.float64]:
@@ -372,36 +445,6 @@ def remaining_tost_weight(
     return driving @ operator.T
 
 
-@dataclass(frozen=True)
-class OnsetEventProbabilities:
-    """Per-draw zero-probabilities for onset-anchored RAC and RAT."""
-
-    days: NDArray[np.int64]
-    log_no_further_cases: NDArray[np.float64]
-    """``log P(no onset after t | posterior draw)``."""
-
-    log_no_further_transmission: NDArray[np.float64]
-    """``log P(no transmission event after t | posterior draw)``."""
-
-    @property
-    def n_draws(self) -> int:
-        return int(self.log_no_further_cases.shape[0])
-
-    def risk_of_additional_cases(self) -> RiskCurve:
-        return RiskCurve(
-            days=self.days,
-            risk=1.0 - np.exp(self.log_no_further_cases).mean(axis=0),
-            n_draws=self.n_draws,
-        )
-
-    def risk_of_additional_transmission(self) -> RiskCurve:
-        return RiskCurve(
-            days=self.days,
-            risk=1.0 - np.exp(self.log_no_further_transmission).mean(axis=0),
-            n_draws=self.n_draws,
-        )
-
-
 def onset_event_probabilities(
     model: str | ModelSpecification,
     *,
@@ -414,7 +457,8 @@ def onset_event_probabilities(
     latent: NDArray[np.float64] | None = None,
     reset_R: float | NDArray[np.float64] | None = None,
     days: NDArray[np.int64] | None = None,
-) -> OnsetEventProbabilities:
+    n_chains: int = 1,
+) -> DailyRiskEstimate:
     """Conditional zero-probabilities defining RAC and RAT for an onset model.
 
     The retained expected infections ``E_{u≤t}`` generate a Poisson incubation pipeline with
@@ -512,10 +556,11 @@ def onset_event_probabilities(
     log_no_transmission = -retained_exponent - pipeline * (-np.expm1(-per_case_exponent))[:, None]
     if np.any(log_no_transmission + 1e-12 < log_no_cases):
         raise AssertionError("RAC/RAT zero-probability ordering was violated")
-    return OnsetEventProbabilities(
+    return DailyRiskEstimate(
         days=selected_days,
         log_no_further_cases=log_no_cases[:, selected_days],
         log_no_further_transmission=log_no_transmission[:, selected_days],
+        n_chains=n_chains,
     )
 
 
@@ -558,37 +603,6 @@ def _broadcast_draws(
 # ---------------------------------------------------------------------------------------
 
 
-@dataclass(frozen=True)
-class RiskCurve:
-    """RAC over the conditioning days: one posterior-averaged probability per day.
-
-    RAC(t) is a single number, not a distribution: it is the posterior *probability* of a
-    further case, so the average over draws happens inside it (§5.1, and eq. (5) of Thompson
-    et al. (2024), which does the same integral in closed form).
-    """
-
-    days: NDArray[np.int64]
-    risk: NDArray[np.float64]
-    """RAC(t): the probability of at least one further case after day ``t``."""
-
-    n_draws: int
-
-    @property
-    def probability_of_no_further_cases(self) -> NDArray[np.float64]:
-        """``1 − RAC(t)``, the quantity the closed forms of §5.3 actually evaluate."""
-        return 1.0 - self.risk
-
-    def first_day_below(self, threshold: float) -> int | None:
-        """First conditioning day on which RAC falls below ``threshold`` and stays there.
-
-        The decision-relevant summary of the curve: the report quantifies onset-anchoring by
-        how far this date moves at the 0.05 and 0.01 thresholds (§5.7, Stage 9).
-        """
-        above = np.flatnonzero(self.risk >= threshold)
-        settled = 0 if above.size == 0 else int(above[-1]) + 1
-        return None if settled >= self.risk.size else int(self.days[settled])
-
-
 def risk_curve(
     model: str | ModelSpecification,
     *,
@@ -623,15 +637,41 @@ def risk_curve(
 
 
 @dataclass(frozen=True)
+class UnsampledLatents:
+    """Latents the fit did not sample, and their exact conditional law given the parameters.
+
+    Two kinds, and they are handled identically because their conditional laws have the same
+    shape: those the ``marginalised`` parameterisations integrated out of the likelihood
+    (:func:`end_of_outbreak.pymc_models.marginalised_latent_conditional`), and SSE-SO's
+    boundary latent on the final day of the window, which cannot reach any fitted onset because
+    incubation starts at lag 1 and therefore retains its prior exactly.
+    """
+
+    days: NDArray[np.int64]
+    shape: NDArray[np.float64]
+    """``(n_draws, n_unsampled)`` Gamma shape ``A_u``, one per parameter draw."""
+
+    rate: NDArray[np.float64]
+    """``(n_draws, n_unsampled)`` Gamma rate ``B_u``, one per parameter draw."""
+
+
+@dataclass(frozen=True)
 class PosteriorState:
-    """The posterior draws a RAC curve is built from, latents included and complete by day."""
+    """The posterior draws a risk curve is built from: parameters, latents, and their law.
+
+    The latent block is deliberately *not* completed here. ``sampled_infectivity`` carries the
+    latents the sampler saw and zeros elsewhere, and :attr:`unsampled` carries the conditional
+    law of the rest, which :func:`risk_log_probabilities` integrates out in closed form rather
+    than drawing.
+    """
 
     R_pre: NDArray[np.float64]
     R_post: NDArray[np.float64]
     k: NDArray[np.float64] | None
-    infectivity: NDArray[np.float64] | None
-    """``(n_draws, n_days)`` latent path, sampled and rebuilt parts spliced together."""
+    sampled_infectivity: NDArray[np.float64] | None
+    """``(n_draws, n_days)`` latent path, zero on every day the fit did not sample."""
 
+    unsampled: UnsampledLatents | None = None
     n_chains: int = 1
     """Chains the draws came from. They are stacked chain-major, which is what lets
     :func:`monte_carlo_standard_error` recover the between-chain spread."""
@@ -676,9 +716,8 @@ def posterior_state(
     fixed_R_post: float | None = None,
     fixed_k: float | None = None,
     negligible_latent_threshold: float = 0.0,
-    rng: np.random.Generator | None = None,
 ) -> PosteriorState:
-    """Flatten a fit into draw-indexed arrays, rebuilding the latents that were integrated out.
+    """Flatten a fit into draw-indexed arrays, with the law of the latents it did not sample.
 
     Parameters
     ----------
@@ -694,10 +733,9 @@ def posterior_state(
         fixed-``k`` analyses need ``fixed_k``; the fixed-``θ`` cross-checks of §6.4, which
         sample the latents alone, need all three. Each is ignored when the posterior carries
         the variable itself.
-    rng
-        Generator for the reconstruction draws.
     """
     specification = specification_of(model)
+    counts = np.asarray(counts, dtype=np.int64)
     posterior = idata.posterior
     n_draws = int(posterior.sizes["chain"] * posterior.sizes["draw"])
     R_pre = _parameter_draws(posterior, "R_pre", fixed=fixed_R_pre, n_draws=n_draws)
@@ -708,17 +746,20 @@ def posterior_state(
         else None
     )
 
-    infectivity = None
+    sampled_infectivity = None
+    unsampled = None
     if specification.has_latents:
         if latent_parameterisation is None:
             raise ValueError(
                 f"model {specification.name!r} has a latent block, so the parameterisation it "
-                "was fitted under must be given: it decides which latents need rebuilding"
+                "was fitted under must be given: it decides which latents the sampler saw"
             )
         assert k is not None  # every latent model in the project carries a dispersion
-        infectivity = reconstruct_latent_paths(
+        sampled_infectivity, sampled_days = _sampled_latent_paths(
+            specification, idata, counts, n_draws=n_draws
+        )
+        unsampled = unsampled_latent_conditional(
             specification,
-            idata,
             counts,
             delays=delays,
             switch_day=switch_day,
@@ -727,54 +768,107 @@ def posterior_state(
             R_post=R_post,
             k=k,
             negligible_latent_threshold=negligible_latent_threshold,
-            rng=rng,
+        )
+        _check_block_accounted_for(
+            specification,
+            counts,
+            delays=delays,
+            switch_day=switch_day,
+            sampled_days=sampled_days,
+            unsampled_days=unsampled.days,
         )
     return PosteriorState(
         R_pre=R_pre,
         R_post=R_post,
         k=k,
-        infectivity=infectivity,
+        sampled_infectivity=sampled_infectivity,
+        unsampled=unsampled,
         n_chains=int(posterior.sizes["chain"]),
     )
 
 
-def risk_curve_from_posterior(
+def risk_log_probabilities(
     model: str | ModelSpecification,
-    idata: Any,
-    counts: NDArray[np.int64],
+    state: PosteriorState,
     *,
+    counts: NDArray[np.int64],
     delays: OnsetAnchoredDelays,
     switch_day: int,
-    latent_parameterisation: str | LatentParameterisation | None = None,
-    fixed_R_pre: float | None = None,
-    fixed_R_post: float | None = None,
-    fixed_k: float | None = None,
-    negligible_latent_threshold: float = 0.0,
     days: NDArray[np.int64] | None = None,
-    rng: np.random.Generator | None = None,
-) -> RiskCurve:
-    """RAC(t) straight from a fit: reconstruct the state, then average the closed form."""
-    state = posterior_state(
-        model,
-        idata,
-        counts,
+    reset_R: float | NDArray[np.float64] | None = None,
+) -> DailyRiskEstimate:
+    """RAC and RAT log zero-probabilities from a fit's draws — the one entry point.
+
+    Two terms. The closed forms of §5.3 evaluated at the *sampled* latents, which are zero on
+    every day the fit did not sample; and the exact correction of
+    :func:`marginalised_risk_correction` for those unsampled days. Their sum is the conditional
+    zero-probability with the unsampled latents integrated out rather than drawn, which is
+    exact and carries no Monte-Carlo error of its own.
+    """
+    specification = specification_of(model)
+    counts = np.asarray(counts, dtype=np.int64)
+    selected = (
+        np.arange(counts.size, dtype=np.int64) if days is None else np.asarray(days, np.int64)
+    )
+
+    if specification.anchoring == "onsets":
+        estimate = onset_event_probabilities(
+            specification,
+            counts=counts,
+            delays=delays,
+            switch_day=switch_day,
+            R_pre=state.R_pre,
+            R_post=state.R_post,
+            k=state.k,
+            latent=state.sampled_infectivity,
+            reset_R=reset_R,
+            days=selected,
+            n_chains=state.n_chains,
+        )
+    else:
+        if reset_R is not None:
+            raise ValueError(
+                f"model {specification.name!r} resets to R_pre by construction and takes no "
+                "reset_R; the argument exists for the onset-anchored pipeline checks"
+            )
+        log_probability = log_probability_of_no_further_cases(
+            specification,
+            counts=counts,
+            serial_interval=delays.serial_interval,
+            R_pre=state.R_pre,
+            k=state.k,
+            infectivity=state.sampled_infectivity,
+            days=selected,
+        )
+        # RAC and RAT coincide under every infection-anchored model, by assumption: an
+        # infection *is* a case there. That identification is the conflation being studied.
+        estimate = DailyRiskEstimate(
+            days=selected,
+            log_no_further_cases=log_probability,
+            log_no_further_transmission=log_probability,
+            n_chains=state.n_chains,
+        )
+
+    if state.unsampled is None or state.unsampled.days.size == 0:
+        return estimate
+    assert state.k is not None  # only the latent models have an unsampled block
+    cases, transmission = marginalised_risk_correction(
+        specification,
+        state.unsampled,
+        counts=counts,
         delays=delays,
         switch_day=switch_day,
-        latent_parameterisation=latent_parameterisation,
-        fixed_R_pre=fixed_R_pre,
-        fixed_R_post=fixed_R_post,
-        fixed_k=fixed_k,
-        negligible_latent_threshold=negligible_latent_threshold,
-        rng=rng,
-    )
-    return risk_curve(
-        model,
-        counts=counts,
-        serial_interval=delays.serial_interval,
+        days=selected,
         R_pre=state.R_pre,
+        R_post=state.R_post,
         k=state.k,
-        infectivity=state.infectivity,
-        days=days,
+        reset_R=reset_R,
+    )
+    return DailyRiskEstimate(
+        days=estimate.days,
+        log_no_further_cases=estimate.log_no_further_cases + cases,
+        log_no_further_transmission=estimate.log_no_further_transmission + transmission,
+        n_chains=estimate.n_chains,
     )
 
 
@@ -803,13 +897,65 @@ def _parameter_draws(
 
 
 # ---------------------------------------------------------------------------------------
-# Rebuilding the latents the fit integrated out
+# The latents the fit did not sample, and integrating them out of the risk
 # ---------------------------------------------------------------------------------------
 
 
-def reconstruct_latent_paths(
+def _sampled_latent_paths(
+    specification: ModelSpecification, idata: Any, counts: NDArray[np.int64], *, n_draws: int
+) -> tuple[NDArray[np.float64], NDArray[np.int64]]:
+    """The sampled latent block on the day axis, zero on every day the fit did not sample.
+
+    The variable can be absent from the posterior altogether, and legitimately so: on an early
+    conditioning day no latent reaches a day with a case, so the whole block is marginalised
+    and the sampler sees none of it. :func:`posterior_state` checks that every latent is
+    accounted for either here or in the unsampled block, which is the guard that matters.
+    """
+    assert specification.latent_variable is not None
+    paths = np.zeros((n_draws, counts.size), dtype=np.float64)
+    if specification.latent_variable not in idata.posterior.data_vars:
+        return paths, np.empty(0, dtype=np.int64)
+    sampled = _flatten_draws(idata.posterior, specification.latent_variable)
+    if sampled.shape[0] != n_draws:
+        raise ValueError(f"the latent block has {sampled.shape[0]} draws but the fit has {n_draws}")
+    dimension = pymc_models.latent_dimension(specification)
+    sampled_days = np.asarray(
+        idata.posterior.data_vars[specification.latent_variable].coords[dimension].values,
+        dtype=np.int64,
+    )
+    paths[:, sampled_days] = sampled
+    return paths, sampled_days
+
+
+def _check_block_accounted_for(
+    specification: ModelSpecification,
+    counts: NDArray[np.int64],
+    *,
+    delays: OnsetAnchoredDelays,
+    switch_day: int,
+    sampled_days: NDArray[np.int64],
+    unsampled_days: NDArray[np.int64],
+) -> None:
+    """Every latent that carries mass must be either sampled or accounted for in closed form.
+
+    The failure this rules out is the quiet one: a latent that is in neither block is read as
+    zero, the risk comes out plausible, and it is too low. Latents whose scale is zero are
+    point masses at zero and are correctly absent from both.
+    """
+    structure = pymc_models.latent_block_structure(
+        specification, counts, delays=delays, switch_day=switch_day
+    )
+    carries_mass = structure.days[structure.scale > 0.0]
+    missing = np.setdiff1d(carries_mass, np.union1d(sampled_days, unsampled_days))
+    if missing.size > 0:
+        raise ValueError(
+            f"model {specification.name!r} has latents on days {missing.tolist()} that the fit "
+            "neither sampled nor integrated out; reading them as zero would understate the risk"
+        )
+
+
+def unsampled_latent_conditional(
     model: str | ModelSpecification,
-    idata: Any,
     counts: NDArray[np.int64],
     *,
     delays: OnsetAnchoredDelays,
@@ -819,46 +965,27 @@ def reconstruct_latent_paths(
     R_post: NDArray[np.float64],
     k: NDArray[np.float64],
     negligible_latent_threshold: float = 0.0,
-    rng: np.random.Generator | None = None,
-) -> NDArray[np.float64]:
-    """A complete latent path per posterior draw, indexed by day.
+) -> UnsampledLatents:
+    """Every latent the fit left out of the posterior, with its exact conditional law.
 
-    The default parameterisation integrates out every latent the data constrain only through
-    ``exp(−Σ_j μ_j)``, so ``idata.posterior`` holds only part of the block — and on the real
-    series the missing part is exactly the run of days from the last observed case onwards,
-    which is the range a late conditioning day needs. Those latents are conditionally
-    independent of the sampled block and of each other given the parameters, so drawing each
-    from its closed-form conditional ``Gamma(k · scale_u, k + c_u)`` gives *exact* draws from
-    the full smoothed posterior (§5.1, §6.3).
+    Two sources, in one place because the calculators must not have to remember either:
 
-    Done **once per posterior draw**, not once per conditioning day, so the
-    one-fit-serves-every-day economy of §5.6 is untouched.
+    - the latents the ``marginalised`` parameterisations integrated out of the likelihood,
+      whose conditional is ``Gamma(k·scale_u, k + c_u)``; and
+    - **SSE-SO's boundary latent** on the final day of the window. Its infections cannot reach
+      a fitted onset, because incubation has no lag-0 mass, so it is absent from the graph
+      altogether — but they *are* in the incubation pipeline retained on that day, and its
+      conditional law is therefore its prior ``Gamma(k·λ_T, k)``.
 
-    Returns
-    -------
-    ``(n_draws, n_days)`` array, zero on days that carry no latent at all — for the
-    individual-level models, the days with no cases, whose infectivity is identically zero.
+    Given the parameters these are independent of the sampled block and of each other, which is
+    what makes both the exact correction of :func:`marginalised_risk_correction` and the draws
+    of :func:`reconstruct_latent_paths` valid.
     """
     specification = specification_of(model)
     if specification.latent_variable is None:
-        raise ValueError(f"model {specification.name!r} has no latent block to rebuild")
+        raise ValueError(f"model {specification.name!r} has no latent block")
     counts = np.asarray(counts, dtype=np.int64)
-    rng = np.random.default_rng() if rng is None else rng
-
-    sampled = _flatten_draws(idata.posterior, specification.latent_variable)
-    n_draws = R_pre.size
-    if sampled.shape[0] != n_draws:
-        raise ValueError(f"the latent block has {sampled.shape[0]} draws but R_pre has {n_draws}")
-    dimension = pymc_models.latent_dimension(specification)
-    sampled_days = np.asarray(
-        idata.posterior.data_vars[specification.latent_variable].coords[dimension].values,
-        dtype=np.int64,
-    )
-
-    paths = np.zeros((n_draws, counts.size), dtype=np.float64)
-    paths[:, sampled_days] = sampled
-
-    rebuilt_days, shape, rate = pymc_models.marginalised_latent_conditional(
+    days, shape, rate = pymc_models.marginalised_latent_conditional(
         specification,
         counts,
         delays=delays,
@@ -869,22 +996,230 @@ def reconstruct_latent_paths(
         latent_parameterisation=latent_parameterisation,
         negligible_latent_threshold=negligible_latent_threshold,
     )
-    if rebuilt_days.size > 0:
-        paths[:, rebuilt_days] = rng.gamma(shape, 1.0 / rate)
+    shape = np.atleast_2d(np.asarray(shape, dtype=np.float64))
+    rate = np.atleast_2d(np.asarray(rate, dtype=np.float64))
 
-    # SSE-SO's inference graph stops at transmission day T - 1: E_T cannot reach an observed
-    # onset because f_inc starts at lag one. The reset state at conditioning day T nevertheless
-    # needs E_T, whose infections are already in the incubation pipeline by the end of that
-    # day. It is independent of the fitted likelihood and therefore retains its prior exactly.
-    # Rebuild this predictive-boundary latent here so every returned path is genuinely complete
-    # by calendar day, just as the marginalised in-window block is.
     if specification.name == "sse_so":
         final_day = counts.size - 1
-        tost_sum = renewal.delay_weighted_sum(
-            counts.astype(np.float64), delays.tost, first_lag=TOST_FIRST_LAG
-        )[final_day]
+        tost_sum = float(
+            renewal.delay_weighted_sum(
+                counts.astype(np.float64), delays.tost, first_lag=TOST_FIRST_LAG
+            )[final_day]
+        )
         if tost_sum > 0.0:
-            paths[:, final_day] = rng.gamma(k * tost_sum, 1.0 / k)
+            days = np.concatenate((days, [final_day]))
+            shape = np.concatenate((shape, (k * tost_sum)[:, None]), axis=1)
+            rate = np.concatenate((rate, np.asarray(k, dtype=np.float64)[:, None]), axis=1)
+    return UnsampledLatents(days=np.asarray(days, dtype=np.int64), shape=shape, rate=rate)
+
+
+@dataclass(frozen=True)
+class LatentRiskBasis:
+    """The coefficients of the latent path in the risk exponent, with ``R`` factored out.
+
+    Every model's conditional zero-probability is *affine* in the latent path,
+
+    ``log P(no further case after t | θ, Y) = −(α(θ) + Σ_u β_u(θ) Y_u)``,
+
+    and ``β`` depends on the draw only through the reproduction numbers. Two pieces, because
+    RAT scales them differently: :attr:`retained` is the remaining transmission of the cohorts
+    already retained on day ``t``, and :attr:`pre`/:attr:`post` are the incubation pipeline,
+    split by the period the *transmission* falls in. So
+
+    ``β_cases = R_reset·retained + R_pre·pre + R_post·post``
+
+    ``β_transmission = R_reset·retained + (1 − e^{−c})(R_pre·pre + R_post·post)``,
+
+    matching the two exponents :func:`onset_event_probabilities` writes out. The naive models
+    have no pipeline, so ``pre`` and ``post`` vanish and the two coincide, as RAC and RAT do.
+    """
+
+    days: NDArray[np.int64]
+    retained: NDArray[np.float64]
+    """``(n_days, n_latent_days)``, indexed by conditioning day then by the latent's day."""
+
+    pre: NDArray[np.float64]
+    post: NDArray[np.float64]
+
+    def weights(
+        self,
+        *,
+        R_reset: NDArray[np.float64],
+        R_pre: NDArray[np.float64],
+        R_post: NDArray[np.float64],
+        per_case_exponent: NDArray[np.float64] | None = None,
+    ) -> NDArray[np.float64]:
+        """``β`` per draw, per conditioning day, per latent day.
+
+        ``per_case_exponent`` is ``c``; pass it for RAT and omit it for RAC.
+        """
+        pipeline = R_pre[:, None, None] * self.pre + R_post[:, None, None] * self.post
+        if per_case_exponent is not None:
+            pipeline = pipeline * (-np.expm1(-per_case_exponent))[:, None, None]
+        return R_reset[:, None, None] * self.retained + pipeline
+
+
+def latent_risk_basis(
+    model: str | ModelSpecification,
+    *,
+    counts: NDArray[np.int64],
+    delays: OnsetAnchoredDelays,
+    switch_day: int,
+    days: NDArray[np.int64] | None = None,
+    latent_days: NDArray[np.int64] | None = None,
+) -> LatentRiskBasis:
+    """Build :class:`LatentRiskBasis` from the same operators the closed forms use.
+
+    ``latent_days`` restricts the columns, which is what keeps the arrays small when only the
+    unsampled latents are wanted. The identity ``β_u = logP(0) − logP(e_u)`` holds by
+    linearity and is what pins this against the closed forms in the tests, so the two cannot
+    drift apart.
+    """
+    specification = specification_of(model)
+    if specification.latent_variable is None:
+        raise ValueError(f"model {specification.name!r} has no latent block")
+    counts = np.asarray(counts, dtype=np.int64)
+    n_days = counts.size
+    selected = np.arange(n_days, dtype=np.int64) if days is None else np.asarray(days, np.int64)
+    columns = (
+        np.arange(n_days, dtype=np.int64)
+        if latent_days is None
+        else np.asarray(latent_days, np.int64)
+    )
+    every_day = np.arange(n_days, dtype=np.int64)
+    zero = np.zeros((selected.size, columns.size), dtype=np.float64)
+
+    if specification.anchoring == "infections":
+        # ssi: log P = −R_pre Λ_Y(t), and Λ_Y is the survival-weighted latent path.
+        survival = renewal.delay_design_matrix(
+            n_days,
+            survival_weights(delays.serial_interval),
+            first_lag=0,
+            source_days=every_day,
+        )
+        return LatentRiskBasis(
+            days=selected, retained=survival[np.ix_(selected, columns)], pre=zero, post=zero
+        )
+
+    incubation_survival = renewal.delay_design_matrix(
+        n_days, survival_weights(delays.incubation), first_lag=0, source_days=every_day
+    )
+    period = renewal.switch_index(n_days, switch_day)
+    if specification.name == "sse_so":
+        # The latent is the transmission day's own infectivity, so the pipeline weight is the
+        # incubation survival and the retained cohorts are the observed onsets — no latents.
+        pipeline = incubation_survival[selected][:, columns]
+        in_pre = (period[columns] == 0).astype(np.float64)
+        return LatentRiskBasis(
+            days=selected, retained=zero, pre=pipeline * in_pre, post=pipeline * (1.0 - in_pre)
+        )
+
+    # ssi_so: the latent is an onset cohort's infectivity, so it reaches the pipeline through
+    # the TOST hop first and the retained exponent through the TOST survival function.
+    tost_operator = renewal.delay_design_matrix(
+        n_days, delays.tost, first_lag=TOST_FIRST_LAG, source_days=every_day
+    )
+    tost_survival = renewal.delay_design_matrix(
+        n_days, tost_survival_weights(delays.tost), first_lag=TOST_FIRST_LAG, source_days=every_day
+    )
+    reach = incubation_survival[selected]
+    pre_reach = np.where(period[None, :] == 0, reach, 0.0)
+    return LatentRiskBasis(
+        days=selected,
+        retained=tost_survival[np.ix_(selected, columns)],
+        pre=(pre_reach @ tost_operator)[:, columns],
+        post=((reach - pre_reach) @ tost_operator)[:, columns],
+    )
+
+
+def marginalised_risk_correction(
+    model: str | ModelSpecification,
+    unsampled: UnsampledLatents,
+    *,
+    counts: NDArray[np.int64],
+    delays: OnsetAnchoredDelays,
+    switch_day: int,
+    days: NDArray[np.int64],
+    R_pre: NDArray[np.float64],
+    R_post: NDArray[np.float64],
+    k: NDArray[np.float64],
+    reset_R: float | NDArray[np.float64] | None = None,
+) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
+    """``log E[exp(−β·Y_unsampled) | θ]`` for RAC and for RAT, exactly.
+
+    The unsampled latents are conditionally independent ``Gamma(A_u, B_u)`` given the
+    parameters, and the risk exponent is affine in them, so the Gamma moment generating
+    function integrates them out term by term:
+
+    ``E[exp(−β_u Y_u) | θ] = (1 + β_u / B_u)^(−A_u)``.
+
+    This is the same conditional law :func:`reconstruct_latent_paths` would draw from, used
+    exactly instead of by Monte Carlo — so the correction adds no sampling error of its own and
+    needs no random stream.
+    """
+    specification = specification_of(model)
+    basis = latent_risk_basis(
+        specification,
+        counts=counts,
+        delays=delays,
+        switch_day=switch_day,
+        days=days,
+        latent_days=unsampled.days,
+    )
+    n_draws = R_pre.size
+    reset = R_pre if reset_R is None else _broadcast_draws(reset_R, "reset_R", n_draws=n_draws)
+    per_case_exponent = k * np.log1p(reset / k)
+
+    rate = unsampled.rate[:, None, :]
+    shape = unsampled.shape[:, None, :]
+    cases = -(
+        shape * np.log1p(basis.weights(R_reset=reset, R_pre=R_pre, R_post=R_post) / rate)
+    ).sum(axis=2)
+    transmission = -(
+        shape
+        * np.log1p(
+            basis.weights(
+                R_reset=reset, R_pre=R_pre, R_post=R_post, per_case_exponent=per_case_exponent
+            )
+            / rate
+        )
+    ).sum(axis=2)
+    return cases, transmission
+
+
+def reconstruct_latent_paths(
+    model: str | ModelSpecification,
+    state: PosteriorState,
+    *,
+    counts: NDArray[np.int64],
+    rng: np.random.Generator | None = None,
+) -> NDArray[np.float64]:
+    """A complete latent path per posterior draw, indexed by day — for validation only.
+
+    Nothing on the results path calls this. :func:`risk_log_probabilities` integrates the
+    unsampled latents out of the risk in closed form instead, which is exact where this is
+    Monte Carlo. What still needs an explicit path is the matched-conditioning check of §6.4,
+    where the *same* ``Y`` has to reach the analytic calculator and the forward simulator; a
+    distribution cannot be handed to a simulator.
+
+    Returns
+    -------
+    ``(n_draws, n_days)`` array, zero on days that carry no latent at all — for the
+    individual-level models, the days with no cases, whose infectivity is identically zero.
+    """
+    specification = specification_of(model)
+    if specification.latent_variable is None:
+        raise ValueError(f"model {specification.name!r} has no latent block to rebuild")
+    if state.sampled_infectivity is None:
+        raise ValueError(f"the state carries no latent block for model {specification.name!r}")
+    rng = np.random.default_rng() if rng is None else rng
+    paths = np.array(state.sampled_infectivity, dtype=np.float64, copy=True)
+    if paths.shape[1] != np.asarray(counts).size:
+        raise ValueError("the sampled latent block and the counts disagree on the window length")
+    if state.unsampled is not None and state.unsampled.days.size > 0:
+        paths[:, state.unsampled.days] = rng.gamma(
+            state.unsampled.shape, 1.0 / state.unsampled.rate
+        )
     return paths
 
 

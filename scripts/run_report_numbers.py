@@ -20,7 +20,7 @@ Two consequences worth keeping:
 What it does *not* do is compute anything the pipeline does not already compute. Posterior
 summaries come from :mod:`end_of_outbreak.posterior_comparison`, exactly as
 ``dispersion_posteriors.json`` does; threshold crossings come from
-:meth:`~end_of_outbreak.risk_of_additional_cases.RiskCurve.first_day_below`, exactly as the
+:meth:`~end_of_outbreak.risk_curves.RiskCurve.first_day_below`, exactly as the
 markers on the figures do. The three cross-analysis quantities it forms — the crossing shift
 between an onset-anchored model and its naive counterpart, the log-evidence gain from fixing
 ``k`` to estimating it, and the largest RAC/RAT gap — are subtractions of numbers already in
@@ -49,9 +49,14 @@ import pandas as pd
 import xarray as xr
 from numpy.typing import NDArray
 
-from end_of_outbreak import configuration, delay_distributions, outbreak_data, pymc_models
+from end_of_outbreak import (
+    configuration,
+    delay_distributions,
+    outbreak_data,
+    pymc_models,
+    risk_curves,
+)
 from end_of_outbreak import posterior_comparison as pc
-from end_of_outbreak import risk_of_additional_cases as rac
 from end_of_outbreak.model_specifications import LogNormalPrior, specification_of
 
 RISK_COLUMN = "risk_of_additional_cases"
@@ -395,7 +400,7 @@ def add_risk_curve(
     # case-free tail, where the thresholds are crossed and two curves are read against each other.
     late = days >= int(np.flatnonzero(np.asarray(data.onsets) > 0)[-1])
     for column, name, error_column in columns:
-        curve = rac.RiskCurve(
+        curve = risk_curves.RiskCurve(
             days=days, risk=np.asarray(frame[column], dtype=np.float64), n_draws=0
         )
         for threshold in THRESHOLDS:
@@ -425,7 +430,7 @@ def add_risk_curve(
         for threshold in THRESHOLDS:
             label = f"{round(threshold * 100):02d}"
             crossings = [
-                rac.RiskCurve(
+                risk_curves.RiskCurve(
                     days=days, risk=np.asarray(frame[column], dtype=np.float64), n_draws=0
                 ).first_day_below(threshold)
                 for column in (RISK_COLUMN, TRANSMISSION_RISK_COLUMN)
@@ -548,7 +553,7 @@ def add_onset_shifts(numbers: NumberFile, analysis: str, curves: dict[str, pd.Da
 
 
 def _crossing(frame: pd.DataFrame, threshold: float) -> int | None:
-    curve = rac.RiskCurve(
+    curve = risk_curves.RiskCurve(
         days=np.asarray(frame["day"], dtype=np.int64),
         risk=np.asarray(frame[RISK_COLUMN], dtype=np.float64),
         n_draws=0,

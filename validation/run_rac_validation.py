@@ -1,4 +1,4 @@
-"""Stage-4 validation of the RAC calculators, in three parts.
+"""Validation of the RAC calculators, in four parts.
 
 Each answers a different question, and none of them substitutes for another::
 
@@ -13,21 +13,31 @@ Each answers a different question, and none of them substitutes for another::
     itself, so the comparison tests the whole pipeline against an outside answer.
 
 ``equality``
-    **The §6.4 equality check**, at fixed ``(R_pre, R_post, k)`` and with the conditioning
-    matched. For the latent-free models the reset state is the observed counts, so the closed
-    forms are checked directly against forward simulation. For SSI the retained state is
-    latent, and a *smoothed* one, so the comparison is against a particle **smoother** — the
-    filter's ancestral paths — never against its filtering output. The filtering curve is
-    computed too, but as the §5.6 measurement, not as a pass criterion.
+    **The §6.4 equality check on the arithmetic**, at fixed ``(R_pre, R_post, k)`` and with the
+    conditioning matched on both sides. For the latent-free models the retained state is the
+    observed counts, so the closed forms are checked directly against forward simulation. For
+    SSI the retained state is latent, and both sides condition on the whole record, so the
+    comparison is against the particle **smoother** — the filter's ancestral paths. Matching
+    the conditioning is what makes this a test of the arithmetic rather than of the estimand:
+    it says the closed forms evaluate the right function of a given state, and says nothing
+    about which state the estimand retains.
+
+``methods``
+    **The estimator comparison.** The real-time estimand refits per conditioning day
+    (:mod:`end_of_outbreak.refit_risk`); :mod:`end_of_outbreak.filtered_risk` keeps one
+    full-record parameter posterior and filters only the latents. This measures the signed gap
+    between them, per model and per day, on the real series. DLO and SSE are the control: they
+    have no latent state, so their gap is entirely the parameter conditioning.
 
 ``matched_pair``
-    **The latent-reconstruction check.** Fits SSI twice, once under
-    ``marginalised_inverse_cdf`` (where the uncoupled latents are integrated out and have to be
-    rebuilt from their conditional) and once under plain ``inverse_cdf`` (where nothing is
-    removed), and requires the RAC curves to agree. Since the two fits share no latent block,
-    agreement is an end-to-end check on the reconstruction rather than on the likelihood. A
-    second fit under the *same* parameterisation with a different seed calibrates what "within
-    Monte-Carlo error" means here, instead of leaving it to judgement.
+    **The exact-marginalisation check.** Fits SSI twice, once under
+    ``marginalised_inverse_cdf`` (where the uncoupled latents are integrated out of the
+    likelihood, and then out of the risk in closed form) and once under plain ``inverse_cdf``
+    (where nothing is removed and the sampler carries every latent), and requires the RAC
+    curves to agree. Since the two fits share no latent block, agreement is an end-to-end check
+    on the marginalisation rather than on the likelihood. A second fit under the *same*
+    parameterisation with a different seed calibrates what "within Monte-Carlo error" means
+    here, instead of leaving it to judgement.
 
 Writes one CSV per check to ``validation/results/`` plus a figure for the Thompson replication;
 ``validation/results/rac_validation.md`` is the written summary that goes with them.
@@ -47,10 +57,22 @@ import numpy as np
 import pandas as pd
 from numpy.typing import NDArray
 
-from end_of_outbreak import configuration, fitting, outbreak_data, particle_filter, pymc_models
+from end_of_outbreak import (
+    configuration,
+    filtered_risk,
+    fitting,
+    outbreak_data,
+    particle_filter,
+    pymc_models,
+    refit_risk,
+)
 from end_of_outbreak import risk_of_additional_cases as rac
 from end_of_outbreak.delay_distributions import OnsetAnchoredDelays
-from end_of_outbreak.model_specifications import LogNormalPrior, TransmissionParameters
+from end_of_outbreak.model_specifications import (
+    LogNormalPrior,
+    TransmissionParameters,
+    specification_of,
+)
 
 matplotlib.use("Agg")
 
@@ -239,8 +261,10 @@ def check_equality(
             }
         )
 
-    # SSI: the retained state is latent, so the comparison is MCMC (smoothed) against the
-    # filter's ancestral paths (also smoothed). The filtering curve goes in as a measurement.
+    # SSI: the retained state is latent, so both sides must condition on the same thing. The
+    # MCMC state and the filter's ancestral paths are both smoothed over the whole record, and
+    # matching them is exactly what makes this a check of the arithmetic. The estimator
+    # comparison is a separate check; see `compare_rac_methods`.
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         idata = fitting.fit_model(
@@ -264,23 +288,13 @@ def check_equality(
         fixed_R_pre=parameters.R_pre,
         fixed_R_post=parameters.R_post,
         fixed_k=parameters.k,
-        rng=np.random.default_rng(seed),
     )
-    assert state.infectivity is not None
-    mcmc_log_probability = rac.log_probability_of_no_further_cases(
-        "ssi",
-        counts=counts,
-        serial_interval=w,
-        R_pre=state.R_pre,
-        k=state.k,
-        infectivity=state.infectivity,
+    assert state.sampled_infectivity is not None
+    mcmc_estimate = rac.risk_log_probabilities(
+        "ssi", state, counts=counts, delays=delays, switch_day=data.ert_arrival_day
     )
-    mcmc = rac.RiskCurve(
-        days=data.day_index,
-        risk=1.0 - np.exp(mcmc_log_probability).mean(axis=0),
-        n_draws=state.n_draws,
-    )
-    mcmc_error = rac.monte_carlo_standard_error(mcmc_log_probability, n_chains=state.n_chains)
+    mcmc = mcmc_estimate.risk_of_additional_cases()
+    mcmc_error, _ = mcmc_estimate.standard_errors()
     filtered = particle_filter.filter_naive(
         "ssi",
         counts,
@@ -299,34 +313,15 @@ def check_equality(
         k=np.full(n_particles, parameters.k),
         infectivity=filtered.latent_paths,
     )
-    filtering_risk = 1.0 - np.exp(-parameters.R_pre * filtered.filtering_remaining_weight).mean(
-        axis=1
-    )
-
-    columns["ssi_mcmc_smoothed"] = mcmc.risk
-    columns["ssi_particle_smoothed"] = smoothed.risk
-    columns["ssi_particle_filtering"] = filtering_risk
+    columns["ssi_mcmc"] = mcmc.risk
+    columns["ssi_particle_smoother"] = smoothed.risk
     columns["ssi_mcmc_standard_error"] = mcmc_error
     rows.append(
         {
-            "comparison": "ssi: MCMC smoothed vs particle smoother (matched conditioning)",
+            "comparison": "ssi: MCMC vs particle smoother (matched conditioning, fixed θ)",
             "max_abs_difference": np.abs(mcmc.risk - smoothed.risk).max(),
             "monte_carlo_scale": 3 * float(np.nanmax(mcmc_error)),
         }
-    )
-    rows.append(
-        {
-            "comparison": "ssi: smoothed vs filtering (the §5.6 gap — a measurement, not a test)",
-            "max_abs_difference": np.abs(mcmc.risk - filtering_risk).max(),
-            "monte_carlo_scale": np.nan,
-        }
-    )
-    signed = mcmc.risk - filtering_risk
-    late = data.day_index >= 58
-    print(
-        f"  §5.6 gap (smoothed − filtering): max |·| {np.abs(signed).max():.4f}; "
-        f"after the last case, mean {signed[late].mean():+.4f}, "
-        f"range [{signed[late].min():+.4f}, {signed[late].max():+.4f}]"
     )
     print(
         f"  filter degeneracy: {filtered.n_distinct[0]} distinct day-0 ancestors of "
@@ -397,7 +392,99 @@ def measure_smc_variance(
 
 
 # ---------------------------------------------------------------------------------------
-# 3. The matched pair: does the reconstruction give back what was integrated out?
+# 3. The estimator comparison: refitting per day against filtering one fit
+# ---------------------------------------------------------------------------------------
+
+
+def compare_rac_methods(
+    data: outbreak_data.OutbreakData,
+    delays: OnsetAnchoredDelays,
+    *,
+    models: list[str],
+    R_prior: LogNormalPrior,
+    dispersion: float | LogNormalPrior,
+    parameterisation: str,
+    sampler: fitting.SamplerSettings,
+    n_draws: int,
+    n_particles: int,
+    seed: int,
+) -> pd.DataFrame:
+    """Signed gap between the two estimators, per model and per conditioning day.
+
+    Not a pass/fail. They estimate different things — one conditions parameters and latents on
+    the record through day ``t``, the other conditions the parameters on all of it — so the
+    question is how large the difference is and which way it runs, day by day. **DLO and SSE
+    are the control**: with no latent state their gap is entirely the parameter conditioning,
+    so whatever the latent models show on top of that is the cost of the second approximation.
+    """
+    columns: dict[str, Any] = {}
+    days = refit_risk.conditioning_days(data.onsets.size)
+    for index, model in enumerate(models):
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            refit = refit_risk.risk_by_refitting(
+                model,
+                data.onsets,
+                delays=delays,
+                switch_day=data.ert_arrival_day,
+                R_pre=R_prior,
+                R_post=R_prior,
+                k=dispersion,
+                latent_parameterisation=parameterisation,
+                days=days,
+                sampler=sampler,
+                seed_for_day=lambda day, index=index: seed + 1000 * index + day,
+            )
+            whole_record = fitting.fit_model(
+                model,
+                data.onsets,
+                delays=delays,
+                switch_day=data.ert_arrival_day,
+                R_pre=R_prior,
+                R_post=R_prior,
+                k=dispersion,
+                latent_parameterisation=parameterisation,
+                sampler=sampler,
+            )
+        state = rac.posterior_state(
+            model,
+            whole_record,
+            data.onsets,
+            delays=delays,
+            switch_day=data.ert_arrival_day,
+            latent_parameterisation=fitting.fitted_parameterisation(whole_record),
+            fixed_k=fitting.fitted_dispersion(whole_record),
+        )
+        if specification_of(model).has_latents:
+            state = filtered_risk.thin_draws(state, n_draws)
+        filtered = filtered_risk.risk_by_filtering(
+            model,
+            state,
+            counts=data.onsets,
+            delays=delays,
+            switch_day=data.ert_arrival_day,
+            days=days,
+            n_particles=n_particles,
+            rng=np.random.default_rng([seed, index]),
+        )
+        refit_risk_values = refit.estimate.risk_of_additional_cases().risk
+        filtered_values = filtered.estimate.risk_of_additional_cases().risk
+        columns[f"{model}_refit_daily"] = refit_risk_values
+        columns[f"{model}_single_fit_filtered"] = filtered_values
+
+        gap = refit_risk_values - filtered_values
+        late = days >= 58  # after the final observed onset
+        worst = int(days[np.abs(gap).argmax()])
+        print(
+            f"  {model}: refit − filtered, max |·| {np.abs(gap).max():.4f} on day {worst}; "
+            f"after the last onset mean {gap[late].mean():+.4f}, "
+            f"range [{gap[late].min():+.4f}, {gap[late].max():+.4f}]"
+        )
+    return pd.DataFrame({"day": days, "date": [data.date_of(int(day)) for day in days], **columns})
+
+
+# ---------------------------------------------------------------------------------------
+# 4. The matched pair: is the exact marginalisation really exact?
 # ---------------------------------------------------------------------------------------
 
 
@@ -407,9 +494,14 @@ def _ssi_rac_curve(
     *,
     idata: Any,
     fixed_k: float,
-    seed: int,
 ) -> tuple[NDArray[np.float64], NDArray[np.float64], NDArray[np.float64]]:
-    """``(RAC, Monte-Carlo standard error, mean latent path)`` from one SSI fit."""
+    """``(RAC, Monte-Carlo standard error, posterior mean latent path)`` from one SSI fit.
+
+    The mean latent path is exact under either parameterisation, which is the point of the
+    comparison: where the sampler carried a latent it is the posterior mean of the draws, and
+    where the fit integrated one out it is the mean ``A_u / B_u`` of the conditional the risk is
+    marginalised over. No reconstruction draw is involved on either side.
+    """
     parameterisation = fitting.fitted_parameterisation(idata)
     assert parameterisation is not None
     state = rac.posterior_state(
@@ -420,25 +512,18 @@ def _ssi_rac_curve(
         switch_day=data.ert_arrival_day,
         latent_parameterisation=parameterisation,
         fixed_k=fixed_k,
-        # A separate stream per curve, so that a repeated fit is a genuinely independent
-        # replicate: sharing one would correlate the reconstruction draws and flatter the
-        # within-parameterisation baseline the comparison is judged against.
-        rng=np.random.default_rng(seed),
     )
-    assert state.infectivity is not None
-    log_probability = rac.log_probability_of_no_further_cases(
-        "ssi",
-        counts=data.onsets,
-        serial_interval=delays.serial_interval,
-        R_pre=state.R_pre,
-        k=state.k,
-        infectivity=state.infectivity,
+    assert state.sampled_infectivity is not None
+    estimate = rac.risk_log_probabilities(
+        "ssi", state, counts=data.onsets, delays=delays, switch_day=data.ert_arrival_day
     )
-    return (
-        1.0 - np.exp(log_probability).mean(axis=0),
-        rac.monte_carlo_standard_error(log_probability, n_chains=state.n_chains),
-        state.infectivity.mean(axis=0),
-    )
+    mean_latent = state.sampled_infectivity.mean(axis=0)
+    if state.unsampled is not None and state.unsampled.days.size > 0:
+        mean_latent[state.unsampled.days] = (state.unsampled.shape / state.unsampled.rate).mean(
+            axis=0
+        )
+    error, _ = estimate.standard_errors()
+    return estimate.risk_of_additional_cases().risk, error, mean_latent
 
 
 def check_matched_pair(
@@ -495,11 +580,7 @@ def check_matched_pair(
             ("marginalised_reseeded", "marginalised_inverse_cdf", 2),
         ):
             curve, error, latent = _ssi_rac_curve(
-                data,
-                delays,
-                idata=fit(parameterisation, base + offset),
-                fixed_k=fixed_k,
-                seed=base + offset,
+                data, delays, idata=fit(parameterisation, base + offset), fixed_k=fixed_k
             )
             curves[label] = curve
             errors.append(error)
@@ -587,7 +668,7 @@ def parse_arguments(argv: list[str] | None = None) -> argparse.Namespace:
         "--checks",
         nargs="+",
         default=["all"],
-        choices=["all", "thompson", "equality", "matched_pair"],
+        choices=["all", "thompson", "equality", "methods", "matched_pair"],
     )
     parser.add_argument("--seed", type=int, default=20260806)
     parser.add_argument("--thompson-draws", type=int, default=200_000)
@@ -667,8 +748,24 @@ def main(argv: list[str] | None = None) -> None:
         )
         variance.to_csv(output_dir / "rac_smc_variance.csv", index=False)
 
+    if wanted & {"all", "methods"}:
+        print("\nRefitting per day against filtering one full-record fit:")
+        frame = compare_rac_methods(
+            data,
+            delays,
+            models=list(analysis["models"]),
+            R_prior=LogNormalPrior.from_config(analysis["shared"]["priors"]["R_pre"]),
+            dispersion=fixed_k,
+            parameterisation=parameterisation,
+            sampler=sampler,
+            n_draws=int(config["rac"]["filtering"]["n_draws"]),
+            n_particles=int(config["rac"]["filtering"]["n_particles"]),
+            seed=arguments.seed,
+        )
+        frame.to_csv(output_dir / "rac_method_comparison.csv", index=False)
+
     if wanted & {"all", "matched_pair"}:
-        print("\nMatched-pair check of the latent reconstruction:")
+        print("\nMatched-pair check of the exact latent marginalisation:")
         frame = check_matched_pair(
             data,
             delays,

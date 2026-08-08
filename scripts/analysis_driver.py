@@ -18,7 +18,7 @@ results-driving logic there would make every restyle a reason to re-run MCMC. It
 instead in ``FIT_CORE``, ``RAC_CORE``, ``EVIDENCE_CORE`` and ``DISPERSION_CORE`` at the top of
 the ``Snakefile``, alongside the package modules whose changes must invalidate those tiers.
 
-Four subcommands, one per pipeline rule, so that recomputing a risk curve never re-runs a fit::
+Four subcommands, one per pipeline rule::
 
     python scripts/run_<analysis>.py fit        --model ssi --output ..._posterior.nc
     python scripts/run_<analysis>.py rac        --model ssi --posterior ... --output ..._rac.csv
@@ -27,12 +27,20 @@ Four subcommands, one per pipeline rule, so that recomputing a risk curve never 
 
 ``dispersion`` applies only to the analyses that estimate ``k``, and says so rather than writing
 an empty file when it is pointed at a fixed-``k`` fit.
+
+**``rac`` is a tier-1 step under the default method.** RAC(t) conditions on the record through
+day ``t``, so the estimator refits the model once per conditioning day and the "recomputing a
+risk curve never re-runs a fit" separation cannot hold for it. The other three steps keep it: a
+fit, an evidence and a dispersion summary are all properties of the model given the whole record.
+The ``--method`` flag selects between the per-day refit and the filtering approximation; the
+default comes from ``config/config.yaml``.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -41,14 +49,25 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 
-from end_of_outbreak import configuration, fitting, model_evidence, outbreak_data
+from end_of_outbreak import (
+    configuration,
+    filtered_risk,
+    fitting,
+    model_evidence,
+    outbreak_data,
+    refit_risk,
+)
 from end_of_outbreak import posterior_comparison as pc
 from end_of_outbreak import risk_of_additional_cases as rac
 from end_of_outbreak.delay_distributions import OnsetAnchoredDelays
-from end_of_outbreak.model_specifications import LogNormalPrior
+from end_of_outbreak.model_specifications import LogNormalPrior, specification_of
 
 DISPERSION_VARIABLE = "k"
 """Name the model builders give the dispersion parameter in the posterior."""
+
+REFIT_DAILY = "refit_daily"
+SINGLE_FIT_FILTERED = "single_fit_filtered"
+RAC_METHODS = (REFIT_DAILY, SINGLE_FIT_FILTERED)
 
 
 # ---------------------------------------------------------------------------------------
@@ -96,6 +115,18 @@ class AnalysisSetting:
     def negligible_latent_threshold(self) -> float:
         return float(self.config["negligible_latent_threshold"])
 
+    @property
+    def rac(self) -> dict[str, Any]:
+        """The ``rac:`` block: which estimator, from which day, and the filter's settings."""
+        return dict(self.config["rac"])
+
+    def rac_method(self, override: str | None = None) -> str:
+        """The estimator to use, from the command line if given and the config otherwise."""
+        method = override or str(self.rac["method"])
+        if method not in RAC_METHODS:
+            raise ValueError(f"unknown rac method {method!r}; expected one of {RAC_METHODS}")
+        return method
+
     def reproduction_number_priors(self) -> tuple[LogNormalPrior, LogNormalPrior]:
         """``R_pre`` and ``R_post``, shared by every model so the evidences compare."""
         priors = self.block["shared"]["priors"]
@@ -123,18 +154,31 @@ class AnalysisSetting:
             raise ValueError(f"{self.name} does not include model {model!r}; it compares {known}")
         return model
 
-    def reconstruction_rng(self, model: str) -> np.random.Generator:
-        """Generator for the latent reconstruction, seeded reproducibly and distinctly per model.
+    def model_entropy(self, model: str) -> list[int]:
+        """Seed entropy for one model of this analysis: the sampler seed and the model's index.
 
-        The default parameterisation integrates some latents out exactly, so they have to be
-        drawn back from their conditional before a RAC curve can be computed (§6.3). That draw
-        is Monte Carlo, so it needs a seed that lives in the config like every other one — and a
-        different stream per model, since sharing one would correlate curves that are meant to
-        be independent.
+        A different stream per model, since sharing one would correlate results that are meant
+        to be independent.
         """
         seed = self.block["sampler"].get("seed")
-        entropy = [0 if seed is None else int(seed), self.models.index(model)]
-        return np.random.default_rng(entropy)
+        return [0 if seed is None else int(seed), self.models.index(model)]
+
+    def reconstruction_rng(self, model: str) -> np.random.Generator:
+        """Generator for the Monte-Carlo steps of the evidence estimators (§6.5)."""
+        return np.random.default_rng(self.model_entropy(model))
+
+    def daily_fit_seed(self, model: str) -> Callable[[int], int]:
+        """Sampler seed for the day-``t`` refit, reproducible and distinct per model and day.
+
+        Re-using one seed across the 110 days would correlate the curve's Monte-Carlo error from
+        day to day, which is exactly what the standard error beside it is there to measure.
+        """
+        entropy = self.model_entropy(model)
+
+        def seed(day: int) -> int:
+            return int(np.random.SeedSequence([*entropy, day]).generate_state(1)[0])
+
+        return seed
 
     def load_posteriors(self, paths: list[Path]) -> dict[str, xr.DataTree]:
         """Fits keyed by the model each one records itself as, in this analysis's order."""
@@ -184,17 +228,130 @@ def command_fit(args: argparse.Namespace) -> None:
 
 
 def command_rac(args: argparse.Namespace) -> None:
-    """Turn one fit into its RAC curve.
+    """Estimate the RAC (and, for the onset models, RAT) curve.
 
-    The curve and its Monte-Carlo standard error come from a single evaluation of the per-draw
-    log-probabilities: RAC(t) is a posterior *average*, so it carries Monte-Carlo error, and a
-    curve published without it cannot be compared with another one.
+    Under ``refit_daily`` this is a **tier-1** step: the estimand conditions on the record
+    through day ``t``, so it fits the model once per conditioning day. The alternative reuses a
+    single full-record fit and filters the latents, which is faster and approximate.
+
+    The curves and their Monte-Carlo standard errors come from a single evaluation of the
+    per-draw log-probabilities: RAC(t) is a posterior *average*, so it carries Monte-Carlo
+    error, and a curve published without it cannot be compared with another one.
     """
     setting = setting_from_arguments(args)
     model = setting.require_model(args.model)
     data = setting.data
-    idata = fitting.load_fit(args.posterior)
+    method = setting.rac_method(args.method)
+    first_day = int(setting.rac["first_day"])
+    days = refit_risk.conditioning_days(data.onsets.size, first_day=first_day)
+    if method == REFIT_DAILY and args.diagnostics is None:
+        raise ValueError(
+            f"{method} runs one fit per conditioning day, so --diagnostics is required: a "
+            "curve built from 110 fits nobody has looked at is not a result"
+        )
 
+    if method == REFIT_DAILY:
+        estimate, diagnostics = _rac_by_refitting(
+            setting, model, days=days, posterior=args.posterior
+        )
+    else:
+        estimate, diagnostics = _rac_by_filtering(
+            setting, model, days=days, posterior=args.posterior
+        )
+
+    cases = estimate.risk_of_additional_cases()
+    transmission = estimate.risk_of_additional_transmission()
+    case_error, transmission_error = estimate.standard_errors()
+    columns: dict[str, Any] = {
+        "date": [data.date_of(int(day)) for day in estimate.days],
+        "day": estimate.days,
+        "model": model,
+        "risk_of_additional_cases": cases.risk,
+        "monte_carlo_standard_error": case_error,
+    }
+    if model.endswith("_so"):
+        # RAC and RAT coincide under every infection-anchored model, so writing both columns
+        # there would suggest a comparison the models cannot make.
+        columns["risk_of_additional_transmission"] = transmission.risk
+        columns["transmission_monte_carlo_standard_error"] = transmission_error
+    pd.DataFrame(columns).to_csv(configuration.ensure_parent(args.output), index=False)
+    if args.diagnostics is not None:
+        diagnostics.insert(0, "method", method)
+        diagnostics.to_csv(configuration.ensure_parent(args.diagnostics), index=False)
+
+    print(
+        f"{model}: RAC over days {int(estimate.days[0])}–{int(estimate.days[-1])} by {method}; "
+        f"written to {args.output}"
+    )
+
+
+def _rac_by_refitting(
+    setting: AnalysisSetting, model: str, *, days: np.ndarray, posterior: Path
+) -> tuple[rac.DailyRiskEstimate, pd.DataFrame]:
+    """The gold standard: one fit per conditioning day, with every day's diagnostics kept.
+
+    The full-record fit the pipeline already holds is reused for the last conditioning day
+    rather than repeated, so the end of the curve and the evidence and dispersion summaries
+    describe the same posterior.
+    """
+    data = setting.data
+    R_pre, R_post = setting.reproduction_number_priors()
+    reported = {int(day) for day in np.linspace(days[0], days[-1], 12).round()}
+    result = refit_risk.risk_by_refitting(
+        model,
+        data.onsets,
+        delays=setting.delays,
+        switch_day=data.ert_arrival_day,
+        R_pre=R_pre,
+        R_post=R_post,
+        k=setting.dispersion(),
+        latent_parameterisation=setting.latent_parameterisation,
+        negligible_latent_threshold=setting.negligible_latent_threshold,
+        days=days,
+        sampler=fitting.SamplerSettings.from_config(setting.block["sampler"]),
+        seed_for_day=setting.daily_fit_seed(model),
+        final_day_fit=fitting.load_fit(posterior),
+        on_day=lambda day: _report_day(model, day, reported),
+    )
+    suspect = result.suspect_days()
+    if suspect:
+        listed = ", ".join(
+            f"day {day.day} (R̂ {day.max_r_hat:.3f}, {day.divergences} divergences)"
+            for day in suspect[:10]
+        )
+        raise RuntimeError(
+            f"{len(suspect)} of {len(result.diagnostics)} {model} fits did not converge: "
+            f"{listed}. A hundred and ten fits is a hundred and ten chances for one to go "
+            "quietly wrong, so this fails rather than writing a curve nobody has checked."
+        )
+    diagnostics = pd.DataFrame(
+        {
+            "day": [day.day for day in result.diagnostics],
+            "divergences": [day.divergences for day in result.diagnostics],
+            "max_r_hat": [day.max_r_hat for day in result.diagnostics],
+            "min_ess_bulk": [day.min_ess_bulk for day in result.diagnostics],
+            "seconds": [day.seconds for day in result.diagnostics],
+        }
+    )
+    return result.estimate, diagnostics
+
+
+def _report_day(model: str, day: refit_risk.DayDiagnostics, reported: set[int]) -> None:
+    """Progress for a long tier-1 step, at a dozen days rather than all of them."""
+    if day.day in reported:
+        print(
+            f"  {model} day {day.day}: {day.seconds:.1f}s, R̂ {day.max_r_hat:.3f}, "
+            f"{day.divergences} divergences",
+            flush=True,
+        )
+
+
+def _rac_by_filtering(
+    setting: AnalysisSetting, model: str, *, days: np.ndarray, posterior: Path
+) -> tuple[rac.DailyRiskEstimate, pd.DataFrame]:
+    """The approximation: one full-record fit, latents filtered to each conditioning day."""
+    data = setting.data
+    idata = fitting.load_fit(posterior)
     state = rac.posterior_state(
         model,
         idata,
@@ -204,63 +361,30 @@ def command_rac(args: argparse.Namespace) -> None:
         latent_parameterisation=fitting.fitted_parameterisation(idata),
         fixed_k=fitting.fitted_dispersion(idata),
         negligible_latent_threshold=setting.negligible_latent_threshold,
+    )
+    filtering = setting.rac["filtering"]
+    # Thinning exists only to bound the cost of running a filter per draw, so a model with no
+    # latent block keeps every draw and reproduces the closed form exactly.
+    if specification_of(model).has_latents:
+        state = filtered_risk.thin_draws(state, int(filtering["n_draws"]))
+    result = filtered_risk.risk_by_filtering(
+        model,
+        state,
+        counts=data.onsets,
+        delays=setting.delays,
+        switch_day=data.ert_arrival_day,
+        days=days,
+        n_particles=int(filtering["n_particles"]),
         rng=setting.reconstruction_rng(model),
     )
-    if model.endswith("_so"):
-        probabilities = rac.onset_event_probabilities(
-            model,
-            counts=data.onsets,
-            delays=setting.delays,
-            switch_day=data.ert_arrival_day,
-            R_pre=state.R_pre,
-            R_post=state.R_post,
-            k=state.k,
-            latent=state.infectivity,
-        )
-        log_probability = probabilities.log_no_further_cases
-        log_no_transmission = probabilities.log_no_further_transmission
-    else:
-        log_probability = rac.log_probability_of_no_further_cases(
-            model,
-            counts=data.onsets,
-            serial_interval=setting.delays.serial_interval,
-            R_pre=state.R_pre,
-            k=state.k,
-            infectivity=state.infectivity,
-        )
-        log_no_transmission = None
-    curve = rac.RiskCurve(
-        days=data.day_index,
-        risk=1.0 - np.exp(log_probability).mean(axis=0),
-        n_draws=state.n_draws,
-    )
-    columns = {
-        "date": [data.date_of(int(day)) for day in curve.days],
-        "day": curve.days,
-        "model": model,
-        "risk_of_additional_cases": curve.risk,
-        "monte_carlo_standard_error": rac.monte_carlo_standard_error(
-            log_probability, n_chains=state.n_chains
-        ),
-    }
-    if log_no_transmission is not None:
-        columns["risk_of_additional_transmission"] = 1.0 - np.exp(log_no_transmission).mean(axis=0)
-        columns["transmission_monte_carlo_standard_error"] = rac.monte_carlo_standard_error(
-            log_no_transmission, n_chains=state.n_chains
-        )
-    frame = pd.DataFrame(columns)
-    frame.to_csv(configuration.ensure_parent(args.output), index=False)
-
-    crossings = " ".join(
-        f"{threshold:g}→{_crossing_text(curve, threshold, data)}" for threshold in (0.05, 0.01)
-    )
-    print(f"{model}: RAC first settles below {crossings}; written to {args.output}")
-
-
-def _crossing_text(curve: rac.RiskCurve, threshold: float, data: outbreak_data.OutbreakData) -> str:
-    """The date a curve settles below a threshold, or a marker that it never does."""
-    day = curve.first_day_below(threshold)
-    return "never" if day is None else f"day {day} ({data.date_of(day).isoformat()})"
+    # DLO and SSE run no filter — they have no latent state — so there is nothing per-day to
+    # diagnose, and the file says so rather than inventing columns.
+    diagnostics = pd.DataFrame({"day": result.estimate.days})
+    if result.diagnostics is not None:
+        diagnostics["min_effective_sample_size"] = result.diagnostics.min_effective_sample_size
+        diagnostics["mean_effective_sample_size"] = result.diagnostics.mean_effective_sample_size
+        diagnostics["resample_fraction"] = result.diagnostics.resample_fraction
+    return result.estimate, diagnostics
 
 
 # ---------------------------------------------------------------------------------------
@@ -413,9 +537,27 @@ def parse_arguments(analysis: str, argv: list[str] | None = None) -> argparse.Na
     fit.add_argument("--progressbar", action="store_true")
     fit.set_defaults(handler=command_fit)
 
-    risk = common(subcommands.add_parser("rac", help="risk of additional cases (tier 2)"))
+    risk = common(
+        subcommands.add_parser("rac", help="risk of additional cases (tier 1 under refit_daily)")
+    )
     risk.add_argument("--model", required=True)
-    risk.add_argument("--posterior", type=Path, required=True)
+    risk.add_argument(
+        "--posterior",
+        type=Path,
+        required=True,
+        help="the full-record fit: the whole state under single_fit_filtered, and the last "
+        "conditioning day's fit under refit_daily",
+    )
+    risk.add_argument(
+        "--diagnostics",
+        type=Path,
+        help="where to write the per-day sampler diagnostics (refit_daily only)",
+    )
+    risk.add_argument(
+        "--method",
+        choices=RAC_METHODS,
+        help="override config's rac.method; the default refits per conditioning day",
+    )
     risk.set_defaults(handler=command_rac)
 
     evidence = common(subcommands.add_parser("evidence", help="model evidence (tier 2)"))

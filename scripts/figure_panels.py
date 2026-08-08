@@ -10,9 +10,9 @@ The split from :mod:`utils` is by altitude rather than by subject. ``utils`` hol
 style, the loading of what the tier-2 rules wrote, and the drawing primitives — a density, a
 pie, an incidence backdrop — and computes nothing at all. This module composes those primitives
 into the labelled panels the report actually quotes, which is why it is the one place under
-``scripts/`` that touches :mod:`end_of_outbreak.risk_of_additional_cases`: "the day a curve
+``scripts/`` that touches :mod:`end_of_outbreak.risk_curves`: "the day a curve
 settles below a threshold" is a definition the report states, so it must come from
-:meth:`~end_of_outbreak.risk_of_additional_cases.RiskCurve.first_day_below` rather than being
+:meth:`~end_of_outbreak.risk_curves.RiskCurve.first_day_below` rather than being
 reimplemented beside the panel.
 """
 
@@ -27,8 +27,7 @@ import utils
 from matplotlib.axes import Axes
 from numpy.typing import NDArray
 
-from end_of_outbreak import outbreak_data
-from end_of_outbreak import risk_of_additional_cases as rac
+from end_of_outbreak import outbreak_data, risk_curves
 from end_of_outbreak.model_specifications import LogNormalPrior
 
 SETTLING_THRESHOLD = 0.05
@@ -181,11 +180,11 @@ def rac_rat_panel(
 def settling_day(frame: pd.DataFrame, threshold: float = SETTLING_THRESHOLD) -> int | None:
     """The first day a curve falls below ``threshold`` and stays there.
 
-    Delegated to :class:`~end_of_outbreak.risk_of_additional_cases.RiskCurve` rather than
+    Delegated to :class:`~end_of_outbreak.risk_curves.RiskCurve` rather than
     reimplemented here, because "settles below" is a definition the report quotes and it must not
     be able to drift between the marker on the panel and the number in the text.
     """
-    curve = rac.RiskCurve(
+    curve = risk_curves.RiskCurve(
         days=np.asarray(frame["day"], dtype=np.int64),
         risk=np.asarray(frame[utils.RISK_COLUMN], dtype=np.float64),
         n_draws=0,

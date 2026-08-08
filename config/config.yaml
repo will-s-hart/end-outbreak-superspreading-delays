@@ -76,6 +76,25 @@ analyses:
     plot_script: scripts/plot_onset_models_estimated_k.py
     sampler: {draws: 2000, tune: 2000, chains: 4, target_accept: 0.95, seed: 20260808}
 
+# How the risk of additional cases is estimated. RAC(t) conditions on the record through day t
+# and nothing after it, so the honest estimator refits the model to counts[:t+1] for every
+# conditioning day. That is `refit_daily`, and it is what every figure and report number rests on.
+#
+# `single_fit_filtered` keeps the parameters from one fit to the whole record and re-derives only
+# the latents with a particle filter. It is an approximation on two counts -- the parameters see
+# all 111 days, and conditioning the latents on less data than the parameters ignores their
+# posterior correlation -- and it is here as the fast route for prototyping a new analysis and as
+# the comparison in validation/run_rac_validation.py. Do not publish from it.
+#
+# Like `latent_parameterisation`, this is a property of the implementation rather than of any one
+# analysis, so it sits outside the per-analysis blocks.
+rac:
+  method: refit_daily
+  first_day: 1  # day 0 is an initial condition and carries no likelihood term
+  filtering:
+    n_draws: 1000     # parameter draws the filter is run at, thinned within chains
+    n_particles: 500  # per draw; the filter is fully adapted, so it needs no tuning
+
 # Latent-variable parameterisation, chosen by the Stage-3 sampler benchmark (see
 # validation/results/sampler_benchmark.md for the comparison this rests on). Scripts must pass this
 # explicitly -- end_of_outbreak.pymc_models refuses to build a latent model without one.

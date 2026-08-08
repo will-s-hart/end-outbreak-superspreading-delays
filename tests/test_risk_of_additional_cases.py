@@ -1,19 +1,23 @@
-"""Tests for the RAC calculators (Stage 4).
+"""Tests for the RAC calculators.
 
-Four things need pinning, in order of how much they would cost to get wrong:
+Five things need pinning, in order of how much they would cost to get wrong:
 
 1. **The closed forms are the right arithmetic.** Each is checked against forward simulation of
    the same reset state — the equality check of §6.4 — with the conditioning *matched*: for SSI
-   the same latent path reaches the analytic calculator and the simulator, so a filtering-versus
-   -smoothing difference cannot be mistaken for agreement.
-2. **The reset state is complete.** The default parameterisation integrates out the latents the
-   data cannot resolve, and on the real series those are exactly the late days a late
-   conditioning day needs. The reconstruction is checked to land on the right days and to draw
-   from the right conditional.
-3. **§5.4's inequality.** DLO's risk is bounded by the Poisson limit on one side and by the
+   the same latent path reaches the analytic calculator and the simulator, so a difference in
+   what the two condition on cannot be mistaken for agreement.
+2. **The risk is affine in the latent path**, with :func:`latent_risk_basis` as its gradient.
+   That is what licenses integrating the unsampled latents out of the risk with the Gamma
+   moment generating function instead of drawing them, so it is checked against the closed
+   forms by the identity linearity gives: ``β_u = log P(0) − log P(e_u)``.
+3. **The reset state is complete.** The default parameterisation integrates out the latents the
+   data cannot resolve, and those are exactly the late days a late conditioning day needs. The
+   exact correction is checked against averaging the reconstruction, which is unbiased for the
+   same quantity, and the conditional it marginalises over is checked directly.
+4. **§5.4's inequality.** DLO's risk is bounded by the Poisson limit on one side and by the
    same total ``Λ(t)`` arriving on a single day on the other; that convexity argument is the
    headline result, so it is measured rather than asserted.
-4. **The external validation.** Thompson et al.'s eqs. (3)–(5), under their conventions, are a
+5. **The external validation.** Thompson et al.'s eqs. (3)–(5), under their conventions, are a
    one-day shift of this project's machinery at ``k → ∞``. That identity is exact, so it is
    tested exactly, and their published Équateur ``R`` estimate is checked numerically.
 """
@@ -31,7 +35,11 @@ import scipy.stats
 from end_of_outbreak import delay_distributions as dd
 from end_of_outbreak import fitting, outbreak_data, pymc_models
 from end_of_outbreak import risk_of_additional_cases as rac
-from end_of_outbreak.model_specifications import LogNormalPrior, TransmissionParameters
+from end_of_outbreak.model_specifications import (
+    LogNormalPrior,
+    TransmissionParameters,
+    specification_of,
+)
 
 COUNTS = np.array([1, 0, 2, 1, 0, 3, 0, 1])
 SERIAL_INTERVAL = np.array([0.5, 0.3, 0.2])
@@ -346,18 +354,16 @@ def test_the_reconstruction_splices_the_sampled_and_rebuilt_blocks_onto_the_cale
         R_pre=np.full(n_draws, R_PRE),
         R_post=np.full(n_draws, R_POST),
     )
-    paths = rac.reconstruct_latent_paths(
+    state = rac.posterior_state(
         "ssi",
         idata,
         COUNTS,
         delays=SHORT_DELAYS,
         switch_day=SWITCH_DAY,
         latent_parameterisation="marginalised_inverse_cdf",
-        R_pre=np.full(n_draws, R_PRE),
-        R_post=np.full(n_draws, R_POST),
-        k=np.full(n_draws, K),
-        rng=np.random.default_rng(4),
+        fixed_k=K,
     )
+    paths = rac.reconstruct_latent_paths("ssi", state, counts=COUNTS, rng=np.random.default_rng(4))
     np.testing.assert_allclose(paths[:, sampled_days], values)
     assert np.all(paths[:, COUNTS == 0] == 0.0)  # no cohort, no infectivity
 
@@ -368,6 +374,119 @@ def test_the_reconstruction_splices_the_sampled_and_rebuilt_blocks_onto_the_cale
     rebuilt = paths[:, removed_days]
     np.testing.assert_allclose(rebuilt.mean(axis=0), shape / rate, rtol=0.05)
     np.testing.assert_allclose(rebuilt.var(axis=0), shape / rate**2, rtol=0.15)
+
+
+def _log_probabilities_at(model, path, days, *, R_pre, R_post, k, delays):
+    """``log P(no case)`` and ``log P(no transmission)`` at an explicit latent path."""
+    if specification_of(model).anchoring == "onsets":
+        estimate = rac.onset_event_probabilities(
+            model,
+            counts=COUNTS,
+            delays=delays,
+            switch_day=SWITCH_DAY,
+            R_pre=R_pre,
+            R_post=R_post,
+            k=k,
+            latent=path,
+            days=days,
+        )
+        return estimate.log_no_further_cases, estimate.log_no_further_transmission
+    log_probability = rac.log_probability_of_no_further_cases(
+        model,
+        counts=COUNTS,
+        serial_interval=delays.serial_interval,
+        R_pre=R_pre,
+        k=k,
+        infectivity=path,
+        days=days,
+    )
+    return log_probability, log_probability
+
+
+@pytest.mark.parametrize("model", ["ssi", "sse_so", "ssi_so"])
+def test_the_risk_is_affine_in_the_latent_path_with_the_basis_as_its_gradient(model):
+    """``log P = −(α + Σ_u β_u Y_u)``, and :func:`latent_risk_basis` is that ``β``.
+
+    Checked by the identity linearity gives for free — ``β_u = log P(0) − log P(e_u)`` — so
+    the closed forms remain the source of truth and the basis cannot drift away from them.
+    This is what licenses integrating the unsampled latents out with the Gamma moment
+    generating function rather than drawing them.
+    """
+    days = np.array([2, 4, COUNTS.size - 1])
+    R_pre, R_post, k = np.array([R_PRE]), np.array([R_POST]), np.array([K])
+    zero = np.zeros((1, COUNTS.size))
+    arguments = {"R_pre": R_pre, "R_post": R_post, "k": k, "delays": SHORT_DELAYS}
+    base_cases, base_transmission = _log_probabilities_at(model, zero, days, **arguments)
+
+    basis = rac.latent_risk_basis(
+        model, counts=COUNTS, delays=SHORT_DELAYS, switch_day=SWITCH_DAY, days=days
+    )
+    per_case_exponent = k * np.log1p(R_pre / k)
+    beta_cases = basis.weights(R_reset=R_pre, R_pre=R_pre, R_post=R_post)
+    beta_transmission = basis.weights(
+        R_reset=R_pre, R_pre=R_pre, R_post=R_post, per_case_exponent=per_case_exponent
+    )
+    for latent_day in range(COUNTS.size):
+        unit = np.zeros((1, COUNTS.size))
+        unit[0, latent_day] = 1.0
+        cases, transmission = _log_probabilities_at(model, unit, days, **arguments)
+        np.testing.assert_allclose(base_cases - cases, beta_cases[:, :, latent_day], atol=1e-12)
+        np.testing.assert_allclose(
+            base_transmission - transmission, beta_transmission[:, :, latent_day], atol=1e-12
+        )
+
+
+@pytest.mark.parametrize("model", ["ssi", "sse_so"])
+def test_integrating_the_unsampled_latents_out_matches_drawing_them(model):
+    """The exact correction is what averaging the reconstruction converges to.
+
+    Drawing the removed latents and averaging ``exp(log P)`` is unbiased for the same quantity,
+    so with enough replicates the two must meet — and the closed form gets there with no
+    Monte-Carlo error of its own.
+    """
+    idata = fitting.fit_model(
+        model,
+        COUNTS,
+        delays=SHORT_DELAYS,
+        switch_day=SWITCH_DAY,
+        R_pre=LogNormalPrior.from_median_and_quantile(median=1.0, quantile=0.2, probability=0.025),
+        R_post=LogNormalPrior.from_median_and_quantile(median=1.0, quantile=0.2, probability=0.025),
+        k=K,
+        latent_parameterisation="marginalised_inverse_cdf",
+        sampler=fitting.SamplerSettings(draws=500, tune=500, chains=2, seed=13),
+    )
+    state = rac.posterior_state(
+        model,
+        idata,
+        COUNTS,
+        delays=SHORT_DELAYS,
+        switch_day=SWITCH_DAY,
+        latent_parameterisation="marginalised_inverse_cdf",
+        fixed_k=K,
+    )
+    assert state.unsampled is not None and state.unsampled.days.size > 0
+
+    days = np.arange(1, COUNTS.size)
+    exact = rac.risk_log_probabilities(
+        model, state, counts=COUNTS, delays=SHORT_DELAYS, switch_day=SWITCH_DAY, days=days
+    ).risk_of_additional_cases()
+
+    rng = np.random.default_rng(2)
+    probabilities = []
+    for _ in range(40):
+        path = rac.reconstruct_latent_paths(model, state, counts=COUNTS, rng=rng)
+        drawn, _ = _log_probabilities_at(
+            model,
+            path,
+            days,
+            R_pre=state.R_pre,
+            R_post=state.R_post,
+            k=state.k,
+            delays=SHORT_DELAYS,
+        )
+        probabilities.append(np.exp(drawn).mean(axis=0))
+    drawn_risk = 1.0 - np.mean(probabilities, axis=0)
+    np.testing.assert_allclose(exact.risk, drawn_risk, atol=3e-3)
 
 
 def test_the_conditional_broadcasts_over_draws_exactly_as_it_does_one_at_a_time():
@@ -427,23 +546,18 @@ def test_a_fit_carries_everything_the_curve_needs():
         switch_day=SWITCH_DAY,
         latent_parameterisation="marginalised_inverse_cdf",
         fixed_k=fitting.fitted_dispersion(idata),
-        rng=np.random.default_rng(6),
     )
-    assert state.infectivity is not None
-    assert state.infectivity.shape == (state.n_draws, COUNTS.size)
-    # Every day with a case carries a latent, whether it was sampled or rebuilt.
-    assert np.all(state.infectivity[:, COUNTS > 0] > 0.0)
+    assert state.sampled_infectivity is not None
+    assert state.sampled_infectivity.shape == (state.n_draws, COUNTS.size)
+    # Every day with a case carries a latent, whether the sampler saw it or not.
+    reconstructed = rac.reconstruct_latent_paths(
+        "ssi", state, counts=COUNTS, rng=np.random.default_rng(6)
+    )
+    assert np.all(reconstructed[:, COUNTS > 0] > 0.0)
 
-    curve = rac.risk_curve_from_posterior(
-        "ssi",
-        idata,
-        COUNTS,
-        delays=SHORT_DELAYS,
-        switch_day=SWITCH_DAY,
-        latent_parameterisation="marginalised_inverse_cdf",
-        fixed_k=K,
-        rng=np.random.default_rng(6),
-    )
+    curve = rac.risk_log_probabilities(
+        "ssi", state, counts=COUNTS, delays=SHORT_DELAYS, switch_day=SWITCH_DAY
+    ).risk_of_additional_cases()
     assert curve.days.size == COUNTS.size
     assert np.all((curve.risk >= 0.0) & (curve.risk <= 1.0))
 

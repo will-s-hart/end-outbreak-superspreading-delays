@@ -22,6 +22,7 @@ import pandas as pd
 from end_of_outbreak import (
     configuration,
     delay_distributions,
+    filtered_risk,
     fitting,
     forward_simulation,
     outbreak_data,
@@ -138,31 +139,38 @@ def matched_rac_check(
             fixed_R_pre=parameters.R_pre,
             fixed_R_post=parameters.R_post,
             fixed_k=parameters.k,
-            rng=np.random.default_rng([seed, model_index, 1]),
         )
-        assert state.infectivity is not None
-        mcmc_probabilities = rac.onset_event_probabilities(
-            model,
-            counts=counts,
-            delays=delays,
-            switch_day=switch_day,
-            R_pre=state.R_pre,
-            R_post=state.R_post,
-            k=state.k,
-            latent=state.infectivity,
+        assert state.sampled_infectivity is not None
+        mcmc_smoothed = (
+            rac.risk_log_probabilities(
+                model, state, counts=counts, delays=delays, switch_day=switch_day
+            )
+            .risk_of_additional_cases()
+            .risk
         )
-        mcmc_smoothed = mcmc_probabilities.risk_of_additional_cases().risk
 
-        assert filtered.filtering_pipeline_mean is not None
-        assert parameters.k is not None
-        c = (
-            parameters.k * np.log1p(parameters.R_pre / parameters.k)
-            if model == "sse_so"
-            else parameters.R_pre
+        # The filtering estimator, exercised through the module the pipeline would use rather
+        # than re-derived here. At fixed θ a one-draw posterior state is all it needs, and the
+        # result is directly comparable with the MCMC curve only in the sense that both are
+        # conditional on the same parameters — the states differ, which is the point.
+        filtering = (
+            filtered_risk.risk_by_filtering(
+                model,
+                rac.PosteriorState(
+                    R_pre=np.array([parameters.R_pre]),
+                    R_post=np.array([parameters.R_post]),
+                    k=np.array([parameters.k]),
+                    sampled_infectivity=None,
+                ),
+                counts=counts,
+                delays=delays,
+                switch_day=switch_day,
+                n_particles=n_particles,
+                rng=np.random.default_rng([seed, model_index, 1]),
+            )
+            .estimate.risk_of_additional_cases()
+            .risk
         )
-        filtering = 1.0 - np.exp(
-            -c * filtered.filtering_remaining_weight - filtered.filtering_pipeline_mean
-        ).mean(axis=1)
         for day in range(counts.size):
             rows.append(
                 {

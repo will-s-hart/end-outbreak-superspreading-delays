@@ -256,6 +256,33 @@ def cumulative(w: NDArray[np.float64]) -> NDArray[np.float64]:
     return np.concatenate(([0.0], np.cumsum(w)))
 
 
+def survival_weights(weights: NDArray[np.float64]) -> NDArray[np.float64]:
+    """``1 − F_r`` for ``r = 0, 1, ...`` of a delay supported from lag 1.
+
+    The chance that the event a lag-1 delay describes is still to come, ``r`` days after the
+    cohort appeared. ``F_0 = 0``, so ``survival[0] = 1``: a case appearing on the conditioning
+    day itself still has *all* of its transmission ahead of it. Stored densely from lag 0, so it
+    composes with :func:`end_of_outbreak.renewal.delay_design_matrix` under ``first_lag=0``.
+
+    Applies to the serial interval and to the incubation period; use
+    :func:`tost_survival_weights` for the TOST, whose support starts at lag 0.
+    """
+    return np.clip(1.0 - cumulative(np.asarray(weights, dtype=np.float64)), 0.0, 1.0)
+
+
+def tost_survival_weights(tost: NDArray[np.float64]) -> NDArray[np.float64]:
+    """Probability that a cohort's transmission occurs *after* each attained age.
+
+    TOST is stored from lag zero, so a cohort observed on the conditioning day has already had
+    its lag-0 transmission opportunity. Consequently the first entry is ``1 - f_tost[0]``, in
+    contrast to :func:`survival_weights` for a lag-1 delay, whose first entry is one.
+    """
+    weights = np.asarray(tost, dtype=np.float64)
+    if weights.ndim != 1 or weights.size == 0:
+        raise ValueError("tost must be a non-empty one-dimensional array")
+    return np.clip(1.0 - np.cumsum(weights), 0.0, 1.0)
+
+
 # ---------------------------------------------------------------------------------------
 # The onset-anchored variance budget
 # ---------------------------------------------------------------------------------------

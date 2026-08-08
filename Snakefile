@@ -5,13 +5,21 @@
 #
 # Three tiers per analysis, so a change at one tier never re-runs the tiers above it:
 #
-#   1. fit        results/<analysis>/<model>_posterior.nc         minutes-hours (MCMC)
-#   2. rac        results/<analysis>/<model>_rac.csv              seconds-minutes
-#      evidence   results/<analysis>/model_evidence.json
+#   1. fit        results/<analysis>/<model>_posterior.nc         seconds-minutes (MCMC)
+#      rac        results/<analysis>/<model>_rac.csv              minutes-hours (MCMC)
+#   2. evidence   results/<analysis>/model_evidence.json          seconds-minutes
 #      dispersion results/<analysis>/dispersion_posteriors.json   (analyses that estimate k)
-#   2. report_numbers  results/report_numbers.tex                  seconds (spans the analyses)
+#      report_numbers  results/report_numbers.tex                 seconds (spans the analyses)
 #   3. figure     figures/<analysis>/*.pdf, *.png                 seconds
 #      report     report/report.pdf                               seconds (needs latexmk)
+#
+# `rac` sits in tier 1, not tier 2, and that is not an oversight. RAC(t) conditions on the
+# record through day t, so the estimator fits the model once per conditioning day -- about 110
+# fits per model. The tier split still holds where it can: `fit`, `evidence` and `dispersion`
+# describe the model given the whole record, and restyling a figure re-runs no MCMC. What it
+# cannot hold for is a quantity whose definition *is* a fit per day. Selecting
+# `rac.method: single_fit_filtered` in the config moves `rac` back to seconds, at the cost of
+# an approximation -- see config/config.yaml and end_of_outbreak/filtered_risk.py.
 #
 # Tier 1 carries the model in a wildcard rather than fitting a whole analysis at once, so
 # re-fitting SSE-SO does not re-fit SSI.
@@ -54,19 +62,25 @@ FIT_CORE = RUN_DRIVER + code(
     "latent_parameterisations",
     "fitting",
 )
-# The RAC step rebuilds the latents the fit integrated out, which needs the model's block
-# structure (`pymc_models`, `latent_parameterisations`), and -- from Stage 8, for the
-# onset-anchored models, whose RAC has no closed form -- the simulators too.
+# The RAC step drives a fit per conditioning day (`refit_risk` -> `fitting`, `pymc_models`) or
+# a particle filter per posterior draw (`filtered_risk` -> `particle_filter`), and integrates
+# the latents the fit left out of the posterior back out of the risk, which needs the model's
+# block structure (`pymc_models`, `latent_parameterisations`). `risk_curves` is deliberately
+# absent: the curve container and the "settles below" rule belong to the figure and report
+# tiers, and naming them here would put a presentation-facing definition on the dependency list
+# of every fit.
 RAC_CORE = RUN_DRIVER + code(
     "configuration",
     "risk_of_additional_cases",
+    "refit_risk",
+    "filtered_risk",
+    "particle_filter",
     "renewal",
     "delay_distributions",
     "outbreak_data",
     "model_specifications",
     "latent_parameterisations",
     "pymc_models",
-    "forward_simulation",
     "fitting",
 )
 EVIDENCE_CORE = RUN_DRIVER + code(
@@ -93,27 +107,28 @@ DISPERSION_CORE = RUN_DRIVER + code(
 # The report quotes no number of its own: `scripts/run_report_numbers.py` collects them all from
 # what the other tier-2 rules wrote and emits LaTeX macros, and `report.tex` expands those. That
 # makes it a tier-2 rule like the rest -- it opens posteriors and summarises them -- so it lists
-# the modules it summarises with. `posterior_comparison` and `risk_of_additional_cases` are here
-# for the same reason they are elsewhere: the medians and the "settles below" rule the report
-# quotes have to be the ones the pipeline computed.
+# the modules it summarises with. `posterior_comparison` and `risk_curves` are here for the same
+# reason they are elsewhere: the medians and the "settles below" rule the report quotes have to
+# be the ones the pipeline computed.
 REPORT_NUMBERS_CORE = ["scripts/run_report_numbers.py"] + code(
     "configuration",
     "outbreak_data",
     "delay_distributions",
     "model_specifications",
     "posterior_comparison",
-    "risk_of_additional_cases",
+    "risk_curves",
     "pymc_models",
 )
 # The figure tier is deliberately the narrowest list. A plotting script reads what tier 2 wrote
 # and decides what it looks like; the one piece of *method* it borrows is
 # `RiskCurve.first_day_below`, the rule for when a curve has settled below a threshold, which
-# the report quotes and so must not be reimplemented beside the panel. `risk_of_additional_cases`
-# is named for that and not for its own imports: nothing else in the modelling stack can change
-# a figure without first changing a results file.
-PLOT_CORE = code(
-    "configuration", "outbreak_data", "model_specifications", "risk_of_additional_cases"
-) + ["scripts/utils.py", "scripts/figure_panels.py"]
+# the report quotes and so must not be reimplemented beside the panel. That rule lives in
+# `risk_curves`, which has no package imports at all -- the estimand module cannot appear here,
+# because under `refit_daily` it drives every fit, and a restyle must never reach the MCMC.
+PLOT_CORE = code("configuration", "outbreak_data", "model_specifications", "risk_curves") + [
+    "scripts/utils.py",
+    "scripts/figure_panels.py",
+]
 DELAY_RESULTS_CORE = ["scripts/run_delay_distributions.py"] + code(
     "configuration", "delay_distributions"
 )
@@ -258,7 +273,12 @@ rule rac:
         script=lambda wildcards: ANALYSES[wildcards.analysis]["run_script"],
         code=RAC_CORE,
     output:
-        "results/{analysis}/{model}_rac.csv",
+        curve="results/{analysis}/{model}_rac.csv",
+        # One row per conditioning day: divergences, the worst R-hat and the smallest bulk ESS
+        # over every variable that day's fit sampled. A hundred and ten fits per model is a
+        # hundred and ten chances for one to go quietly wrong, and the step fails rather than
+        # writing a curve none of whose fits anyone has looked at.
+        diagnostics="results/{analysis}/{model}_rac_diagnostics.csv",
     params:
         analysis=lambda wildcards: analysis_params(wildcards.analysis),
         shared=SHARED_PARAMS,
@@ -268,7 +288,8 @@ rule rac:
         " --posterior {input.posterior}"
         " --data {input.data}"
         " --config {input.config}"
-        " --output {output}"
+        " --diagnostics {output.diagnostics}"
+        " --output {output.curve}"
 
 
 rule evidence:
