@@ -144,7 +144,19 @@ naive switch by one day. With future `R = 0`, RAT is exactly zero and RAC is exa
 probability that the retained Poisson incubation pipeline is non-empty; explicit reset simulation
 agrees with both. At 250 particles the largest measured `Var(log L̂)` is 0.081; the particle
 smoother and MCMC agree within 0.0214 at matched conditioning; PMMH/PyMC 95% intervals overlap for
-all six synthetic parameter comparisons.
+all six synthetic parameter comparisons. The filtering curve in that table now comes from
+`filtered_risk` itself, so the check exercises a results path rather than a reimplementation of
+one; it sits up to 0.65 from the matched smoothing curve, which is a difference of estimand and
+not of implementation.
+
+**The RAC equality check's tolerance was mis-specified until it was re-run**, and the fix is
+worth remembering. It compared a *single* particle-smoother run against the MCMC curve and judged
+the difference against the MCMC standard error alone — but one smoother run is about twice as
+noisy, because path degeneracy leaves the late-window estimate resting on a fraction of the
+particles. It now averages six independent runs and combines both errors (2.79e-03 against
+6.81e-03). The same averaging independently confirms the exact latent marginalisation: over six
+runs the smoother agrees with it to ±3e-4 with no systematic sign. **A tolerance that omits one
+side's error is not a tolerance**, and this one passed for a long time by luck.
 
 **The two estimators of the risk** (`validation/results/rac_method_comparison.csv`, naive models
 at fixed `k`, every eighth conditioning day). The gap between `refit_daily` and
