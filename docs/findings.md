@@ -3,6 +3,37 @@
 Findings, not conventions. They are here so that a real result is not mistaken for a bug and
 "fixed", and each names the file that holds the number, so none of it has to be taken on trust.
 
+## What did real-time conditioning change?
+
+Almost nothing, in the numbers — and that is worth knowing rather than assuming.
+
+Moving from the old retrospective estimand (one full-record fit supplying the state for every
+day) to the real-time one (a fit per conditioning day) moved **3 of the 28 threshold crossings,
+each by exactly one day**: SSE-SO and SSI-SO at 0.05, and SSE-SO at 0.01, all under estimated
+`k`. The other 25 are identical. Every finding below survives to the precision it is quoted at.
+So the smoothed approximation was, on this series, very nearly right — which is a fact about this
+series and this posterior, not a general licence to use it.
+
+What changed is what the quantity *is*. `P(· | data up to day t)` is now literally true rather
+than a shorthand the methods had to disown, and the caveat about a state informed by data after
+day `t` is gone.
+
+The visible change is at the **start** of the curve, not the end. RAC used to be pinned at 1 for
+every early day by construction: parameters informed by the whole outbreak leave no doubt that
+more cases follow. It now climbs from about **0.28 on day 1**, through 0.83 by day 5, to ~0.99 by
+day 10. Early on the record is one case and a few days of silence, `R` is prior-dominated, and
+the probability of any further case is genuinely well below one —
+`−k log(1 + R/k)·Λ(1) ≈ −0.34` at the prior median gives ≈ 0.29. The day-to-day roughness over
+those weeks is the estimand too, not the sampler: each day is a separate posterior conditioned on
+a separate record.
+
+**Convergence, over all 1540 fits** (14 model/analysis pairs × 110 days,
+`<model>_rac_diagnostics.csv`): worst `R̂` over every sampled variable is **1.0100**, on one day
+of SSE-SO with estimated `k` and no divergences; 34 days exceed 1.005; 172 divergences in 12.3M
+draws, worst single day 22; minimum bulk ESS 1143. **SSE-SO is the outlier by a wide margin** —
+14–19 of its days above 1.005 against none for most models, and a minimum ESS a third of theirs.
+It is the model whose geometry needed `target_accept: 0.95`, and it is the one to watch.
+
 ## Does the machinery reproduce an outside answer?
 
 **Yes, exactly** (`validation/results/rac_validation.md`). Thompson et al.'s convention differs
@@ -115,8 +146,22 @@ agrees with both. At 250 particles the largest measured `Var(log L̂)` is 0.081;
 smoother and MCMC agree within 0.0214 at matched conditioning; PMMH/PyMC 95% intervals overlap for
 all six synthetic parameter comparisons.
 
-**The two estimators of the risk** (`validation/results/rac_method_comparison.csv`). The gap
-between `refit_daily` and `single_fit_filtered` **has both signs**; report it as measured, not as a
-claimed direction. **DLO and SSE are the control** — with no latent state their whole gap is the
-parameter conditioning — so anything the latent models show on top of that is the cost of
-conditioning latents and parameters differently.
+**The two estimators of the risk** (`validation/results/rac_method_comparison.csv`, naive models
+at fixed `k`, every eighth conditioning day). The gap between `refit_daily` and
+`single_fit_filtered` is **concentrated at the start of the window and negligible in the tail**:
+
+| | max \|gap\| | on day | after the last onset (day ≥ 58) |
+| --- | ---: | ---: | --- |
+| DLO | 0.2652 | 1 | mean **+0.0002**, range [−0.0004, +0.0013] |
+| SSE | 0.0640 | 1 | mean **−0.0002**, range [−0.0011, +0.0002] |
+| SSI | 0.0513 | 1 | mean **−0.0060**, range [−0.0144, −0.0003] |
+
+**DLO and SSE are the control**: with no latent state their whole gap is the parameter
+conditioning, so the comparison decomposes the approximation. In the decision-relevant tail the
+parameter half is ±0.0002 and the latent half — everything SSI shows on top of that — is about
+0.006, roughly thirty times larger but still well under a percentage point. Early on, where
+`refit_daily` has almost no data and `single_fit_filtered` is using a posterior informed by the
+whole outbreak, the gap is large for exactly the reason it should be.
+
+Report it as measured. The signs differ by model and by period, and only SSI's tail gap has a
+consistent one (negative: refitting sits below filtering).

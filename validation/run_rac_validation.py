@@ -190,6 +190,7 @@ def check_equality(
     n_replicates: int,
     n_particles: int,
     simulation_stride: int,
+    smoother_repeats: int,
     seed: int,
 ) -> pd.DataFrame:
     """Closed forms against simulation, and the SSI curve against a particle smoother."""
@@ -295,38 +296,65 @@ def check_equality(
     )
     mcmc = mcmc_estimate.risk_of_additional_cases()
     mcmc_error, _ = mcmc_estimate.standard_errors()
-    filtered = particle_filter.filter_naive(
-        "ssi",
-        counts,
-        parameters,
-        serial_interval=w,
-        switch_day=data.ert_arrival_day,
-        n_particles=n_particles,
-        rng=np.random.default_rng(seed),
-    )
-    assert filtered.latent_paths is not None
-    smoothed = rac.risk_curve(
-        "ssi",
-        counts=counts,
-        serial_interval=w,
-        R_pre=np.full(n_particles, parameters.R_pre),
-        k=np.full(n_particles, parameters.k),
-        infectivity=filtered.latent_paths,
-    )
+    # The smoother is replicated and averaged, and its *own* spread goes into the tolerance.
+    # One run of it is far noisier than the MCMC curve it is held against — path degeneracy
+    # leaves the late-window estimate resting on a fraction of the particles — so a tolerance
+    # built from the MCMC standard error alone understates the comparison's error by close to an
+    # order of magnitude. Judged that way this check would fail on an unlucky seed with nothing
+    # wrong, and pass on a lucky one with something wrong.
+    replicates = []
+    for repeat in range(smoother_repeats):
+        filtered = particle_filter.filter_naive(
+            "ssi",
+            counts,
+            parameters,
+            serial_interval=w,
+            switch_day=data.ert_arrival_day,
+            n_particles=n_particles,
+            rng=np.random.default_rng([seed, repeat]),
+        )
+        assert filtered.latent_paths is not None
+        replicates.append(
+            rac.risk_curve(
+                "ssi",
+                counts=counts,
+                serial_interval=w,
+                R_pre=np.full(n_particles, parameters.R_pre),
+                k=np.full(n_particles, parameters.k),
+                infectivity=filtered.latent_paths,
+            ).risk
+        )
+    runs = np.asarray(replicates)
+    smoothed_mean = runs.mean(axis=0)
+    smoother_error = runs.std(axis=0, ddof=1) / np.sqrt(smoother_repeats)
+    combined = np.sqrt(np.nan_to_num(mcmc_error) ** 2 + smoother_error**2)
+
     columns["ssi_mcmc"] = mcmc.risk
-    columns["ssi_particle_smoother"] = smoothed.risk
+    columns["ssi_particle_smoother"] = smoothed_mean
     columns["ssi_mcmc_standard_error"] = mcmc_error
+    columns["ssi_particle_smoother_standard_error"] = smoother_error
     rows.append(
         {
-            "comparison": "ssi: MCMC vs particle smoother (matched conditioning, fixed θ)",
-            "max_abs_difference": np.abs(mcmc.risk - smoothed.risk).max(),
-            "monte_carlo_scale": 3 * float(np.nanmax(mcmc_error)),
+            "comparison": (
+                f"ssi: MCMC vs particle smoother, {smoother_repeats} runs averaged "
+                "(matched conditioning, fixed θ)"
+            ),
+            "max_abs_difference": np.abs(mcmc.risk - smoothed_mean).max(),
+            "monte_carlo_scale": 3 * float(np.nanmax(combined)),
         }
     )
+    ratio = np.abs(mcmc.risk - smoothed_mean) / np.maximum(combined, 1e-12)
+    # Against the spread of a *single* run, not of their mean: the point is what averaging buys.
+    noisier = runs.std(axis=0, ddof=1).max() / max(float(np.nanmax(mcmc_error)), 1e-12)
     print(
         f"  filter degeneracy: {filtered.n_distinct[0]} distinct day-0 ancestors of "
         f"{n_particles}; min ESS {filtered.effective_sample_size.min():.0f}; "
         f"{int(filtered.resampled.sum())} resampling steps"
+    )
+    print(
+        f"  ssi: worst day {int(ratio.argmax())} at {ratio.max():.1f} combined s.e.; one "
+        f"smoother run is up to {noisier:.0f}x noisier than the MCMC curve, which is why "
+        f"{smoother_repeats} of them are averaged rather than one taken"
     )
     for row in rows:
         print(
@@ -685,6 +713,13 @@ def parse_arguments(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--variance-repeats", type=int, default=12)
     parser.add_argument("--matched-pair-repeats", type=int, default=5)
     parser.add_argument(
+        "--smoother-repeats",
+        type=int,
+        default=6,
+        help="independent particle-smoother runs to average in the equality check; one run is "
+        "far noisier than the MCMC curve it is compared against",
+    )
+    parser.add_argument(
         "--method-stride",
         type=int,
         default=5,
@@ -745,6 +780,7 @@ def main(argv: list[str] | None = None) -> None:
             n_replicates=arguments.replicates,
             n_particles=arguments.particles,
             simulation_stride=arguments.simulation_stride,
+            smoother_repeats=arguments.smoother_repeats,
             seed=arguments.seed,
         )
         curves.to_csv(output_dir / "rac_equality_check.csv", index=False)

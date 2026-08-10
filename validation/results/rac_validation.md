@@ -1,22 +1,30 @@
-# Stage-4 validation of the RAC calculators
+# Validation of the RAC calculators
 
-**Conclusion: the RAC arithmetic, the reset state and the latent reconstruction all check out.**
-The three "done when" criteria of Stage 4 are met — the closed forms agree with forward
-simulation of the reset future, the marginalised and un-marginalised parameterisations give the
-same RAC curve, and the Poisson-limit RAC reproduces Thompson et al.'s published Équateur curve
-*exactly* under their conventions, because their convention differs from this project's by
-exactly one day.
+**Conclusion: the RAC arithmetic, the reset state and the exact latent marginalisation all check
+out.** The closed forms agree with forward simulation of the reset future; the marginalised and
+un-marginalised parameterisations give the same RAC curve; the analytic marginalisation of the
+latents the fit removed agrees with the particle smoother to 2.8 × 10⁻³ against a combined
+tolerance of 6.8 × 10⁻³; and the Poisson-limit RAC reproduces Thompson et al.'s published
+Équateur curve *exactly* under their conventions, because their convention differs from this
+project's by exactly one day.
 
-Two things worth carrying forward beyond the pass/fail:
+Three things worth carrying forward beyond the pass/fail:
 
-- **The §5.6 smoothing gap has been measured, and it has both signs**, exactly as §5.6 said it
-  might. Smoothed-minus-filtering RAC is strongly *positive* early (+0.64 at day 2) and
-  *negative* after the last observed case (mean −0.03, worst −0.15). The plan's hypothesis —
-  predominantly downward over the decision-relevant late period — survives, and is now a
-  measurement rather than an assertion.
+- **The two estimators of the estimand differ by little where it matters.** `refit_daily` minus
+  `single_fit_filtered` is concentrated at the start of the window (max 0.27 for DLO on day 1)
+  and negligible after the last onset: ±0.0002 for the latent-free models, −0.006 for SSI. Since
+  DLO and SSE have no latent state, their gap *is* the parameter conditioning, so the comparison
+  decomposes the approximation — the latent half is about thirty times the parameter half, and
+  both are well under a percentage point in the tail.
 - **`Var(log L̂)` for the SSI filter on the real series is ~0.02 at 2000 particles**, two orders
-  of magnitude below the 1–3 that PMMH needs. Stage 4b's Tier B (the real series) looks
-  comfortably feasible, and that go/no-go no longer has to be re-derived.
+  of magnitude below the 1–3 that PMMH needs, so the particle-MCMC route on the real series is
+  comfortably feasible and that go/no-go does not have to be re-derived.
+- **The equality check's tolerance was wrong until now, and is fixed.** It compared a *single*
+  particle-smoother run against the MCMC curve and judged the difference against the MCMC
+  standard error alone. One smoother run is about twice as noisy as the MCMC curve — path
+  degeneracy leaves the late-window estimate on a fraction of the particles — so the tolerance
+  understated the comparison's error and the check would fail on an unlucky seed with nothing
+  wrong. It now averages six independent smoother runs and puts their spread into the tolerance.
 
 Produced by
 
@@ -25,7 +33,8 @@ python validation/run_rac_validation.py --checks all
 ```
 
 writing `rac_thompson_replication.csv` (+ `.png`), `rac_equality_check.csv`,
-`rac_equality_summary.csv`, `rac_smc_variance.csv` and `rac_latent_reconstruction.csv`.
+`rac_equality_summary.csv`, `rac_smc_variance.csv`, `rac_method_comparison.csv` and
+`rac_latent_reconstruction.csv`.
 
 ---
 
@@ -82,25 +91,31 @@ direct. 20 000 replicates per conditioning day, on a stride-10 grid of days:
 on SSI. Its SMC log-evidence equals the built model's likelihood to the last bit — a difference
 of exactly `0.0` for DLO, SSE and Cori — despite sharing no code with the PyMC graph.
 
-**SSI — matched conditioning.** RAC resets from a *smoothed* state, so the filter's ancestral
-paths (a smoother) are the right comparison and its filtering output is not:
+**SSI — matched conditioning.** Both sides condition on the whole record, which is what makes
+this a check of the *arithmetic*: the MCMC state and the filter's ancestral paths (a smoother)
+are estimates of the same distribution, so they must agree. The filter's *filtering* output
+answers a different question and belongs to the estimator comparison in §3.
 
 | Comparison | `max \|Δ\|` | Scale |
 | --- | --- | --- |
-| MCMC smoothed vs particle smoother | 3.23 × 10⁻³ | 3 MCSE ≈ 5.11 × 10⁻³ |
-| MCMC smoothed vs particle **filtering** | 6.36 × 10⁻¹ | — (this is the §5.6 gap, not a test) |
+| MCMC vs particle smoother, 6 runs averaged | 2.79 × 10⁻³ | 3 combined s.e. ≈ 6.81 × 10⁻³ |
 
-**The §5.6 gap, measured.** Smoothed minus filtering, by period:
+The worst day sits at 1.9 combined standard errors. **This is also the check that the exact
+latent marginalisation is exact**: the MCMC side no longer draws the latents the fit integrated
+out, it integrates them out of the risk in closed form, and the smoother — which shares no
+machinery with it — lands in the same place.
 
-| Period | Signed gap |
-| --- | --- |
-| Around day 2 | **+0.64** — the filter has not yet seen the cases that reveal a high early infectivity |
-| After the last case (days 58–110) | mean **−0.031**, range [−0.153, −0.0003] |
+**The tolerance is the interesting part.** Until now this compared a *single* smoother run and
+judged it against the MCMC standard error alone. Measured over six independent runs, one
+smoother run is about twice as noisy as the MCMC curve, and its error is not in that tolerance
+at all; the check would fail on an unlucky seed with nothing wrong, and pass on a lucky one with
+something wrong. Averaging six runs and combining the two errors is what makes the comparison
+mean what it says.
 
-Both directions appear, and where §5.6 said they would. The decision-relevant late period is
-downward: conditioning on the subsequent run of zeros pulls the retained infectivity down and
-with it the RAC. Nowhere near enough to move the threshold-crossing dates by more than a day,
-but it is the approximation the report has to state, and it now has a number.
+For the record, the earlier committed version of this table (3.23 × 10⁻³ against 5.11 × 10⁻³)
+came from a filter that no longer exists: `particle_filter.filter_naive` gained a per-day
+resampled snapshot afterwards, which consumes the random stream once per day and shifts the
+ancestry. The check had not been re-run since.
 
 **Degeneracy.** 20 000 particles, adaptive resampling at ESS < N/2:
 
@@ -114,7 +129,7 @@ Mild, because the daily counts are small (maximum 6, 80 of 111 days at zero) and
 transition is driven by the *observed* counts rather than by the previous latent state, so the
 filter is fully adapted.
 
-## 3. `Var(log L̂)` — the Stage-4b stopping rule, settled early
+## 3. `Var(log L̂)` — the particle-MCMC feasibility rule
 
 PMMH mixes acceptably when the variance of the estimated log-likelihood at the mode is around
 1–3 (Doucet et al. 2015). For SSI on the real series, over 12 independent runs per particle
@@ -135,12 +150,34 @@ a few hundred particles will do.
 filter of Stage 8 carries an incubation pipeline in its state, so §6.6 is right that the
 measurement has to be repeated there rather than assumed to carry over.
 
-## 4. The matched pair: is the latent reconstruction exact in practice?
+## 4. The two estimators of the estimand
 
-`marginalised_inverse_cdf` removes the latents the data constrain only through `exp(−Σ_j μ_j)`
-and rebuilds them afterwards from `Gamma(k·scale_u, k + c_u)`; plain `inverse_cdf` samples all
-of them. On SSI the removed block is one latent — the final cohort, day 58 — out of 31. The two
-must give the same RAC curve.
+`refit_daily` (a fit per conditioning day — the estimand) against `single_fit_filtered` (one
+full-record fit, latents filtered per day). Naive models at fixed `k`, every eighth conditioning
+day, from `rac_method_comparison.csv`:
+
+| | `max \|gap\|` | on day | after the last onset (days 58–110) |
+| --- | ---: | ---: | --- |
+| DLO | 0.2652 | 1 | mean **+0.0002**, range [−0.0004, +0.0013] |
+| SSE | 0.0640 | 1 | mean **−0.0002**, range [−0.0011, +0.0002] |
+| SSI | 0.0513 | 1 | mean **−0.0060**, range [−0.0144, −0.0003] |
+
+Not a pass/fail: the two condition on different things, so the question is how far apart they are
+and where. **DLO and SSE are the control** — with no latent state their whole gap is the
+parameter conditioning — so the table decomposes the approximation. In the decision-relevant tail
+the parameter half is ±0.0002 and the latent half, everything SSI shows on top of it, is about
+0.006. Early in the window the gap is large for the reason it should be: `refit_daily` has almost
+no data there, while `single_fit_filtered` is using parameters informed by the whole outbreak.
+
+Only SSI's tail gap has a consistent sign (negative — refitting sits below filtering). Report the
+comparison as measured rather than as a claimed direction.
+
+## 5. The matched pair: is the latent marginalisation exact in practice?
+
+`marginalised_inverse_cdf` removes the latents the data constrain only through `exp(−Σ_j μ_j)`;
+the risk then integrates them back out in closed form, using the same `Gamma(k·scale_u, k + c_u)`
+conditional. Plain `inverse_cdf` samples all of them instead. On SSI the removed block is one
+latent — the final cohort, day 58 — out of 31. The two must give the same RAC curve.
 
 Judged in Monte-Carlo standard errors (the between-chain spread of the curve, ×√2 for two
 independent estimates), over five independent triples of fits:
@@ -154,8 +191,10 @@ The two distributions are indistinguishable, which is the point: the difference 
 reconstruction introduces is the same size as the difference between two runs of the *same*
 fit. In absolute terms the curves differ by at most 2.4 × 10⁻³ (rms 8.8 × 10⁻⁴).
 
-The rebuilt latent itself agrees with the sampled one directly: `E[Y_58] = 0.199` rebuilt
-against 0.210 sampled, both Monte-Carlo estimates of the same conditional.
+The removed latent itself agrees with the sampled one directly: `E[Y_58] = 0.206` from the
+closed-form conditional the risk marginalises over, against 0.210 estimated from the draws of the
+fit that sampled it. The first carries no Monte-Carlo error at all, which is the point of doing
+it analytically.
 
 A single pair of fits would not have supported this claim. The worst-day statistic is a maximum
 over 111 correlated days and ranges from 1.5 to 2.4 MCSE across the five triples, so one pair
@@ -166,12 +205,15 @@ small.
 
 ## What this does *not* cover
 
-- **The onset-anchored models.** Their RAC has no closed form and their reset state includes the
-  incubation pipeline; the calculators, simulators and filter are Stage 8. Everything here
-  raises `NotImplementedError` when handed `sse_so` or `ssi_so` rather than quietly doing
-  something infection-anchored.
+- **The onset-anchored models.** Their reset state includes the incubation pipeline, and their
+  calculators, simulators and filter are checked separately in
+  `onset_particle_mcmc_validation.md`. Everything here refuses `sse_so` and `ssi_so` rather than
+  quietly doing something infection-anchored.
 - **RAT.** It coincides with RAC under all three naive models by assumption — the conflation the
-  project is about — so there is nothing separate to validate until Stage 8.
+  project is about — so there is nothing separate to validate here; see the onset check.
 - **The estimated-`k` analyses.** Every check here fixes `k`, either at 0.18 or by the fit. The
   RAC machinery takes `k` per draw and the tests cover that path, but the checks on the real
   series do not exercise a `k` posterior.
+- **The full conditioning-day grid.** The estimator comparison runs on every eighth day, because
+  its refit arm costs one MCMC fit per day kept. The gap is a smooth function of `t`, so the
+  stride describes it, but a feature narrower than eight days would be missed.
