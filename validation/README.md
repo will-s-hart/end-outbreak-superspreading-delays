@@ -11,6 +11,7 @@ outputs are evidence about the *implementation*, not about the outbreak.
 | `run_rac_validation.py` | Are the RAC calculators and the reset state right, is the latent marginalisation exact, and how far apart are the two estimators? (§5.1/§6.4) | `results/rac_validation.md` + six CSVs and a figure |
 | `run_evidence_validation.py` | Are the marginal likelihoods right, on the real series? (Stage 6, §6.5) | `results/evidence_validation.md` + three CSVs |
 | `run_onset_particle_mcmc_check.py` | Do the onset filters, matched RAC state and PMMH route agree with PyMC? (Stage 8, §6.6) | `results/onset_particle_mcmc_validation.md` + three CSVs |
+| `run_rst_validation.py` | Do the analytic RST formulas agree with independent Galton–Watson continuation simulation? | `results/rst_validation.md` + `results/rst_validation.csv` |
 
 Each study has a written summary in `results/` beside its data. Read that first: it carries the
 conclusion, what was falsified along the way, and what the study does *not* cover. The CSVs are

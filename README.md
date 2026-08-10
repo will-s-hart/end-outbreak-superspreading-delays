@@ -51,6 +51,11 @@ onset-anchored models separate them, and the gap is the contribution of individu
 infected but not yet symptomatic. RAC is reported throughout; RAT appears in a supplementary
 analysis, where the gap between them quantifies the onset-vs-infection conflation directly.
 
+The **risk of sustained transmission (RST)** asks whether the reset future ever becomes extinct.
+It is computed from the same per-day posterior fits for SSE, SSI and their onset-anchored forms;
+the DLO model is omitted because its day-level negative binomial does not define individual
+offspring families. The risks obey RST ≤ RAT ≤ RAC.
+
 ## Getting started
 
 The environment is managed by [pixi](https://pixi.sh):
@@ -77,7 +82,7 @@ fresh clone can look stale to Snakemake. The default profile
 config/            pipeline configuration, keyed per analysis, and the Snakemake profile
 data/              the padded daily onset series, with provenance in data/README.md
 docs/              the detail behind AGENTS.md: the estimand, the models, the findings
-end_of_outbreak/   the package: models, delays, inference, RAC/RAT, evidence
+end_of_outbreak/   the package: models, delays, inference, RAC/RAT/RST, evidence
 scripts/           one compute-and-save script and one load-and-plot script per analysis
 results/           committed analysis outputs, including the report's numbers as LaTeX macros
 figures/           committed figures (PDF + PNG)
@@ -97,10 +102,9 @@ it in the prose too. See `report/README.md`.
 
 ## Status
 
-Complete through Stage 10. All four analyses, the supplementary RAC/RAT comparison and the
-methods-and-results report run end to end from the raw CSV: `pixi run pipeline` reproduces
-everything in `results/`, `figures/` and `report/`. The sensitivity analyses listed at the end
-of the report have not been run.
+All four analyses, the RAC/RAT/RST comparisons and the methods-and-results report run end to end
+from the raw CSV: `pixi run pipeline` reproduces everything in `results/`, `figures/` and
+`report/`. The sensitivity analyses listed at the end of the report have not been run.
 
 ## References
 

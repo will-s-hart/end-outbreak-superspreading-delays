@@ -5,8 +5,14 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
+from end_of_outbreak import (
+    branching_process,
+    forward_simulation,
+    particle_filter,
+    pymc_models,
+    renewal,
+)
 from end_of_outbreak import delay_distributions as dd
-from end_of_outbreak import forward_simulation, particle_filter, pymc_models, renewal
 from end_of_outbreak import risk_of_additional_cases as rac
 from end_of_outbreak.model_specifications import TransmissionParameters
 
@@ -169,11 +175,13 @@ def test_resetting_R_to_zero_leaves_only_the_incubation_pipeline():
     pipeline = rac.incubation_pipeline_mean(E, DELAYS.incubation)
     np.testing.assert_allclose(probabilities.log_no_further_cases[0], -pipeline)
     np.testing.assert_allclose(probabilities.log_no_further_transmission, 0.0)
+    assert probabilities.log_no_sustained_transmission is not None
+    np.testing.assert_allclose(probabilities.log_no_sustained_transmission, 0.0)
 
 
 def _explicit_onset_zero_probabilities(
     model: str, *, latent: np.ndarray | None, reset_R: float
-) -> tuple[np.ndarray, np.ndarray]:
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """The closed forms of the report's §4.3, written out as plain double sums.
 
     A transcription of the mathematics, not of the implementation: no design matrix, no
@@ -204,17 +212,25 @@ def _explicit_onset_zero_probabilities(
         PARAMETERS.R_pre, PARAMETERS.R_post, n_days=n_days, switch_day=SWITCH_DAY
     )
     per_case = reset_R if model == "cori_so" else K * np.log1p(reset_R / K)
+    extinction = float(
+        branching_process.poisson_extinction_probability(reset_R)
+        if model == "cori_so"
+        else branching_process.negative_binomial_extinction_probability(reset_R, K)
+    )
 
     if model == "cori_so":
         driving = COUNTS.astype(float)
         retained_coefficient = reset_R
+        retained_sustained_coefficient = reset_R * (1.0 - extinction)
     elif model == "ssi_so":
         assert latent is not None
         driving = latent
         retained_coefficient = reset_R
+        retained_sustained_coefficient = reset_R * (1.0 - extinction)
     else:
         driving = COUNTS.astype(float)
         retained_coefficient = per_case
+        retained_sustained_coefficient = -np.log(extinction)
 
     # E_u, the expected infections on day u under the *historical* reproduction number: the
     # pipeline it fills was generated before the reset, which is the asymmetry §4.3 turns on.
@@ -229,12 +245,17 @@ def _explicit_onset_zero_probabilities(
 
     log_no_cases = np.zeros(n_days)
     log_no_transmission = np.zeros(n_days)
+    log_no_sustained = np.zeros(n_days)
     for t in range(n_days):
         H = retained_coefficient * sum(driving[u] * tost_survival(t - u) for u in range(t + 1))
         M = sum(expected_infections[u] * incubation_survival(t - u) for u in range(t + 1))
         log_no_cases[t] = -H - M
         log_no_transmission[t] = -H - M * (1.0 - np.exp(-per_case))
-    return log_no_cases, log_no_transmission
+        retained_sustained = retained_sustained_coefficient * sum(
+            driving[u] * tost_survival(t - u) for u in range(t + 1)
+        )
+        log_no_sustained[t] = -retained_sustained - M * (1.0 - extinction)
+    return log_no_cases, log_no_transmission, log_no_sustained
 
 
 @pytest.mark.parametrize("model", ["cori_so", "sse_so", "ssi_so"])
@@ -250,11 +271,13 @@ def test_onset_zero_probabilities_match_the_closed_forms_written_out(model):
         k=None if model == "cori_so" else K,
         latent=None if latent is None else latent[None, :],
     )
-    expected_cases, expected_transmission = _explicit_onset_zero_probabilities(
+    expected_cases, expected_transmission, expected_sustained = _explicit_onset_zero_probabilities(
         model, latent=latent, reset_R=PARAMETERS.R_pre
     )
     np.testing.assert_allclose(probabilities.log_no_further_cases[0], expected_cases)
     np.testing.assert_allclose(probabilities.log_no_further_transmission[0], expected_transmission)
+    assert probabilities.log_no_sustained_transmission is not None
+    np.testing.assert_allclose(probabilities.log_no_sustained_transmission[0], expected_sustained)
 
 
 @pytest.mark.parametrize("model", ["cori_so", "sse_so", "ssi_so"])
@@ -301,6 +324,16 @@ def test_degenerate_delays_collapse_the_closed_forms_to_one_line(model):
         probabilities.log_no_further_transmission[0],
         -expected_infections * (1.0 - np.exp(-per_case)),
     )
+    q = float(
+        branching_process.poisson_extinction_probability(PARAMETERS.R_pre)
+        if model == "cori_so"
+        else branching_process.negative_binomial_extinction_probability(PARAMETERS.R_pre, K)
+    )
+    assert probabilities.log_no_sustained_transmission is not None
+    np.testing.assert_allclose(
+        probabilities.log_no_sustained_transmission[0],
+        -expected_infections * (1.0 - q),
+    )
 
 
 def test_rac_is_never_below_rat():
@@ -319,6 +352,10 @@ def test_rac_is_never_below_rat():
     assert np.all(
         probabilities.risk_of_additional_cases().risk
         >= probabilities.risk_of_additional_transmission().risk
+    )
+    assert np.all(
+        probabilities.risk_of_additional_transmission().risk
+        >= probabilities.risk_of_sustained_transmission().risk
     )
 
 

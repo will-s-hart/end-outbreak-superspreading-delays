@@ -71,6 +71,7 @@ FIT_CORE = RUN_DRIVER + code(
 # of every fit.
 RAC_CORE = RUN_DRIVER + code(
     "configuration",
+    "branching_process",
     "risk_of_additional_cases",
     "refit_risk",
     "filtered_risk",
@@ -186,6 +187,7 @@ SHARED_PARAMS = config["shared"]
 wildcard_constraints:
     analysis="|".join(ANALYSES),
     model="[a-z0-9_]+",
+    rst_setting="fixed_k|estimated_k",
 
 
 def models_of(analysis):
@@ -222,20 +224,30 @@ def racs_of(wildcards):
 # Targets
 # ---------------------------------------------------------------------------------------
 
-# One main figure per implemented analysis. Grows with `IMPLEMENTED_ANALYSES`.
-MAIN_TARGETS = [
+# One comparison figure per implemented analysis. Grows with `IMPLEMENTED_ANALYSES`.
+ANALYSIS_FIGURE_TARGETS = [
     f"figures/{analysis}/{analysis}.{extension}"
     for analysis in IMPLEMENTED_ANALYSES
     for extension in ("pdf", "png")
 ]
-RAT_FIGURE_TARGETS = [
-    f"figures/onset_models_rat/onset_models_rat.{extension}" for extension in ("pdf", "png")
-]
+SUSTAINED_TRANSMISSION_ANALYSES = {
+    "fixed_k": "onset_models_fixed_k",
+    "estimated_k": "onset_models_estimated_k",
+}
+SUSTAINED_TRANSMISSION_TARGETS = {
+    setting: [
+        f"figures/sustained_transmission_{setting}/sustained_transmission_{setting}.{extension}"
+        for extension in ("pdf", "png")
+    ]
+    for setting in SUSTAINED_TRANSMISSION_ANALYSES
+}
+MAIN_TARGETS = ANALYSIS_FIGURE_TARGETS + SUSTAINED_TRANSMISSION_TARGETS["fixed_k"]
+RST_SUPPLEMENTARY_TARGETS = SUSTAINED_TRANSMISSION_TARGETS["estimated_k"]
 DELAY_FIGURE_TARGETS = [
     f"figures/delay_distributions/delay_distributions.{extension}"
     for extension in ("pdf", "png")
 ]
-SUPPLEMENTARY_FIGURE_TARGETS = DELAY_FIGURE_TARGETS + RAT_FIGURE_TARGETS
+SUPPLEMENTARY_FIGURE_TARGETS = DELAY_FIGURE_TARGETS + RST_SUPPLEMENTARY_TARGETS
 # The compiled methods-and-results document, and the macro file every number in it expands from.
 REPORT_NUMBERS = "results/report_numbers.tex"
 REPORT_TARGET = "report/report.pdf"
@@ -286,7 +298,7 @@ rule rac:
         posterior="results/{analysis}/{model}_posterior.nc",
         data=ONSETS_CSV,
         config=CONFIG_FILE,
-        script=lambda wildcards: ANALYSES[wildcards.analysis]["run_script"],
+        script="scripts/run_risk_curves.py",
         code=RAC_CORE,
     output:
         curve="results/{analysis}/{model}_rac.csv",
@@ -300,7 +312,8 @@ rule rac:
         rac=RAC_PARAMS,
         shared=SHARED_PARAMS,
     shell:
-        "python {input.script} rac"
+        "python {input.script}"
+        " --analysis {wildcards.analysis}"
         " --model {wildcards.model}"
         " --posterior {input.posterior}"
         " --data {input.data}"
@@ -436,24 +449,31 @@ rule figure:
         " --output-png {output.png}"
 
 
-rule rat_figure:
+rule sustained_transmission_figure:
     input:
-        racs=[
-            f"results/{analysis}/{model}_rac.csv"
-            for analysis in ("onset_models_fixed_k", "onset_models_estimated_k")
-            for model in ("sse_so", "ssi_so")
+        racs=lambda wildcards: [
+            f"results/{SUSTAINED_TRANSMISSION_ANALYSES[wildcards.rst_setting]}/{model}_rac.csv"
+            for model in ("sse", "ssi", "sse_so", "ssi_so")
         ],
         data=ONSETS_CSV,
         config=CONFIG_FILE,
-        script="scripts/plot_onset_models_rat.py",
+        script="scripts/plot_sustained_transmission.py",
         code=PLOT_CORE,
     output:
-        pdf="figures/onset_models_rat/onset_models_rat.pdf",
-        png="figures/onset_models_rat/onset_models_rat.png",
+        pdf=(
+            "figures/sustained_transmission_{rst_setting}/"
+            "sustained_transmission_{rst_setting}.pdf"
+        ),
+        png=(
+            "figures/sustained_transmission_{rst_setting}/"
+            "sustained_transmission_{rst_setting}.png"
+        ),
     params:
+        analysis=lambda wildcards: SUSTAINED_TRANSMISSION_ANALYSES[wildcards.rst_setting],
         shared=SHARED_PARAMS,
     shell:
         "python {input.script}"
+        " --analysis {params.analysis}"
         " --results-root results"
         " --data {input.data}"
         " --config {input.config}"

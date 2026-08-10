@@ -6,10 +6,11 @@ in this tree — see `validation/` for benchmarks and cross-checks.
 
 | Script | Tier | Writes |
 | --- | --- | --- |
-| `analysis_driver.py` | 1 and 2 | — the whole body of every `run_*.py`, shared |
+| `analysis_driver.py` | 1 and 2 | shared fit/evidence/dispersion machinery and risk acquisition helpers |
+| `run_risk_curves.py` | 1 | RAC/RAT/RST together, without repeating any conditioning-day fit |
 | `run_naive_models_fixed_k.py` | 1 and 2 | `results/naive_models_fixed_k/{model}_posterior.nc`, `..._rac.csv`, `..._rac_diagnostics.csv`, `model_evidence.json` |
 | `run_naive_models_estimated_k.py` | 1 and 2 | the same, plus `results/naive_models_estimated_k/dispersion_posteriors.json` |
-| `run_onset_models_fixed_k.py` | 1 and 2 | the four-model fixed-`k` Analysis 3 outputs, including RAT in the SO-model RAC files |
+| `run_onset_models_fixed_k.py` | 1 and 2 | the four-model fixed-`k` Analysis 3 outputs, including RST and RAT where applicable |
 | `run_onset_models_estimated_k.py` | 1 and 2 | the four-model estimated-`k` Analysis 4 outputs and dispersion comparisons |
 | `run_delay_distributions.py` | 2 | `results/delay_distributions.csv` — the four distributions drawn in Supplementary Fig. S1 |
 | `run_report_numbers.py` | 2 | `results/report_numbers.tex` — every number the report quotes, as LaTeX macros |
@@ -18,12 +19,12 @@ in this tree — see `validation/` for benchmarks and cross-checks.
 | `plot_onset_models_fixed_k.py` | 3 | `figures/onset_models_fixed_k/*.pdf`, `*.png` |
 | `plot_onset_models_estimated_k.py` | 3 | the same for `onset_models_estimated_k` |
 | `plot_delay_distributions.py` | 3 | Supplementary Fig. S1: incubation, TOST and serial-interval distributions |
-| `plot_onset_models_rat.py` | 3 | Supplementary Fig. S2: the two-panel RAC/RAT comparison |
+| `plot_sustained_transmission.py` | 3 | Main Fig. 5 (fixed `k`) and Supplementary Fig. S2 (estimated `k`): RAC/RAT/RST by anchoring |
 | `figure_panels.py` | 3 | the panels the analysis figures are assembled from |
 | `utils.py` | — | presentation-only helpers shared by the plotting scripts |
 
-Stage 9 added the two onset-anchored analyses to `IMPLEMENTED_ANALYSES` and the `rat_figure`
-rule for §5.5's supplementary comparison. That explicit list, not the config, remains what
+The two onset-anchored analyses supply both the infection- and onset-anchored panels of the RST
+figures. That explicit list, not the config, remains what
 `rule all` and the convenience aggregates are built from — and Stage 10's `run_report_numbers.py`
 takes it on the command line rather than growing a second copy of it, because it is the one
 script that spans the analyses.
@@ -33,7 +34,7 @@ Conventions, all of them load-bearing:
 - **Compute-and-save and load-and-plot are separate scripts**, so restyling a figure never
   re-runs MCMC. The run scripts carry one subcommand per pipeline rule (`fit`, `rac`, `evidence`,
   and `dispersion` where `k` is estimated) and each Snakemake rule invokes exactly one of them.
-- **`rac` is a tier-1 step**, not tier 2. The estimand conditions on the record through the
+- **`rac` is a tier-1 step**, not tier 2. RAC, RAT and RST all condition on the record through the
   conditioning day, so the curve is one MCMC fit per day — about 110 per model — and it writes
   `..._rac_diagnostics.csv` beside the curve, one row per day, failing outright if any of those
   fits did not converge. `--method single_fit_filtered` swaps in the fast approximation for

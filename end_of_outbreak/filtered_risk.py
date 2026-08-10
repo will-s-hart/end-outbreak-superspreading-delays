@@ -1,4 +1,4 @@
-"""RAC and RAT from one full-record fit and a filtering latent state — the fast approximation.
+"""RAC, RAT and RST from one full-record fit and a filtering state — the fast approximation.
 
 The gold standard refits per conditioning day (:mod:`end_of_outbreak.refit_risk`). This module
 keeps the *parameters* from a single fit to the whole record and re-derives only the *latents*
@@ -39,7 +39,7 @@ import numpy as np
 import scipy.special
 from numpy.typing import NDArray
 
-from end_of_outbreak import particle_filter
+from end_of_outbreak import branching_process, particle_filter
 from end_of_outbreak import risk_of_additional_cases as rac
 from end_of_outbreak.delay_distributions import OnsetAnchoredDelays
 from end_of_outbreak.model_specifications import (
@@ -165,9 +165,11 @@ def risk_by_filtering(
     n_draws = state.n_draws
     reset = state.R_pre if reset_R is None else np.full(n_draws, float(reset_R))
     per_case_exponent = state.k * np.log1p(reset / state.k)
+    extinction = branching_process.negative_binomial_extinction_probability(reset, state.k)
 
     log_no_cases = np.empty((n_draws, selected.size), dtype=np.float64)
     log_no_transmission = np.empty((n_draws, selected.size), dtype=np.float64)
+    log_no_sustained = np.empty((n_draws, selected.size), dtype=np.float64)
     effective_sample_size = np.empty((n_draws, selected.size), dtype=np.float64)
     resampled = np.zeros((n_draws, selected.size), dtype=np.float64)
     for draw in range(n_draws):
@@ -198,6 +200,15 @@ def risk_by_filtering(
         log_no_transmission[draw] = _log_mean_exp(
             -retained - pipeline * float(-np.expm1(-per_case_exponent[draw]))
         )
+        remaining_weight = result.filtering_remaining_weight[selected]
+        sustained_scale = (
+            float(-np.log(extinction[draw]))
+            if specification.name == "sse_so"
+            else float(reset[draw] * (1.0 - extinction[draw]))
+        )
+        log_no_sustained[draw] = _log_mean_exp(
+            -sustained_scale * remaining_weight - pipeline * float(1.0 - extinction[draw])
+        )
         # The filter weights days 1 onwards, so day t sits at position t - 1. Day 0 is the
         # initial condition and carries no weighting step, hence a full-strength cloud.
         position = np.clip(selected - 1, 0, result.effective_sample_size.size - 1)
@@ -206,11 +217,17 @@ def risk_by_filtering(
         )
         resampled[draw] = np.where(selected == 0, 0.0, result.resampled[position])
 
+    if np.any(log_no_transmission + 1e-12 < log_no_cases):
+        raise AssertionError("RAC/RAT zero-probability ordering was violated")
+    if np.any(log_no_sustained + 1e-12 < log_no_transmission):
+        raise AssertionError("RAT/RST zero-probability ordering was violated")
+
     return FilteredRiskResult(
         estimate=rac.DailyRiskEstimate(
             days=selected,
             log_no_further_cases=log_no_cases,
             log_no_further_transmission=log_no_transmission,
+            log_no_sustained_transmission=log_no_sustained,
             n_chains=state.n_chains,
         ),
         diagnostics=FilterDiagnostics(

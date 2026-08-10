@@ -32,8 +32,8 @@ import numpy as np
 import pytest
 import scipy.stats
 
+from end_of_outbreak import branching_process, fitting, outbreak_data, pymc_models
 from end_of_outbreak import delay_distributions as dd
-from end_of_outbreak import fitting, outbreak_data, pymc_models
 from end_of_outbreak import risk_of_additional_cases as rac
 from end_of_outbreak.model_specifications import (
     LogNormalPrior,
@@ -140,6 +140,82 @@ def test_sse_pools_the_remaining_offspring_into_one_negative_binomial():
         "sse", counts=COUNTS, serial_interval=SERIAL_INTERVAL, R_pre=R_PRE, k=K
     )
     np.testing.assert_allclose(log_probability[0], -K * Lambda * np.log1p(R_PRE / K), rtol=1e-12)
+
+
+def test_sse_sustained_transmission_is_the_remaining_offspring_pgf_at_q():
+    Lambda = rac.pooled_remaining_weight(COUNTS.astype(float), SERIAL_INTERVAL)
+    q = float(branching_process.negative_binomial_extinction_probability(R_PRE, K))
+    log_probability = rac.log_probability_of_no_sustained_transmission(
+        "sse", counts=COUNTS, serial_interval=SERIAL_INTERVAL, R_pre=R_PRE, k=K
+    )
+    np.testing.assert_allclose(log_probability[0], Lambda * np.log(q), rtol=1e-12)
+
+
+def test_ssi_sustained_transmission_conditions_on_retained_infectivity():
+    infectivity = np.vstack((COUNTS * 0.4, COUNTS * 1.2)).astype(float)
+    R = np.array([1.4, 2.0])
+    k = np.array([0.3, 0.8])
+    q = branching_process.negative_binomial_extinction_probability(R, k)
+    Lambda = rac.pooled_remaining_weight(infectivity, SERIAL_INTERVAL)
+    log_probability = rac.log_probability_of_no_sustained_transmission(
+        "ssi",
+        counts=COUNTS,
+        serial_interval=SERIAL_INTERVAL,
+        R_pre=R,
+        k=k,
+        infectivity=infectivity,
+    )
+    np.testing.assert_allclose(log_probability, -R[:, None] * (1.0 - q)[:, None] * Lambda)
+
+
+def test_subcritical_reset_has_zero_sustained_transmission_risk():
+    log_probability = rac.log_probability_of_no_sustained_transmission(
+        "sse", counts=COUNTS, serial_interval=SERIAL_INTERVAL, R_pre=0.8, k=K
+    )
+    np.testing.assert_array_equal(log_probability, np.zeros_like(log_probability))
+
+
+def test_ssi_zero_tail_matches_the_closed_form_gamma_marginal():
+    """Independent day-0/zero-tail formula for the latent marginalisation."""
+    counts = np.array([2, 0, 0, 0])
+    day = counts.size - 1
+    R = np.array([1.7])
+    k = np.array([0.4])
+    F = float(SHORT_DELAYS.serial_interval[:day].sum())
+    state = rac.PosteriorState(
+        R_pre=R,
+        R_post=R,
+        k=k,
+        sampled_infectivity=np.zeros((1, counts.size)),
+        unsampled=rac.UnsampledLatents(
+            days=np.array([0]),
+            shape=np.array([[k[0] * counts[0]]]),
+            rate=np.array([[k[0] + R[0] * F]]),
+        ),
+    )
+    estimate = rac.risk_log_probabilities(
+        "ssi",
+        state,
+        counts=counts,
+        delays=SHORT_DELAYS,
+        switch_day=counts.size + 1,
+        days=np.array([day]),
+    )
+    assert estimate.log_no_sustained_transmission is not None
+    q = branching_process.negative_binomial_extinction_probability(R, k).item()
+    expected_no_sustained = (1.0 + R[0] * (1.0 - q) * (1.0 - F) / (k[0] + R[0] * F)) ** (
+        -k[0] * counts[0]
+    )
+    np.testing.assert_allclose(
+        np.exp(estimate.log_no_sustained_transmission), expected_no_sustained
+    )
+
+
+def test_dlo_refuses_a_branching_process_quantity():
+    with pytest.raises(ValueError, match="no branching-process formula"):
+        rac.log_probability_of_no_sustained_transmission(
+            "dlo", counts=COUNTS, serial_interval=SERIAL_INTERVAL, R_pre=R_PRE, k=K
+        )
 
 
 def test_dlo_is_a_product_over_the_future_days():
@@ -377,7 +453,7 @@ def test_the_reconstruction_splices_the_sampled_and_rebuilt_blocks_onto_the_cale
 
 
 def _log_probabilities_at(model, path, days, *, R_pre, R_post, k, delays):
-    """``log P(no case)`` and ``log P(no transmission)`` at an explicit latent path."""
+    """The three log zero-probabilities at an explicit latent path."""
     if specification_of(model).anchoring == "onsets":
         estimate = rac.onset_event_probabilities(
             model,
@@ -390,7 +466,11 @@ def _log_probabilities_at(model, path, days, *, R_pre, R_post, k, delays):
             latent=path,
             days=days,
         )
-        return estimate.log_no_further_cases, estimate.log_no_further_transmission
+        return (
+            estimate.log_no_further_cases,
+            estimate.log_no_further_transmission,
+            estimate.log_no_sustained_transmission,
+        )
     log_probability = rac.log_probability_of_no_further_cases(
         model,
         counts=COUNTS,
@@ -400,7 +480,16 @@ def _log_probabilities_at(model, path, days, *, R_pre, R_post, k, delays):
         infectivity=path,
         days=days,
     )
-    return log_probability, log_probability
+    sustained = rac.log_probability_of_no_sustained_transmission(
+        model,
+        counts=COUNTS,
+        serial_interval=delays.serial_interval,
+        R_pre=R_pre,
+        k=k,
+        infectivity=path,
+        days=days,
+    )
+    return log_probability, log_probability, sustained
 
 
 @pytest.mark.parametrize("model", ["ssi", "sse_so", "ssi_so"])
@@ -416,7 +505,10 @@ def test_the_risk_is_affine_in_the_latent_path_with_the_basis_as_its_gradient(mo
     R_pre, R_post, k = np.array([R_PRE]), np.array([R_POST]), np.array([K])
     zero = np.zeros((1, COUNTS.size))
     arguments = {"R_pre": R_pre, "R_post": R_post, "k": k, "delays": SHORT_DELAYS}
-    base_cases, base_transmission = _log_probabilities_at(model, zero, days, **arguments)
+    base_cases, base_transmission, base_sustained = _log_probabilities_at(
+        model, zero, days, **arguments
+    )
+    assert base_sustained is not None
 
     basis = rac.latent_risk_basis(
         model, counts=COUNTS, delays=SHORT_DELAYS, switch_day=SWITCH_DAY, days=days
@@ -426,13 +518,24 @@ def test_the_risk_is_affine_in_the_latent_path_with_the_basis_as_its_gradient(mo
     beta_transmission = basis.weights(
         R_reset=R_pre, R_pre=R_pre, R_post=R_post, per_case_exponent=per_case_exponent
     )
+    q = branching_process.negative_binomial_extinction_probability(R_pre, k)
+    beta_sustained = basis.weights(
+        R_reset=R_pre * (1.0 - q),
+        R_pre=R_pre,
+        R_post=R_post,
+        pipeline_probability=1.0 - q,
+    )
     for latent_day in range(COUNTS.size):
         unit = np.zeros((1, COUNTS.size))
         unit[0, latent_day] = 1.0
-        cases, transmission = _log_probabilities_at(model, unit, days, **arguments)
+        cases, transmission, sustained = _log_probabilities_at(model, unit, days, **arguments)
+        assert sustained is not None
         np.testing.assert_allclose(base_cases - cases, beta_cases[:, :, latent_day], atol=1e-12)
         np.testing.assert_allclose(
             base_transmission - transmission, beta_transmission[:, :, latent_day], atol=1e-12
+        )
+        np.testing.assert_allclose(
+            base_sustained - sustained, beta_sustained[:, :, latent_day], atol=1e-12
         )
 
 
@@ -467,15 +570,18 @@ def test_integrating_the_unsampled_latents_out_matches_drawing_them(model):
     assert state.unsampled is not None and state.unsampled.days.size > 0
 
     days = np.arange(1, COUNTS.size)
-    exact = rac.risk_log_probabilities(
+    exact_estimate = rac.risk_log_probabilities(
         model, state, counts=COUNTS, delays=SHORT_DELAYS, switch_day=SWITCH_DAY, days=days
-    ).risk_of_additional_cases()
+    )
+    exact = exact_estimate.risk_of_additional_cases()
+    exact_sustained = exact_estimate.risk_of_sustained_transmission()
 
     rng = np.random.default_rng(2)
     probabilities = []
+    sustained_probabilities = []
     for _ in range(40):
         path = rac.reconstruct_latent_paths(model, state, counts=COUNTS, rng=rng)
-        drawn, _ = _log_probabilities_at(
+        drawn, _, drawn_sustained = _log_probabilities_at(
             model,
             path,
             days,
@@ -484,9 +590,13 @@ def test_integrating_the_unsampled_latents_out_matches_drawing_them(model):
             k=state.k,
             delays=SHORT_DELAYS,
         )
+        assert drawn_sustained is not None
         probabilities.append(np.exp(drawn).mean(axis=0))
+        sustained_probabilities.append(np.exp(drawn_sustained).mean(axis=0))
     drawn_risk = 1.0 - np.mean(probabilities, axis=0)
     np.testing.assert_allclose(exact.risk, drawn_risk, atol=3e-3)
+    drawn_sustained_risk = 1.0 - np.mean(sustained_probabilities, axis=0)
+    np.testing.assert_allclose(exact_sustained.risk, drawn_sustained_risk, atol=3e-3)
 
 
 def test_the_conditional_broadcasts_over_draws_exactly_as_it_does_one_at_a_time():

@@ -24,7 +24,9 @@ summaries come from :mod:`end_of_outbreak.posterior_comparison`, exactly as
 markers on the figures do. The three cross-analysis quantities it forms — the crossing shift
 between an onset-anchored model and its naive counterpart, the log-evidence gain from fixing
 ``k`` to estimating it, and the largest RAC/RAT gap — are subtractions of numbers already in
-``results/``, done here so that no sentence in the report has to do arithmetic.
+``results/``, done here so that no sentence in the report has to do arithmetic. RST receives the
+same reference-day, final-day, threshold-crossing and Monte-Carlo-error keys wherever its column
+is present; DLO receives none.
 
 Keys are ``.``-separated and carry no underscores, since they are expanded through
 ``\\csname``: an analysis or model name is slugged by dropping everything but its letters and
@@ -60,6 +62,7 @@ from end_of_outbreak.model_specifications import LogNormalPrior, specification_o
 
 RISK_COLUMN = "risk_of_additional_cases"
 TRANSMISSION_RISK_COLUMN = "risk_of_additional_transmission"
+SUSTAINED_RISK_COLUMN = "risk_of_sustained_transmission"
 STANDARD_ERROR_COLUMN = "monte_carlo_standard_error"
 
 THRESHOLDS: tuple[float, ...] = (0.05, 0.01)
@@ -387,10 +390,11 @@ def add_risk_curve(
     *,
     reference_day: int = REFERENCE_DAY,
 ) -> None:
-    """Threshold crossings, the risk left on the withdrawal day, and the Monte-Carlo error.
+    """Threshold crossings, final/reference risks, and the Monte-Carlo error.
 
-    RAT is written only by the onset-anchored RAC tier, so its keys appear only for those
-    models — which is the asymmetry the supplementary figure is about.
+    RAT is written only for onset-anchored models, while RST is written for every model with an
+    individual branching-process interpretation. Their keys therefore follow the columns in
+    the result file rather than being inferred from the model name.
     """
     if reference_day not in set(np.asarray(frame["day"], dtype=np.int64).tolist()):
         raise ValueError(
@@ -401,6 +405,14 @@ def add_risk_curve(
     columns = [(RISK_COLUMN, "rac", STANDARD_ERROR_COLUMN)]
     if TRANSMISSION_RISK_COLUMN in frame:
         columns.append((TRANSMISSION_RISK_COLUMN, "rat", "transmission_monte_carlo_standard_error"))
+    if SUSTAINED_RISK_COLUMN in frame:
+        columns.append(
+            (
+                SUSTAINED_RISK_COLUMN,
+                "rst",
+                "sustained_transmission_monte_carlo_standard_error",
+            )
+        )
     days = np.asarray(frame["day"], dtype=np.int64)
     # Two Monte-Carlo error summaries, because the honest maximum and the useful one differ. The
     # error is largest while the curve is near 1 and every draw is contributing, which is a

@@ -14,6 +14,9 @@ into the labelled panels the report actually quotes, which is why it is the one 
 settles below a threshold" is a definition the report states, so it must come from
 :meth:`~end_of_outbreak.risk_curves.RiskCurve.first_day_below` rather than being
 reimplemented beside the panel.
+
+Fig. 5 and Supplementary Fig. S2 reuse the same backdrop and annotation rules but distinguish
+RAC, RAT and RST by linestyle while preserving the established model colours.
 """
 
 from __future__ import annotations
@@ -136,7 +139,7 @@ def risk_curve_panel(
     utils.panel_label(ax, letter)
 
 
-def rac_rat_panel(
+def risk_metrics_panel(
     ax: Axes,
     curves: dict[str, pd.DataFrame],
     data: outbreak_data.OutbreakData,
@@ -144,15 +147,26 @@ def rac_rat_panel(
     title: str,
     letter: str,
     first_day: int | None = None,
+    infection_anchored: bool,
 ) -> None:
-    """RAC and RAT for the onset-anchored models."""
+    """RAC, RAT and RST for one anchoring convention.
+
+    Colour identifies the transmission mechanism throughout; linestyle identifies the risk
+    estimand. Infection-anchored RAC and RAT are the same event and therefore share one dashed
+    curve and one legend label.
+    """
     utils.plot_incidence(ax, data.dates, data.onsets)
     utils.mark_thresholds(ax)
     for model, frame in curves.items():
-        if utils.TRANSMISSION_RISK_COLUMN not in frame:
+        if utils.SUSTAINED_RISK_COLUMN not in frame:
             raise ValueError(
-                f"the {model} RAC file has no {utils.TRANSMISSION_RISK_COLUMN!r} column; "
-                "RAT is written only by the onset-anchored RAC tier"
+                f"the {model} RAC file has no {utils.SUSTAINED_RISK_COLUMN!r} column; "
+                "regenerate it with the RST-aware risk rule"
+            )
+        if not infection_anchored and utils.TRANSMISSION_RISK_COLUMN not in frame:
+            raise ValueError(
+                f"the onset-anchored {model} RAC file has no "
+                f"{utils.TRANSMISSION_RISK_COLUMN!r} column"
             )
         colour = utils.model_colour(model)
         ax.plot(
@@ -160,15 +174,29 @@ def rac_rat_panel(
             frame[utils.RISK_COLUMN],
             color=colour,
             linestyle="--",
-            label=f"{utils.model_label(model)} RAC",
+            label=(
+                f"{utils.model_label(model)} RAC/RAT"
+                if infection_anchored
+                else f"{utils.model_label(model)} RAC"
+            ),
             zorder=3,
         )
+        if not infection_anchored:
+            ax.plot(
+                frame["date"],
+                frame[utils.TRANSMISSION_RISK_COLUMN],
+                color=colour,
+                linestyle="-",
+                label=f"{utils.model_label(model)} RAT",
+                zorder=4,
+            )
         ax.plot(
             frame["date"],
-            frame[utils.TRANSMISSION_RISK_COLUMN],
+            frame[utils.SUSTAINED_RISK_COLUMN],
             color=colour,
-            label=f"{utils.model_label(model)} RAT",
-            zorder=4,
+            linestyle=":",
+            label=f"{utils.model_label(model)} RST",
+            zorder=5,
         )
     utils.mark_intervention_dates(
         ax,

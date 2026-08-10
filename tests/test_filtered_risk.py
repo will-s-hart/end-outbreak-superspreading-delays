@@ -139,6 +139,12 @@ def test_filtering_meets_smoothing_at_the_end_of_the_window(model):
         - float(smoothed.risk_of_additional_cases().risk[0])
     )
     assert difference < max(5.0 * float(error[0]), 2e-3)
+    sustained_error = smoothed.sustained_transmission_standard_error()
+    sustained_difference = abs(
+        float(filtered.estimate.risk_of_sustained_transmission().risk[0])
+        - float(smoothed.risk_of_sustained_transmission().risk[0])
+    )
+    assert sustained_difference < max(5.0 * float(sustained_error[0]), 2e-3)
 
 
 @pytest.mark.parametrize("model", ["ssi", "sse_so", "ssi_so"])

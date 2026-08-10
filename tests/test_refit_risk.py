@@ -118,6 +118,12 @@ def test_refitting_reproduces_a_fit_done_by_hand_at_the_same_seed(model):
     np.testing.assert_allclose(
         result.estimate.log_no_further_transmission, expected.log_no_further_transmission
     )
+    assert result.estimate.log_no_sustained_transmission is not None
+    assert expected.log_no_sustained_transmission is not None
+    np.testing.assert_allclose(
+        result.estimate.log_no_sustained_transmission,
+        expected.log_no_sustained_transmission,
+    )
 
 
 def test_the_state_summed_over_a_window_ignores_the_days_after_it():

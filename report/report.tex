@@ -65,6 +65,7 @@
 \newcommand{\Gam}{\mathrm{Gamma}}
 \newcommand{\RAC}{\mathrm{RAC}}
 \newcommand{\RAT}{\mathrm{RAT}}
+\newcommand{\RST}{\mathrm{RST}}
 \newcommand{\dlo}{DLO}
 \newcommand{\sse}{SSE}
 \newcommand{\ssi}{SSI}
@@ -562,7 +563,7 @@ infection-anchored models mis-date an intervention's effect. Section~\ref{sec:re
 quantifies its consequences for $\Rpost$ and the risk curve.
 
 % =============================================================================================
-\section{The risk of additional cases and of additional transmission}
+\section{Risks of additional cases, additional transmission and sustained transmission}
 \label{sec:risk}
 % =============================================================================================
 
@@ -603,13 +604,17 @@ Under the onset-anchored models a second quantity becomes distinct:
     the headline throughout.
   \item $\RAT(t)$, the probability of at least one further \emph{transmission event} after day
     $t$. It isolates the effect of relaxing interventions but is not directly observable.
+  \item $\RST(t)$, the probability that the counterfactual transmission process never becomes
+    extinct. ``Sustained'' means eventual non-extinction, not reaching an arbitrary finite case
+    threshold.
 \end{itemize}
 
 \noindent
 Under the three infection-anchored models an infection and the case it produces fall on the same
 day by construction, so the two coincide \emph{by assumption} --- which is precisely the
-conflation under study. $\RAT$ is therefore reported only in the supplementary comparison of
-Section~\ref{sec:results-rat}.
+conflation under study. $\RST$ is defined for the four models with individual offspring families
+and for their Poisson limits. It is not defined for \dlo{}, whose day-level negative-binomial
+variation does not identify an individual's descendants.
 
 $\RAC(t)$ is one number per day, not a distribution: it is a posterior probability, so the
 average over draws happens inside it. In each case below we obtain a conditional
@@ -619,7 +624,7 @@ zero-probability given one posterior draw, and report
   \theta^{(m)})\bigr),
   \label{eq:posterior-average}
 \end{equation}
-over $S$ posterior draws, and likewise for $\RAT$. Because this is an average it carries
+over $S$ posterior draws, and likewise for $\RAT$ and $\RST$. Because this is an average it carries
 Monte-Carlo error, which is estimated from the between-chain spread and reported beside every
 curve.
 
@@ -641,6 +646,18 @@ incubation pipeline.
 \end{equation}
 where $(1-F_{t-u})$ is the probability that a case first appearing on day $u$ still has
 transmission to come after day $t$; with $F_0 = 0$, the $u=t$ term enters with full weight.
+
+\paragraph{Extinction under the reset.} Let $q$ be the smallest extinction fixed point of the
+offspring distribution of one case after the reset:
+\begin{equation}
+  q = \left(1+\frac{\Rreset}{k}(1-q)\right)^{-k}
+  \quad (\text{negative binomial}),
+  \qquad
+  q = \exp\{-\Rreset(1-q)\}
+  \quad (\text{Poisson}).
+  \label{eq:extinction-root}
+\end{equation}
+At and below criticality, $\Rreset\leq1$, the smallest fixed point is $q=1$ exactly.
 
 \paragraph{Future-event exponent.} Let $H_{\mathrm{inf}}(t)$ be minus the log-probability that the
 retained state produces no future event:
@@ -665,7 +682,15 @@ Conditional on one draw of the parameters and, for \ssi{}, the retained latent i
   \log\Pr(\text{no further case after }t) &= -H_{\mathrm{inf}}(t),
   \label{eq:infection-no-case}\\
   \log\Pr(\text{no further transmission after }t) &= -H_{\mathrm{inf}}(t).
-  \label{eq:infection-no-transmission}
+  \label{eq:infection-no-transmission}\\
+  \log\Pr(\text{no sustained transmission after }t)
+  &=
+  \begin{cases}
+    \Lambda(t)\log q & (\text{\sse{}}),\\
+    -\Rreset(1-q)\Lambda_Y(t) & (\text{\ssi{}}),\\
+    -\Rreset(1-q)\Lambda(t) & (\text{\cori{}}).
+  \end{cases}
+  \label{eq:infection-no-sustained}
 \end{align}
 \end{proposition}
 
@@ -684,10 +709,23 @@ over days. Taking minus the logarithm gives the four rows of \eqref{eq:infection
 \emph{Cases versus transmission.}
 Because infection and symptom onset are identified in these models, a future transmission event
 and the future case it creates are represented as occurring together.
+
+\emph{Eventual extinction.}
+Condition on the number $N$ of future infections seeded by the retained state. Each begins an
+independent family that becomes extinct with probability $q$, so the required probability is
+$\mathbb{E}[q^N]$. Under \sse{}, $N$ is
+$\NB(\Rreset\Lambda(t),k\Lambda(t))$ and its pgf at $q$ is
+$(1+\Rreset(1-q)/k)^{-k\Lambda(t)}=q^{\Lambda(t)}$ by
+\eqref{eq:extinction-root}. Under \ssi{} it is conditionally
+$\Pois(\Rreset\Lambda_Y(t))$, and under \cori{} it is
+$\Pois(\Rreset\Lambda(t))$; their pgfs give the remaining rows of
+\eqref{eq:infection-no-sustained}. \dlo{} has no row because it defines aggregate incidence
+one day at a time rather than individual offspring families.
 \end{proof}
 
 \noindent
-Thus $\RAC(t)=\RAT(t)=1-e^{-H_{\mathrm{inf}}(t)}$. The \cori{} row is included as the Poisson
+Thus $\RAC(t)=\RAT(t)=1-e^{-H_{\mathrm{inf}}(t)}$, while $\RST$ follows
+\eqref{eq:infection-no-sustained}. The \cori{} row is included as the Poisson
 reference, not as a compared model. It is the $k\to\infty$ limit of the \sse{} and \ssi{} rows,
 with $\Lambda_Y(t)\to\Lambda(t)$. The \dlo{} sum is finite because $\mu_j=0$ once $j$ exceeds
 $t$ plus the support of $w$.
@@ -758,7 +796,14 @@ Conditional on one draw of the parameters and the retained latent state,
   \label{eq:log-no-case}\\
   \log\Pr(\text{no further transmission after } t)
     &= -H_{\mathrm{on}}(t) - M(t)\bigl(1 - e^{-c}\bigr).
-  \label{eq:log-no-transmission}
+  \label{eq:log-no-transmission}\\
+  \log\Pr(\text{no sustained transmission after } t)
+    &=
+    \begin{cases}
+      W(t)\log q-M(t)(1-q) & (\text{\sseso{}}),\\
+      -\Rreset(1-q)W(t)-M(t)(1-q) & (\text{\ssiso{}},\ \text{\coriso{}}).
+    \end{cases}
+  \label{eq:log-no-sustained}
 \end{align}
 \end{proposition}
 
@@ -793,6 +838,14 @@ transmits zero times, which each does independently with probability $e^{-c}$ by
 $\mathbb{E}\bigl[(e^{-c})^{N}\bigr] = \exp\bigl(-M(t)(1-e^{-c})\bigr)$ by the Poisson generating
 function, and multiplying by $e^{-H_{\mathrm{on}}(t)}$ gives
 \eqref{eq:log-no-transmission}.
+
+For no sustained transmission, every future infection must instead start a family that
+eventually becomes extinct. The retained \sseso{} cohorts seed a negative-binomial number of
+infections whose pgf at $q$ is $q^{W(t)}$ by \eqref{eq:extinction-root}; the retained \ssiso{}
+and \coriso{} cohorts seed a conditionally Poisson number, giving
+$\exp\{-\Rreset(1-q)W(t)\}$. The pipeline contains $N\sim\Pois(M(t))$ cases and contributes
+$\mathbb{E}[q^N]=\exp\{-M(t)(1-q)\}$ in every model. Multiplication gives
+\eqref{eq:log-no-sustained}.
 \end{proof}
 
 \paragraph{Comparison of the two anchorings.} Both $H_{\mathrm{inf}}(t)$ and
@@ -804,20 +857,32 @@ reduces the onset-anchored expressions to the same retained-cohort structure as 
 infection-anchored counterparts, with the TOST survival replacing the serial-interval survival.
 
 \begin{remark}[Immediate consequences]
-Three special cases follow immediately and are used as verification targets
+Five special cases follow immediately and are used as verification targets
 (Section~\ref{sec:verification}).
 \begin{enumerate}[label=(\roman*)]
   \item Since $1 - e^{-c} \le 1$, \eqref{eq:log-no-transmission} is never below
     \eqref{eq:log-no-case}, so $\RAC(t) \ge \RAT(t)$ always, with equality exactly when
     $M(t) = 0$. The gap is the pipeline, and it is the term the infection-anchored models set to
     zero by assumption.
+  \item A sustained family requires a transmission event, so
+    $\RST(t)\leq\RAT(t)\leq\RAC(t)$. Equivalently, the one-case extinction probability $q$ is at
+    least its zero-offspring probability $e^{-c}$, and the same ordering follows term by term in
+    \eqref{eq:log-no-transmission} and \eqref{eq:log-no-sustained}.
   \item Setting $\Rreset = 0$ gives $c = 0$ and $H_{\mathrm{on}}(t) = 0$, so $\RAT(t) = 0$
     exactly and $\RAC(t) = 1 - e^{-M(t)}$: with no future transmission permitted, the only
     remaining risk is that the retained pipeline is non-empty.
   \item As $k \to \infty$, $c = k\log(1+\Rreset/k) \to \Rreset$ and \sseso{}'s
     $H_{\mathrm{on}}(t)$ tends to
     $\Rreset W(t)$, so both overdispersed models collapse onto \coriso{}.
+  \item If $\Rreset\leq1$, then $q=1$ and $\RST(t)=0$ exactly, whatever reset state remains.
 \end{enumerate}
+\end{remark}
+
+\begin{remark}[Why time delays do not change eventual extinction]
+The serial-interval and TOST distributions are normalised: they allocate a case's offspring
+across future times without changing its total offspring pgf. They therefore change
+$\Lambda(t)$, $W(t)$ and $M(t)$, and hence the timing of the decline in $\RST$, but not the
+fixed point $q$ under a constant reset reproduction number.
 \end{remark}
 
 \begin{remark}[Why historical and reset reproduction numbers both appear]
@@ -905,6 +970,9 @@ so no Monte-Carlo reconstruction step is involved and the risk carries no sampli
 that of the posterior draws themselves. This is a third exact marginalisation, composing with the
 two already performed: the likelihood integrates these states out of the observation density, and
 \eqref{eq:latent-mgf} integrates the same states out of the risk.
+For $\RST$, the retained-infectivity coefficient is $\Rreset(1-q)$ and every historical
+incubation-pipeline coefficient is multiplied by $(1-q)$; the existing $\RAC$ and $\RAT$
+coefficients are unchanged.
 
 % =============================================================================================
 \section{Inference}
@@ -1023,6 +1091,9 @@ onset-only representation of Proposition~\ref{prop:equivalence}. Explicit reset 
 agree with the risk formulas in Propositions~\ref{prop:naive} and~\ref{prop:onset}, including the
 $\Rreset=0$ limit in which $\RAT=0$ and $\RAC$ is the probability that the incubation pipeline is
 non-empty.
+The extinction roots are checked against their offspring generating functions, including the
+negative-binomial-to-Poisson limit, and the RST formulas are compared with independent
+Galton--Watson continuation simulation for all four branching models and both Poisson limits.
 
 Particle filtering provides an independent check of the latent-state calculations, and particle
 marginal Metropolis--Hastings reproduces the parameter posteriors on synthetic data. Comparisons

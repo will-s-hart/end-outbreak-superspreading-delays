@@ -4,7 +4,7 @@ Snakemake rule from a script in `scripts/`, and everything here feeds a figure o
 | Path | What it is |
 | --- | --- |
 | `<analysis>/<model>_posterior.nc` | Tier-1 MCMC draws for the fit to the complete record, one file per model. It feeds the evidence and dispersion steps, and serves as the last conditioning day's fit. |
-| `<analysis>/<model>_rac.csv` | Tier-1 RAC curve (plus RAT, for the onset-anchored models), from one fit per conditioning day. |
+| `<analysis>/<model>_rac.csv` | Tier-1 RAC curve, plus RAT for onset-anchored models and RST for every branching model (never DLO), from one fit per conditioning day. |
 | `<analysis>/<model>_rac_diagnostics.csv` | Tier-1 sampler diagnostics for those fits, one row per conditioning day. The per-day posteriors themselves are not kept. |
 | `<analysis>/model_evidence.json` | Tier-2 marginal likelihoods and posterior model probabilities. |
 | `<analysis>/dispersion_posteriors.json` | Tier-2 `k` posterior summaries and their pairwise divergences — only for the analyses that estimate `k`. |
@@ -20,7 +20,7 @@ document: it holds only `\defresultnum{key}{value}` lines and a header recording
 value was read from. The macro machinery that consumes it lives in `report/report.tex`, which
 raises a compile error on a key this file does not define. See `report/README.md`.
 
-**Validation studies live in `validation/`, not here** — sampler benchmarks, the RAC
+**Validation studies live in `validation/`, not here** — sampler benchmarks, the risk
 cross-checks, and the particle-MCMC check write to `validation/results/` with a written summary
 beside the data. Keeping them out of this directory means anything under `results/` can be taken
 as a report input without further checking.

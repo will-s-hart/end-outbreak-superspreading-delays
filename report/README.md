@@ -36,6 +36,10 @@ Four rules go with that scheme:
 - **It takes `IMPLEMENTED_ANALYSES` on the command line.** The `Snakefile` owns that list; the
   script must not grow a second copy.
 
+Risk keys are generated from the columns actually present in each `*_rac.csv`: every model gets
+RAC keys, onset-anchored models also get RAT keys, and every branching model except DLO gets RST
+reference-day, final-day, threshold-crossing and Monte-Carlo-error keys.
+
 **`latexmk`/`pdflatex` are the pipeline's only external toolchain dependency** — pixi does not
 provide TeX, and the `report` rule says so rather than failing with "command not found".
 

@@ -1,4 +1,4 @@
-"""The risk of additional cases (RAC), and the reset state it is computed from.
+"""RAC, RAT and RST, and the reset state they are computed from.
 
 RAC is the project's headline quantity, and it is a **real-time reset posterior predictive**:
 
@@ -84,6 +84,13 @@ The risk of additional *transmission* coincides with RAC under all three naive m
 identification is the conflation the project is about — and separates from it only under the
 onset-anchored models. Their calculators live beside the incubation-pipeline reconstruction
 below.
+
+RST
+---
+The risk of sustained transmission is the probability that the reset branching process never
+becomes extinct. It uses the smallest one-case extinction root from
+:mod:`end_of_outbreak.branching_process`. SSE, SSI and their onset-anchored forms have individual
+offspring families and therefore define RST; DLO's fresh day-level incidence dispersion does not.
 """
 
 from __future__ import annotations
@@ -94,7 +101,7 @@ from typing import Any
 import numpy as np
 from numpy.typing import NDArray
 
-from end_of_outbreak import forward_simulation, pymc_models, renewal
+from end_of_outbreak import branching_process, forward_simulation, pymc_models, renewal
 from end_of_outbreak.delay_distributions import (
     SERIAL_INTERVAL_FIRST_LAG,
     TOST_FIRST_LAG,
@@ -121,7 +128,7 @@ _DRAW_CHUNK_ELEMENTS = 2_000_000
 
 @dataclass(frozen=True)
 class DailyRiskEstimate:
-    """Per-draw conditional zero-probabilities for RAC and RAT, by conditioning day.
+    """Per-draw conditional zero-probabilities for RAC, RAT and RST, by conditioning day.
 
     Every route to the estimand produces this — refitting per day, the filtering
     approximation, and the particle checks — so they are directly comparable. The posterior
@@ -139,6 +146,9 @@ class DailyRiskEstimate:
 
     log_no_further_transmission: NDArray[np.float64]
     """``(n_draws, n_days)``: ``log P(no transmission event after t | posterior draw)``."""
+
+    log_no_sustained_transmission: NDArray[np.float64] | None = None
+    """``log P(eventual extinction | draw)``; unavailable for non-branching DLO."""
 
     n_chains: int = 1
     """Chains the draws came from, stacked chain-major, which is what lets
@@ -162,8 +172,28 @@ class DailyRiskEstimate:
             n_draws=self.n_draws,
         )
 
+    def risk_of_sustained_transmission(self) -> RiskCurve:
+        if self.log_no_sustained_transmission is None:
+            raise ValueError("risk of sustained transmission is unavailable for DLO")
+        return RiskCurve(
+            days=self.days,
+            risk=1.0 - np.exp(self.log_no_sustained_transmission).mean(axis=0),
+            n_draws=self.n_draws,
+        )
+
+    def sustained_transmission_standard_error(self) -> NDArray[np.float64]:
+        if self.log_no_sustained_transmission is None:
+            raise ValueError("risk of sustained transmission is unavailable for DLO")
+        return monte_carlo_standard_error(
+            self.log_no_sustained_transmission, n_chains=self.n_chains
+        )
+
     def standard_errors(self) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
-        """Monte-Carlo standard errors of the two curves, from the between-chain spread."""
+        """Monte-Carlo standard errors of RAC and RAT, from the between-chain spread.
+
+        RST is optional, so its error has the separate
+        :meth:`sustained_transmission_standard_error` accessor.
+        """
         return (
             monte_carlo_standard_error(self.log_no_further_cases, n_chains=self.n_chains),
             monte_carlo_standard_error(self.log_no_further_transmission, n_chains=self.n_chains),
@@ -184,6 +214,11 @@ class DailyRiskEstimate:
                 "conditioning day must be fitted at the same sampler settings, or the curve "
                 "would carry a different Monte-Carlo error on different days"
             )
+        sustained = [part.log_no_sustained_transmission for part in parts]
+        if any(values is None for values in sustained) and not all(
+            values is None for values in sustained
+        ):
+            raise ValueError("the per-day estimates disagree on whether RST is available")
         return cls(
             days=np.concatenate([part.days for part in parts]),
             log_no_further_cases=np.concatenate(
@@ -191,6 +226,11 @@ class DailyRiskEstimate:
             ),
             log_no_further_transmission=np.concatenate(
                 [part.log_no_further_transmission for part in parts], axis=1
+            ),
+            log_no_sustained_transmission=(
+                None
+                if sustained[0] is None
+                else np.concatenate([values for values in sustained if values is not None], axis=1)
             ),
             n_chains=parts[0].n_chains,
         )
@@ -369,6 +409,66 @@ def log_probability_of_no_further_cases(
     return -(dispersion * np.log1p(R / dispersion))[:, None] * Lambda[None, :]
 
 
+def log_probability_of_no_sustained_transmission(
+    model: str | ModelSpecification,
+    *,
+    counts: NDArray[np.int64],
+    serial_interval: NDArray[np.float64],
+    R_pre: float | NDArray[np.float64],
+    k: float | NDArray[np.float64] | None = None,
+    infectivity: NDArray[np.float64] | None = None,
+    days: NDArray[np.int64] | None = None,
+) -> NDArray[np.float64]:
+    """``log P(eventual extinction after day t)`` for an infection-anchored model.
+
+    DLO is deliberately excluded: its fresh day-level negative-binomial draw does not assign an
+    offspring family to each infected individual, so there is no Galton--Watson extinction root
+    to evaluate.  For SSE the remaining-offspring pgf at the single-case root is ``q**Lambda``;
+    for SSI it is Poisson conditional on the retained infectivities.
+    """
+    specification = specification_of(model)
+    if specification.anchoring != "infections":
+        raise ValueError(
+            f"model {specification.name!r} is onset-anchored; use onset_event_probabilities"
+        )
+    if specification.name == "dlo":
+        raise ValueError("DLO has no branching-process formula for sustained transmission")
+
+    counts = np.asarray(counts, dtype=np.int64)
+    selected = (
+        np.arange(counts.size, dtype=np.int64) if days is None else np.asarray(days, np.int64)
+    )
+    R = _one_draw_axis(R_pre, "R_pre")
+    dispersion = _dispersion_draws(specification, k, n_draws=R.size)
+
+    if specification.latent_variable is None:
+        if infectivity is not None:
+            raise ValueError(
+                f"model {specification.name!r} has no latent block; drop `infectivity`"
+            )
+        driving = counts.astype(np.float64)
+    else:
+        if infectivity is None:
+            raise ValueError(
+                f"model {specification.name!r} needs the complete retained infectivity path"
+            )
+        driving = np.asarray(infectivity, dtype=np.float64)
+        if driving.shape != (R.size, counts.size):
+            raise ValueError(
+                f"infectivity must have shape {(R.size, counts.size)}, got {driving.shape}"
+            )
+
+    Lambda = pooled_remaining_weight(driving, serial_interval)[..., selected]
+    if dispersion is None:
+        q = branching_process.poisson_extinction_probability(R)
+        return -(R * (1.0 - q))[:, None] * Lambda[None, :]
+
+    q = branching_process.negative_binomial_extinction_probability(R, dispersion)
+    if specification.name == "ssi":
+        return -(R * (1.0 - q))[:, None] * Lambda
+    return np.log(q)[:, None] * Lambda[None, :]
+
+
 def _dispersion_draws(
     specification: ModelSpecification,
     k: float | NDArray[np.float64] | None,
@@ -466,7 +566,7 @@ def onset_event_probabilities(
     days: NDArray[np.int64] | None = None,
     n_chains: int = 1,
 ) -> DailyRiskEstimate:
-    """Conditional zero-probabilities defining RAC and RAT for an onset model.
+    """Conditional zero-probabilities defining RAC, RAT and RST for an onset model.
 
     The retained expected infections ``E_{u≤t}`` generate a Poisson incubation pipeline with
     mean ``M(t)``. A no-further-case path requires that whole pipeline to be empty, whereas a
@@ -487,6 +587,12 @@ def onset_event_probabilities(
     The posterior average is still Monte Carlo — these arrays hold one conditional probability
     per draw — but evaluating the conditional zero event analytically avoids an unnecessary
     second simulation layer and makes ``RAC >= RAT`` exact up to floating-point rounding.
+
+    For RST, ``q`` is the smallest extinction fixed point for a single reset-regime case.
+    Retained cohorts contribute ``W log(q)`` under SSE-SO or ``-R (1-q) W`` under
+    SSI-SO/Cori-SO, while every future pipeline case contributes a factor ``q``. Normalised
+    generation-time distributions therefore affect when descendants occur but not whether an
+    indefinitely continuing constant-reset branching process eventually becomes extinct.
     """
     specification = specification_of(model)
     if specification.anchoring != "onsets":
@@ -510,6 +616,11 @@ def onset_event_probabilities(
         R_pre_draws if reset_R is None else _broadcast_draws(reset_R, "reset_R", n_draws=n_draws)
     )
     dispersion = _dispersion_draws(specification, k, n_draws=n_draws)
+    extinction = (
+        branching_process.poisson_extinction_probability(reset_draws)
+        if dispersion is None
+        else branching_process.negative_binomial_extinction_probability(reset_draws, dispersion)
+    )
     R_history = np.where(
         renewal.switch_index(counts.size, switch_day)[None, :] == 0,
         R_pre_draws[:, None],
@@ -531,6 +642,9 @@ def onset_event_probabilities(
             reset_draws[:, None]
             * remaining_tost_weight(counts.astype(np.float64), delays.tost)[None, :]
         )
+        retained_sustained_exponent = (reset_draws * (1.0 - extinction))[
+            :, None
+        ] * remaining_tost_weight(counts.astype(np.float64), delays.tost)[None, :]
         per_case_exponent = reset_draws
     else:
         if latent is None:
@@ -547,26 +661,33 @@ def onset_event_probabilities(
         per_case_exponent = dispersion * np.log1p(reset_draws / dispersion)
         if specification.name == "sse_so":
             expected_infections = R_history * latent_paths
-            retained_exponent = (
-                per_case_exponent[:, None]
-                * remaining_tost_weight(counts.astype(np.float64), delays.tost)[None, :]
-            )
+            remaining_weight = remaining_tost_weight(counts.astype(np.float64), delays.tost)[
+                None, :
+            ]
+            retained_exponent = per_case_exponent[:, None] * remaining_weight
+            retained_sustained_exponent = -np.log(extinction)[:, None] * remaining_weight
         else:
             force = latent_paths @ tost_operator.T
             expected_infections = R_history * force
-            retained_exponent = reset_draws[:, None] * remaining_tost_weight(
-                latent_paths, delays.tost
-            )
+            remaining_weight = remaining_tost_weight(latent_paths, delays.tost)
+            retained_exponent = reset_draws[:, None] * remaining_weight
+            retained_sustained_exponent = (reset_draws * (1.0 - extinction))[
+                :, None
+            ] * remaining_weight
 
     pipeline = incubation_pipeline_mean(expected_infections, delays.incubation)
     log_no_cases = -retained_exponent - pipeline
     log_no_transmission = -retained_exponent - pipeline * (-np.expm1(-per_case_exponent))[:, None]
+    log_no_sustained = -retained_sustained_exponent - pipeline * (1.0 - extinction)[:, None]
     if np.any(log_no_transmission + 1e-12 < log_no_cases):
         raise AssertionError("RAC/RAT zero-probability ordering was violated")
+    if np.any(log_no_sustained + 1e-12 < log_no_transmission):
+        raise AssertionError("RAT/RST zero-probability ordering was violated")
     return DailyRiskEstimate(
         days=selected_days,
         log_no_further_cases=log_no_cases[:, selected_days],
         log_no_further_transmission=log_no_transmission[:, selected_days],
+        log_no_sustained_transmission=log_no_sustained[:, selected_days],
         n_chains=n_chains,
     )
 
@@ -583,6 +704,15 @@ def onset_log_probability_of_no_further_transmission(
 ) -> NDArray[np.float64]:
     """Convenience view of :func:`onset_event_probabilities` for supplementary RAT."""
     return onset_event_probabilities(model, **kwargs).log_no_further_transmission
+
+
+def onset_log_probability_of_no_sustained_transmission(
+    model: str | ModelSpecification, **kwargs: Any
+) -> NDArray[np.float64]:
+    """Convenience view of :func:`onset_event_probabilities` for RST."""
+    sustained = onset_event_probabilities(model, **kwargs).log_no_sustained_transmission
+    assert sustained is not None
+    return sustained
 
 
 def _one_draw_axis(value: float | NDArray[np.float64], name: str) -> NDArray[np.float64]:
@@ -847,19 +977,34 @@ def risk_log_probabilities(
             infectivity=state.sampled_infectivity,
             days=selected,
         )
+        log_no_sustained = (
+            None
+            if specification.name == "dlo"
+            else log_probability_of_no_sustained_transmission(
+                specification,
+                counts=counts,
+                serial_interval=delays.serial_interval,
+                R_pre=state.R_pre,
+                k=state.k,
+                infectivity=state.sampled_infectivity,
+                days=selected,
+            )
+        )
         # RAC and RAT coincide under every infection-anchored model, by assumption: an
         # infection *is* a case there. That identification is the conflation being studied.
         estimate = DailyRiskEstimate(
             days=selected,
             log_no_further_cases=log_probability,
             log_no_further_transmission=log_probability,
+            log_no_sustained_transmission=log_no_sustained,
             n_chains=state.n_chains,
         )
 
     if state.unsampled is None or state.unsampled.days.size == 0:
+        _assert_risk_ordering(estimate)
         return estimate
     assert state.k is not None  # only the latent models have an unsampled block
-    cases, transmission = marginalised_risk_correction(
+    cases, transmission, sustained = marginalised_risk_correction(
         specification,
         state.unsampled,
         counts=counts,
@@ -871,12 +1016,29 @@ def risk_log_probabilities(
         k=state.k,
         reset_R=reset_R,
     )
-    return DailyRiskEstimate(
+    estimate = DailyRiskEstimate(
         days=estimate.days,
         log_no_further_cases=estimate.log_no_further_cases + cases,
         log_no_further_transmission=estimate.log_no_further_transmission + transmission,
+        log_no_sustained_transmission=(
+            None
+            if estimate.log_no_sustained_transmission is None
+            else estimate.log_no_sustained_transmission + sustained
+        ),
         n_chains=estimate.n_chains,
     )
+    _assert_risk_ordering(estimate)
+    return estimate
+
+
+def _assert_risk_ordering(estimate: DailyRiskEstimate) -> None:
+    """Assert ``RST <= RAT <= RAC`` through the equivalent zero-event ordering."""
+    if np.any(estimate.log_no_further_transmission + 1e-12 < estimate.log_no_further_cases):
+        raise AssertionError("RAC/RAT zero-probability ordering was violated")
+    if estimate.log_no_sustained_transmission is not None and np.any(
+        estimate.log_no_sustained_transmission + 1e-12 < estimate.log_no_further_transmission
+    ):
+        raise AssertionError("RAT/RST zero-probability ordering was violated")
 
 
 def _flatten_draws(posterior: Any, name: str) -> NDArray[np.float64]:
@@ -1037,7 +1199,9 @@ class LatentRiskBasis:
 
     ``β_transmission = R_reset·retained + (1 − e^{−c})(R_pre·pre + R_post·post)``,
 
-    matching the two exponents :func:`onset_event_probabilities` writes out. The naive models
+    ``β_sustained = R_reset·(1 − q)·retained + (1 − q)(R_pre·pre + R_post·post)``,
+
+    matching the three exponents :func:`onset_event_probabilities` writes out. The naive models
     have no pipeline, so ``pre`` and ``post`` vanish and the two coincide, as RAC and RAT do.
     """
 
@@ -1055,14 +1219,20 @@ class LatentRiskBasis:
         R_pre: NDArray[np.float64],
         R_post: NDArray[np.float64],
         per_case_exponent: NDArray[np.float64] | None = None,
+        pipeline_probability: NDArray[np.float64] | None = None,
     ) -> NDArray[np.float64]:
         """``β`` per draw, per conditioning day, per latent day.
 
-        ``per_case_exponent`` is ``c``; pass it for RAT and omit it for RAC.
+        ``per_case_exponent`` is ``c``; pass it for RAT. ``pipeline_probability`` is
+        ``1 - q``; pass it for RST. Omit both for RAC.
         """
+        if per_case_exponent is not None and pipeline_probability is not None:
+            raise ValueError("choose either a RAT exponent or an RST pipeline probability")
         pipeline = R_pre[:, None, None] * self.pre + R_post[:, None, None] * self.post
         if per_case_exponent is not None:
             pipeline = pipeline * (-np.expm1(-per_case_exponent))[:, None, None]
+        if pipeline_probability is not None:
+            pipeline = pipeline * pipeline_probability[:, None, None]
         return R_reset[:, None, None] * self.retained + pipeline
 
 
@@ -1151,8 +1321,8 @@ def marginalised_risk_correction(
     R_post: NDArray[np.float64],
     k: NDArray[np.float64],
     reset_R: float | NDArray[np.float64] | None = None,
-) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
-    """``log E[exp(−β·Y_unsampled) | θ]`` for RAC and for RAT, exactly.
+) -> tuple[NDArray[np.float64], NDArray[np.float64], NDArray[np.float64]]:
+    """``log E[exp(−β·Y_unsampled) | θ]`` for RAC, RAT and RST, exactly.
 
     The unsampled latents are conditionally independent ``Gamma(A_u, B_u)`` given the
     parameters, and the risk exponent is affine in them, so the Gamma moment generating
@@ -1176,6 +1346,7 @@ def marginalised_risk_correction(
     n_draws = R_pre.size
     reset = R_pre if reset_R is None else _broadcast_draws(reset_R, "reset_R", n_draws=n_draws)
     per_case_exponent = k * np.log1p(reset / k)
+    extinction = branching_process.negative_binomial_extinction_probability(reset, k)
 
     rate = unsampled.rate[:, None, :]
     shape = unsampled.shape[:, None, :]
@@ -1191,7 +1362,19 @@ def marginalised_risk_correction(
             / rate
         )
     ).sum(axis=2)
-    return cases, transmission
+    sustained = -(
+        shape
+        * np.log1p(
+            basis.weights(
+                R_reset=reset * (1.0 - extinction),
+                R_pre=R_pre,
+                R_post=R_post,
+                pipeline_probability=1.0 - extinction,
+            )
+            / rate
+        )
+    ).sum(axis=2)
+    return cases, transmission, sustained
 
 
 def reconstruct_latent_paths(

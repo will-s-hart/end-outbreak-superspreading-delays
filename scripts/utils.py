@@ -61,6 +61,7 @@ DECISION_THRESHOLDS: tuple[float, ...] = (0.05, 0.01)
 
 RISK_COLUMN = "risk_of_additional_cases"
 TRANSMISSION_RISK_COLUMN = "risk_of_additional_transmission"
+SUSTAINED_RISK_COLUMN = "risk_of_sustained_transmission"
 STANDARD_ERROR_COLUMN = "monte_carlo_standard_error"
 
 

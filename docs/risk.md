@@ -22,6 +22,14 @@ and they separate only under `sse_so`/`ssi_so`, where the gap is the contributio
 pipeline of already-infected but not-yet-symptomatic individuals. Use RAC everywhere except the
 supplementary analysis that treats RAT explicitly. `RAC(t) ≥ RAT(t)` always.
 
+The **risk of sustained transmission (RST)** is the late-outbreak analogue: after the same
+conditioning and reset, it is the posterior probability that the future transmission process
+never becomes extinct. “Sustained” means eventual non-extinction, not reaching a finite case
+threshold. RST is available for SSE, SSI and their onset-anchored forms, with Cori/Cori-SO as
+Poisson-limit checks. It is not defined for DLO: DLO attaches a fresh negative-binomial draw to
+aggregate incidence on each day and does not assign an offspring family to each individual.
+Always `RST(t) ≤ RAT(t) ≤ RAC(t)`; reset draws with `R_pre ≤ 1` have RST exactly zero.
+
 ## The two estimators
 
 Chosen by `rac.method` in `config/config.yaml`:
@@ -49,7 +57,7 @@ draws to `risk_log_probabilities`.
 
 ## The closed forms
 
-`risk_of_additional_cases.py` holds the estimand and nothing else. **`risk_log_probabilities` is
+`risk_of_additional_cases.py` holds the estimands and nothing else. **`risk_log_probabilities` is
 the one entry point** — it applies the closed form to the sampled latents and adds the correction
 for the rest, returning a `DailyRiskEstimate` that every route produces.
 
@@ -63,6 +71,30 @@ for the rest, returning a `DailyRiskEstimate` that every route produces.
 - **A parameter that was *fixed* in the fit is not in the posterior.** Pass `fixed_k` for the
   fixed-`k` analyses, and `fixed_R_pre`/`fixed_R_post` too for the fixed-`θ` cross-checks.
 
+### Eventual extinction under the reset
+
+Let `q` be the smallest extinction fixed point of the one-case offspring distribution under
+`R* = R_pre`. It is solved independently for every posterior draw:
+
+```
+q = (1 + R* (1 - q) / k)^(-k)       SSE/SSI
+q = exp(-R* (1 - q))                Cori
+```
+
+The vectorised bracketed solver in `branching_process.py` returns `q = 1` exactly at and below
+criticality. For infection-anchored models the conditional log-probabilities of eventual
+extinction are
+
+```
+SSE:   Lambda(t) log(q)
+SSI:  -R* (1 - q) Lambda_Y(t)
+Cori: -R* (1 - q) Lambda(t)
+```
+
+For SSE the future seeds are negative binomial and their pgf evaluated at `q` reduces to
+`q^Lambda`; for SSI and Cori they are conditionally Poisson. Every seed then starts an
+independent family whose extinction probability is `q`.
+
 ### The onset reset state
 
 Two pieces: future transmission from retained onset cohorts, and the incubation pipeline of
@@ -71,6 +103,8 @@ people infected by `t` but not yet symptomatic. `onset_event_probabilities` give
 ```
 log P(no further case)        = −H(t) − M(t)
 log P(no further transmission) = −H(t) − M(t)·[1 − exp(−c)]
+log P(no sustained transmission) = W(t) log(q) − M(t)·(1 − q)       [SSE-SO]
+                                  = −R* (1 − q)W(t) − M(t)·(1 − q) [SSI-SO/Cori-SO]
 ```
 
 Restarting from observed onsets alone drops `M(t)` and understates RAC.
@@ -84,6 +118,10 @@ change the proposition.** `tests/test_stage8_onset.py` pins them three ways: a t
 the proposition as plain double sums (no design matrices, so it checks the formulae rather than a
 shared abstraction), a degenerate-delay case where they collapse to one line, and the `R* = 0`
 case where RAT is exactly zero.
+
+Generation-time distributions are normalised, so they allocate a case's offspring across time
+without changing its total offspring pgf. They therefore change `W(t)` and `M(t)`—and hence when
+RST falls—but not `q`, the eventual extinction probability under a constant reset `R*`.
 
 ## The latents the fit did not sample
 
@@ -102,7 +140,9 @@ log P(no further event after t | θ, Y) = −(α(θ) + Σ_u β_u(θ)·Y_u),    �
 ```
 
 `latent_risk_basis` is that `β`, factored as `R_reset·retained + R_pre·pre + R_post·post` so the
-draw dependence is three scalars; RAT is the same with the pipeline part scaled by `1 − e^{−c}`.
+draw dependence is three scalars. RAT scales the pipeline part by `1 − e^{−c}`. For RST the
+retained-infectivity coefficient is `R_reset·(1 − q)` and the historical pipeline coefficients
+are multiplied by `1 − q`; the existing RAC and RAT coefficients are unchanged.
 **Individual latents are therefore never needed** — only linear functionals of them.
 
 The removed latents are conditionally independent `Gamma(A_u, B_u)` given `θ`, so the Gamma

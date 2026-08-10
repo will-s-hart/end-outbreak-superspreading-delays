@@ -223,7 +223,7 @@ def synthetic_outbreak(n_days: int = 11):
     )
 
 
-def risk_frame(risk, transmission_risk=None) -> pd.DataFrame:
+def risk_frame(risk, transmission_risk=None, sustained_risk=None) -> pd.DataFrame:
     frame = pd.DataFrame(
         {
             "day": np.arange(len(risk), dtype=np.int64),
@@ -236,6 +236,9 @@ def risk_frame(risk, transmission_risk=None) -> pd.DataFrame:
             transmission_risk, dtype=np.float64
         )
         frame["transmission_monte_carlo_standard_error"] = np.full(len(risk), 2e-3)
+    if sustained_risk is not None:
+        frame[report_numbers.SUSTAINED_RISK_COLUMN] = np.asarray(sustained_risk, dtype=np.float64)
+        frame["sustained_transmission_monte_carlo_standard_error"] = np.full(len(risk), 3e-3)
     return frame
 
 
@@ -286,6 +289,26 @@ def test_the_rat_keys_appear_only_where_the_rat_column_does():
     assert "\\defresultnum{x.rat05.day}{7}" in rendered
     assert "\\defresultnum{x.rac05.day}{9}" in rendered
     assert "\\defresultnum{x.gap.shift05}{2}" in rendered
+
+
+def test_the_rst_keys_appear_only_where_the_rst_column_does():
+    data = synthetic_outbreak()
+    rac = [1.0, 0.90, 0.80, 0.60, 0.50, 0.40, 0.30, 0.20, 0.10, 0.040, 0.005]
+    rst = [0.8, 0.60, 0.40, 0.20, 0.10, 0.04, 0.03, 0.02, 0.01, 0.005, 0.001]
+
+    dlo = report_numbers.NumberFile()
+    report_numbers.add_risk_curve(dlo, risk_frame(rac), data, "x", reference_day=6)
+    assert "x.rst" not in dlo.render(sources=[])
+
+    branching = report_numbers.NumberFile()
+    report_numbers.add_risk_curve(
+        branching, risk_frame(rac, sustained_risk=rst), data, "x", reference_day=6
+    )
+    rendered = branching.render(sources=[])
+    assert "\\defresultnum{x.rst05.day}{5}" in rendered
+    assert "\\defresultnum{x.rst.final}{0.001}" in rendered
+    assert "\\defresultnum{x.rst.reference}{0.030}" in rendered
+    assert "\\defresultnum{x.rst.mcse}{0.0030}" in rendered
 
 
 def test_a_reference_day_outside_the_window_is_an_error_rather_than_a_crash():

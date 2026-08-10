@@ -529,8 +529,8 @@ def _bridge_recursion(
     which keeps ``r`` near 1 whatever the absolute scale of the evidence — on the real series the
     unshifted ratio is ``e^{−80}`` or smaller and the recursion would stall at zero.
 
-    Note that this is *not* the recursion in ``sse-ssi-pmo/src/sse_ssi_pmo/evidence.py``, which
-    divides through by ``e^{ℓ}`` rather than by ``g``; that form has a different fixed point.
+    Dividing through by ``e^{ℓ}`` rather than by ``g`` would instead produce a different fixed
+    point; the denominator here follows the optimal-bridge identity above.
     """
     n_posterior = int(log_ratio_posterior.size)
     n_proposal = int(log_ratio_proposal.size)

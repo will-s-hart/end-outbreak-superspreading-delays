@@ -64,10 +64,8 @@ the same reason.
 
 **The ordering is specific to RAC and to this setting** — check both before claiming it anywhere.
 Ask "would transmission re-establish?" instead and it reverses on the same data (SSI 0.021 against
-SSE 0.036), because a burst of four re-establishes far more readily than a lone case. Run this RAC
-code on the companion project's regime — one index case, `R = 2` throughout, no intervention — and
-SSI comes out *below* SSE at 0.37 of it, matching `sse-ssi-pmo` Fig. 1. Neither difference flips
-the ordering alone.
+SSE 0.036), because a burst of four re-establishes far more readily than a lone case. Neither
+difference flips the ordering alone.
 
 ## What happens when `k` is estimated rather than transplanted?
 

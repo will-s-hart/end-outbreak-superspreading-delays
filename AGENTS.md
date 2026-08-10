@@ -31,7 +31,9 @@ predictive: fit parameters *and* latents to the record through day `t` alone, re
 `R_pre`, and ask for the posterior probability of at least one further case. **Every conditioning
 day gets its own fit** — about 110 per model, which is why the pipeline takes hours. The
 companion **risk of additional transmission (RAT)** separates from RAC only under the
-onset-anchored models, and is reported only in the supplementary analysis. See
+onset-anchored models. The **risk of sustained transmission (RST)** is the probability that the
+reset future never becomes extinct; it is computed for SSE/SSI and their onset-anchored forms,
+but not DLO because DLO has no individual branching-process interpretation. See
 [docs/risk.md](docs/risk.md).
 
 ## Tooling
@@ -66,7 +68,7 @@ The quick route is `rac.method: single_fit_filtered` — one fit per model, late
 conditioning day — which turns hours into minutes:
 
 ```sh
-pixi run python scripts/run_<analysis>.py rac --model <model> \
+pixi run python scripts/run_risk_curves.py --analysis <analysis> --model <model> \
   --posterior results/<analysis>/<model>_posterior.nc \
   --method single_fit_filtered --diagnostics /tmp/d.csv --output /tmp/rac.csv
 ```
@@ -277,7 +279,7 @@ committed measurement.
 | Decision | Where it is argued |
 | --- | --- |
 | **Serial interval:** the generic EVD estimate (mean 15.3 d, SD 9.3 d) for all five models. Its variance budget of 86.49 d² admits published EVD incubation estimates; the outbreak-specific estimate (19.46, 6.08) does not, and is kept only for a sensitivity analysis. | plan §2 |
-| **RAC is the headline, RAT the supplement.** For the onset-anchored models compute both and report the gap. | [docs/risk.md](docs/risk.md) |
+| **RAC is the headline; RAT and RST separate its components.** RAT is distinct only for onset-anchored models. RST is computed for every branching model, never DLO, and means eventual non-extinction. | [docs/risk.md](docs/risk.md) |
 | **Real-time conditioning:** parameters *and* latents fitted to the record through day `t`, one fit per conditioning day. `single_fit_filtered` is a comparison, never a results path. The old smoothed route is gone. | [docs/risk.md](docs/risk.md), plan §5.6 |
 | **`R` switches on day 33 in each model's own time index.** | *Day indexing*, above |
 | **Naming:** the day-level negative-binomial model is `DLO`, not the older "CIO"; the package is `end_of_outbreak`. | — |
@@ -302,11 +304,8 @@ committed measurement.
   shifted `R`-switch that separates structure from indexing; a non-empty initial incubation
   pipeline; and prior sensitivity. The first, second, fourth and fifth are one config value apiece
   and no new code.
-- **Three optional follow-ups to the mechanism finding were declined** and stay declined unless
-  asked for. The report does not reference the companion project, so neither the
-  `P(sustained transmission)` panel nor the reset-convention panel would answer a question the
-  document raises; both are recorded as prose instead. The `sse-ssi-pmo` regression test is the
-  cheapest of the three and remains the one to do first if any is revisited.
+- **The reset-convention follow-up remains declined** unless asked for. RST is now a reported
+  estimand rather than an optional follow-up.
 - **Per-fit process spawn dominates the cheap models' cost.** Each conditioning-day fit starts
   four chain processes, which is a large fraction of a two-second fit. If the pipeline's runtime
   ever matters, the lever is reusing a sampler across days in `fitting.fit_model`, not the
@@ -321,7 +320,7 @@ Go to these when you are about to change the thing they describe.
 | [docs/risk.md](docs/risk.md) | The estimand, the two estimators, the closed forms, the affine representation and the exact latent marginalisation, the onset reset state, matching conditioning against the particle routes |
 | [docs/models.md](docs/models.md) | The renewal core, the builders and simulators, the latent block and what the sampler benchmark settled, model evidence, dispersion comparison |
 | [docs/findings.md](docs/findings.md) | What the study has measured, and which file holds each number. **Read it before "fixing" a surprising result** |
-| `starter_docs/implementation_plan.md` | The source of truth for model definitions and conventions. Untracked, so local only |
+| `starter_docs/implementation_plan.md` | Legacy rationale only; its warning names the authoritative sources. Untracked, so local only |
 | `cluster/README.md` | Running the full pipeline on ARC, and `racstat` for watching one. Untracked, so local only |
 | `scripts/README.md` | The script table, the tier conventions, figure layout rules, the no-fallback rule |
 | `validation/README.md` | What each validation study answers and where it writes |
