@@ -28,11 +28,14 @@ those weeks is the estimand too, not the sampler: each day is a separate posteri
 a separate record.
 
 **Convergence, over all 1540 fits** (14 model/analysis pairs × 110 days,
-`<model>_rac_diagnostics.csv`): worst `R̂` over every sampled variable is **1.0100**, on one day
-of SSE-SO with estimated `k` and no divergences; 34 days exceed 1.005; 172 divergences in 12.3M
-draws, worst single day 22; minimum bulk ESS 1143. **SSE-SO is the outlier by a wide margin** —
-14–19 of its days above 1.005 against none for most models, and a minimum ESS a third of theirs.
-It is the model whose geometry needed `target_accept: 0.95`, and it is the one to watch.
+`<model>_rac_diagnostics.csv`): worst `R̂` over every sampled variable is **1.0080**; 39 days
+exceed 1.005; 160 divergences in 12.3M draws, worst single day 15; minimum bulk ESS 1020.
+**SSE-SO is the outlier by a wide margin** — 17–22 of its days are above 1.005 against none for
+every other model, and its minimum ESS is a third of theirs. It is the model whose geometry
+needed `target_accept: 0.95`, and it is the one to watch. The estimated-`k` inverse-CDF models use
+the benchmarked compound sampler (Slice for `k`, NUTS for the `R` parameters and latent
+uniforms); in the seven retained final-day estimated-`k` posteriors, `R̂_k` is 1.0001–1.0010,
+bulk ESS for `k` is 4075–7956, and there are no divergences.
 
 ## Does the machinery reproduce an outside answer?
 

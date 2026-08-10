@@ -31,8 +31,10 @@ Two headings, because they answer different questions
     Sample ``u_u ~ Uniform(0, 1)`` and set ``Y_u = F⁻¹(u_u)``. A bounded, flat-prior,
     constant-geometry space. The ``u`` are i.i.d. uniform under the **prior** only — the
     likelihood couples them exactly as it couples the Gammas — but the geometry is far
-    tamer. PyTensor supplies a gradient for the Gamma quantile function, so unlike what §6.3
-    anticipated this does **not** preclude NUTS.
+    tamer. PyTensor differentiates the Gamma quantile with respect to ``u`` but not its shape,
+    so fixed-``k`` fits run the whole sampled block under NUTS, while estimated-``k`` fits use
+    Slice for ``k`` and NUTS for the ``R`` parameters and latent uniforms. That compound sampler
+    is the configuration the estimated-``k`` benchmark validated.
 ``marginalise_uncoupled``
     Integrate out, in closed form, every latent that the data constrain only through the
     ``exp(−Σ_j μ_j)`` factor. See below: this is exact, not an approximation.
