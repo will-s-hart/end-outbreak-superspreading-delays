@@ -7,7 +7,7 @@ in this tree — see `validation/` for benchmarks and cross-checks.
 | Script | Tier | Writes |
 | --- | --- | --- |
 | `analysis_driver.py` | 1 and 2 | — the whole body of every `run_*.py`, shared |
-| `run_naive_models_fixed_k.py` | 1 and 2 | `results/naive_models_fixed_k/{model}_posterior.nc`, `..._rac.csv`, `model_evidence.json` |
+| `run_naive_models_fixed_k.py` | 1 and 2 | `results/naive_models_fixed_k/{model}_posterior.nc`, `..._rac.csv`, `..._rac_diagnostics.csv`, `model_evidence.json` |
 | `run_naive_models_estimated_k.py` | 1 and 2 | the same, plus `results/naive_models_estimated_k/dispersion_posteriors.json` |
 | `run_onset_models_fixed_k.py` | 1 and 2 | the four-model fixed-`k` Analysis 3 outputs, including RAT in the SO-model RAC files |
 | `run_onset_models_estimated_k.py` | 1 and 2 | the four-model estimated-`k` Analysis 4 outputs and dispersion comparisons |
@@ -31,9 +31,22 @@ script that spans the analyses.
 Conventions, all of them load-bearing:
 
 - **Compute-and-save and load-and-plot are separate scripts**, so restyling a figure never
-  re-runs MCMC. The run scripts carry one subcommand per tier (`fit`, `rac`, `evidence`, and
-  `dispersion` where `k` is estimated) and each Snakemake rule invokes exactly one of them.
+  re-runs MCMC. The run scripts carry one subcommand per pipeline rule (`fit`, `rac`, `evidence`,
+  and `dispersion` where `k` is estimated) and each Snakemake rule invokes exactly one of them.
+- **`rac` is a tier-1 step**, not tier 2. The estimand conditions on the record through the
+  conditioning day, so the curve is one MCMC fit per day — about 110 per model — and it writes
+  `..._rac_diagnostics.csv` beside the curve, one row per day, failing outright if any of those
+  fits did not converge. `--method single_fit_filtered` swaps in the fast approximation for
+  prototyping; it is not a results path.
 - **Named for what they do**, never for figure numbers.
+- **The figure layout follows the number of parameter posteriors, and the RAC panel's *view*
+  follows the layout.** A fixed-`k` figure has two (`R_pre`, `R_post`), so it is four panels with
+  the RAC spanning the bottom row; an estimated-`k` figure has three, so it is five, with the pie
+  dropping beside the RAC curves. Where the RAC panel shares its row it starts at the ERT's
+  arrival (`risk_curve_panel(first_day=...)`). **`first_day` trims the view only** — every curve
+  is still drawn over the whole window and the settling markers are untouched, so a trimmed panel
+  can never show a different crossing date from an untrimmed one.
+- **Both formats come from one render**, so the PDF and the PNG cannot disagree.
 - **`argparse`, invoked from `shell:`**, never through Snakemake's `script:` directive, so each
   stays runnable and debuggable on its own.
 - **Config parsing is in the package** (`end_of_outbreak.configuration`), not here, because the

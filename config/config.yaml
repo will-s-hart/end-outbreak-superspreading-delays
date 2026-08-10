@@ -95,6 +95,42 @@ rac:
     n_draws: 1000     # parameter draws the filter is run at, thinned within chains
     n_particles: 500  # per draw; the filter is fully adapted, so it needs no tuning
 
+  # Acceptance criteria for the ~110 fits behind each curve. A hundred and ten fits is a hundred
+  # and ten chances for one to go quietly wrong, so every one is checked -- but note that the
+  # thresholds are applied to a *maximum* over roughly 110 fits x 60 variables, which is a far
+  # stronger demand than the same number applied to a single fit.
+  #
+  # `on_failure` is the knob that matters in practice:
+  #
+  #   warn   the curve and its diagnostics are written either way, and the offending days are
+  #          printed. Use this while exploring: refusing to write a curve that has already been
+  #          computed, because two days out of a hundred and ten were marginal, costs an hour
+  #          and tells you nothing the diagnostics file does not.
+  #   error  the step fails. Use this once a configuration is known to pass, so that the gate
+  #          becomes a regression test on the sampling rather than a discovery tool.
+  #
+  # The curve is written and identical under both, so this block is deliberately kept out of the
+  # Snakemake rerun triggers (see `analysis_params` in the Snakefile).
+  #
+  # Calibrated against a complete run of 1540 fits (14 model/analysis pairs x 110 days):
+  #
+  #   max R-hat over every variable of every fit  1.0100   (one day: SSE-SO, estimated k, day 74)
+  #   days above 1.005                            34
+  #   divergences, total                          172 of 12.32M draws
+  #   divergences, worst single day               22   (the criterion fires at 80)
+  #   min bulk ESS                                1143
+  #
+  # 1.02 is roughly double the observed maximum, which is the headroom a *maximum* over ~1540
+  # fits x ~60 variables needs: at 1.01 the run failed on a single day reading exactly 1.0100
+  # with no divergences, which is sampling noise on the hardest model rather than a fit that did
+  # not converge. Anything genuinely broken -- a stuck chain -- lands far above this, not just
+  # over it. Raise `max_r_hat` only with the same kind of evidence; if a *pattern* of days starts
+  # creeping up, that is the sampler telling you something and the fix is upstream.
+  convergence:
+    max_r_hat: 1.02
+    divergence_fraction: 0.01
+    on_failure: error
+
 # Latent-variable parameterisation, chosen by the Stage-3 sampler benchmark (see
 # validation/results/sampler_benchmark.md for the comparison this rests on). Scripts must pass this
 # explicitly -- end_of_outbreak.pymc_models refuses to build a latent model without one.

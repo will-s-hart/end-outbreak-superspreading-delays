@@ -21,20 +21,25 @@ itself before it is trusted on SSI.
 
 Filtering versus smoothing — do not blur them
 ---------------------------------------------
-The forward pass delivers **filtering** states ``p(Y_{≤t} | I_{1:t})``, whereas RAC resets from
-a **smoothed** state ``p(Y_{≤t} | I_{1:T})`` (§5.1, §5.6). Comparing a filtering RAC with a
-smoothed RAC and calling agreement a pass would be wrong; the difference between them is the
-§5.6 approximation, which §6.6 sets out to *measure*. This module therefore exposes both, named
-for what they are:
+The forward pass delivers **filtering** states ``p(Y_{≤t} | I_{1:t})`` as well as, at the end,
+draws from the joint **smoothing** law ``p(Y_{0:T} | I_{1:T})``. They answer different questions
+and this module exposes both, named for what they are:
 
 ``filtering_remaining_weight``
     ``Λ(t)`` under the filtering distribution: a snapshot taken at day ``t`` from the ancestry
     as it stands then. ``Λ(t)`` is the whole of what RAC needs from the retained state for
-    SSE/SSI (§5.2), so recording the scalar rather than the path keeps this cheap.
+    SSE/SSI (§5.2), so recording the scalar rather than the path keeps this cheap. This — with
+    ``filtering_pipeline_mean`` for the onset models — is what
+    :mod:`end_of_outbreak.filtered_risk` consumes.
 ``latent_paths``
-    The ancestral paths at the end of the run, i.e. draws from the **joint smoothing**
-    distribution ``p(Y_{0:T} | I_{1:T})``. These are the ones to compare against an MCMC fit —
-    subject to path degeneracy, which ``n_distinct`` measures rather than hides.
+    The ancestral paths at the end of the run. These are the ones to compare against an MCMC fit
+    to the whole record — subject to path degeneracy, which ``n_distinct`` measures rather than
+    hides.
+
+Which one a check wants follows from what it conditions on. The arithmetic check fixes ``θ`` and
+holds the closed forms against an MCMC state conditioned on the whole record, so it uses
+``latent_paths``. :mod:`end_of_outbreak.filtered_risk` and PMMH both condition on filtering
+states, so they estimate the same thing and their agreement is a test.
 """
 
 from __future__ import annotations

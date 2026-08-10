@@ -40,6 +40,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -223,7 +224,7 @@ def command_fit(args: argparse.Namespace) -> None:
 
 
 # ---------------------------------------------------------------------------------------
-# Tier 2 — the risk of additional cases
+# Tier 1 — the risk of additional cases, one fit per conditioning day
 # ---------------------------------------------------------------------------------------
 
 
@@ -249,6 +250,7 @@ def command_rac(args: argparse.Namespace) -> None:
             f"{method} runs one fit per conditioning day, so --diagnostics is required: a "
             "curve built from 110 fits nobody has looked at is not a result"
         )
+    setting.rac_method(args.method)  # reject an unknown --method before hours of sampling
 
     if method == REFIT_DAILY:
         estimate, diagnostics = _rac_by_refitting(
@@ -283,6 +285,37 @@ def command_rac(args: argparse.Namespace) -> None:
         f"{model}: RAC over days {int(estimate.days[0])}–{int(estimate.days[-1])} by {method}; "
         f"written to {args.output}"
     )
+    _report_convergence(setting, model, diagnostics, path=args.diagnostics)
+
+
+def _report_convergence(
+    setting: AnalysisSetting, model: str, diagnostics: pd.DataFrame, *, path: Path | None
+) -> None:
+    """Act on the acceptance criteria, after the curve is safely on disk.
+
+    The curve is written either way, and is identical either way: the criteria decide whether a
+    shaky-looking set of fits stops the build, not what the answer is. Refusing to write an
+    already-computed curve would throw away an hour of sampling and tell nobody anything the
+    diagnostics table does not already say — and Snakemake deletes a failed job's outputs, so
+    the evidence would go with it. Hence: write, then judge, and always name the days.
+    """
+    suspect = diagnostics.attrs.get("suspect")
+    if not suspect:
+        return
+    criteria = setting.rac.get("convergence", {})
+    listed = ", ".join(
+        f"day {day.day} (R̂ {day.max_r_hat:.4f}, {day.divergences} divergences)"
+        for day in suspect[:10]
+    )
+    more = "" if len(suspect) <= 10 else f", and {len(suspect) - 10} more"
+    summary = (
+        f"{model}: {len(suspect)} of {len(diagnostics)} conditioning-day fits fail the "
+        f"acceptance criteria (R̂ > {criteria.get('max_r_hat')}, divergences > "
+        f"{criteria.get('divergence_fraction'):.0%} of draws): {listed}{more}."
+    )
+    if str(criteria.get("on_failure", "warn")) == "error":
+        raise RuntimeError(f"{summary} Full table: {path}.")
+    print(f"WARNING: {summary} Full table: {path}.", file=sys.stderr)
 
 
 def _rac_by_refitting(
@@ -313,17 +346,6 @@ def _rac_by_refitting(
         final_day_fit=fitting.load_fit(posterior),
         on_day=lambda day: _report_day(model, day, reported),
     )
-    suspect = result.suspect_days()
-    if suspect:
-        listed = ", ".join(
-            f"day {day.day} (R̂ {day.max_r_hat:.3f}, {day.divergences} divergences)"
-            for day in suspect[:10]
-        )
-        raise RuntimeError(
-            f"{len(suspect)} of {len(result.diagnostics)} {model} fits did not converge: "
-            f"{listed}. A hundred and ten fits is a hundred and ten chances for one to go "
-            "quietly wrong, so this fails rather than writing a curve nobody has checked."
-        )
     diagnostics = pd.DataFrame(
         {
             "day": [day.day for day in result.diagnostics],
@@ -332,6 +354,13 @@ def _rac_by_refitting(
             "min_ess_bulk": [day.min_ess_bulk for day in result.diagnostics],
             "seconds": [day.seconds for day in result.diagnostics],
         }
+    )
+    # Carried on the frame rather than raised here, so that `command_rac` writes the curve and
+    # the table before anything decides whether to stop the build.
+    criteria = setting.rac.get("convergence", {})
+    diagnostics.attrs["suspect"] = result.suspect_days(
+        max_r_hat=float(criteria.get("max_r_hat", 1.01)),
+        divergence_fraction=float(criteria.get("divergence_fraction", 0.01)),
     )
     return result.estimate, diagnostics
 

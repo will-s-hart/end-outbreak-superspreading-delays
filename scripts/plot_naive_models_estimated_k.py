@@ -8,10 +8,11 @@ Five panels, reading left to right and then down::
 **What differs from Fig. 1, and why.** Estimating ``k`` adds a third parameter posterior to
 show, so this figure carries five panels where Fig. 1 carries four: the three parameters keep
 the top row, and the model-probability pie drops to the bottom row beside the RAC curves. Panel
-E also starts at the ERT's arrival rather than at the first onset. All three curves sit flat at
-1 until well past the last observed case, so on a panel that now shares its row the run-up from
-day 0 would compress the descent — the part the figure is about — into the right-hand third.
-The curves themselves are drawn over the whole window either way; only the view is trimmed.
+E also starts at the ERT's arrival rather than at the first onset. From there to well past the
+last observed case all three curves sit at 1, so on a panel that now shares its row the opening
+weeks would compress the descent — the part the figure is about — into the right-hand third.
+The curves themselves are drawn over the whole window either way; only the view is trimmed, so
+the crossing markers cannot differ between a trimmed panel and an untrimmed one.
 
 Panel C is the new result of this analysis. The three models are given the *same* prior on ``k``
 (§6.2) and land in different places, which is aim 2 measured rather than demonstrated. Each

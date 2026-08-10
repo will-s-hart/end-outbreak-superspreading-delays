@@ -41,7 +41,9 @@ made in earlier studies.
 
 The **risk of additional cases (RAC)**: the probability that at least one further case occurs
 after a given day, assuming the reproduction number reverts to its pre-intervention value once
-interventions are relaxed.
+interventions are relaxed. It is a real-time quantity — parameters and latent states are fitted
+to the record through the day in question and nothing after it — so each curve is one MCMC fit
+per day rather than a summary of a single fit. That is why `pixi run pipeline` takes hours.
 
 A companion quantity, the **risk of additional transmission (RAT)**, asks instead for at least
 one further *transmission event*. The naive models identify the two by assumption; the
@@ -74,6 +76,7 @@ fresh clone can look stale to Snakemake. The default profile
 ```
 config/            pipeline configuration, keyed per analysis, and the Snakemake profile
 data/              the padded daily onset series, with provenance in data/README.md
+docs/              the detail behind AGENTS.md: the estimand, the models, the findings
 end_of_outbreak/   the package: models, delays, inference, RAC/RAT, evidence
 scripts/           one compute-and-save script and one load-and-plot script per analysis
 results/           committed analysis outputs, including the report's numbers as LaTeX macros
@@ -81,10 +84,12 @@ figures/           committed figures (PDF + PNG)
 report/            LaTeX methods and results, and the compiled PDF
 tests/             pytest suite
 validation/        benchmarks and cross-checks: subject is the implementation, not the outbreak
-Snakefile          pipeline entry point (three tiers: fit -> derive -> plot)
+Snakefile          pipeline entry point (three tiers: fit and risk -> derive -> plot)
 ```
 
-See `AGENTS.md` for conventions and the development workflow.
+See `AGENTS.md` for conventions and the development workflow, and `docs/` for the detail it
+points to: [the risk estimand](docs/risk.md), [the models and fits](docs/models.md), and
+[what the study has measured](docs/findings.md).
 
 The report quotes **no number of its own**: `report/report.tex` writes `\resultnum{<key>}` and
 `results/report_numbers.tex` says what each key expands to, so a refit that moves a number moves

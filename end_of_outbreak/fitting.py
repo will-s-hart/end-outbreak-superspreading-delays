@@ -1,16 +1,19 @@
 """One place that turns a model description plus data into a posterior ``DataTree``.
 
-Every analysis is a single fit to the complete record — days 0–110 — because RAC is a
-retrospective quantity and one fit serves every conditioning day (§5.1, §5.6). So this module
-is deliberately thin: resolve the sampler settings, build the model, supply an initial point if
-the latent parameterisation asks for one, sample, and record on the result the few facts a
-downstream calculator cannot recover from the draws alone.
+This module is deliberately thin: resolve the sampler settings, build the model, supply an
+initial point if the latent parameterisation asks for one, sample, and record on the result the
+few facts a downstream calculator cannot recover from the draws alone.
 
-Those facts matter. The RAC calculators need to know which latent parameterisation the fit used
-— it decides which latents were integrated out and therefore have to be rebuilt (§6.3) — and,
-in the fixed-``k`` analyses, the value ``k`` was held at, since a fixed parameter is a constant
-in the graph rather than a variable in the posterior. Both travel with the fit as attributes so
-that a results file is self-describing.
+It is called on **windows**, not only on the whole record. RAC is a real-time quantity, so
+:mod:`end_of_outbreak.refit_risk` calls this once per conditioning day with ``counts[:t + 1]``;
+the evidence and dispersion steps call it once on the complete record. Nothing here needs to
+know which is happening — the window is just the data it is given.
+
+The recorded facts matter. The RAC calculators need to know which latent parameterisation the
+fit used — it decides which latents were integrated out of the likelihood, and therefore which
+have to be integrated back out of the risk (§6.3) — and, in the fixed-``k`` analyses, the value
+``k`` was held at, since a fixed parameter is a constant in the graph rather than a variable in
+the posterior. Both travel with the fit as attributes so that a results file is self-describing.
 """
 
 from __future__ import annotations

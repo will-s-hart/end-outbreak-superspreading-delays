@@ -177,6 +177,13 @@ class DailyRiskEstimate:
         chains = {part.n_chains for part in parts}
         if len(chains) != 1:
             raise ValueError(f"the per-day estimates disagree on the chain count: {sorted(chains)}")
+        draws = {part.n_draws for part in parts}
+        if len(draws) != 1:
+            raise ValueError(
+                f"the per-day estimates disagree on the draw count: {sorted(draws)}. Every "
+                "conditioning day must be fitted at the same sampler settings, or the curve "
+                "would carry a different Monte-Carlo error on different days"
+            )
         return cls(
             days=np.concatenate([part.days for part in parts]),
             log_no_further_cases=np.concatenate(

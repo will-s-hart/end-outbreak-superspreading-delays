@@ -423,15 +423,16 @@ def marginalised_latent_conditional(
 
     The latents removed by the ``marginalised`` strategies are **not lost**. Conditional on the
     parameters they are independent Gammas, ``Y_u | data, θ ~ Gamma(k · scale_u, k + c_u)``, and
-    independent of the sampled block too — so drawing them from this conditional, once per
-    posterior draw of ``(R_pre, R_post, k)``, reconstructs exact draws from the full smoothed
-    posterior over *every* latent.
+    independent of the sampled block too, so this conditional recovers everything the fit left
+    out of the posterior.
 
     That is what the RAC and RAT calculators need. The reset state at day ``t`` requires
     ``E_u = R_u Y_u`` for every ``u ≤ t`` — including the days past the last observed case,
     which are precisely the ones marginalisation removes — in order to rebuild the incubation
-    pipeline (§5.1). The reconstruction is done **once per posterior draw**, not once per
-    conditioning day, so the one-fit-serves-every-day economy of §5.6 is untouched.
+    pipeline (§5.1). They consume this conditional analytically rather than drawing from it: the
+    risk is affine in the latents, so
+    :func:`end_of_outbreak.risk_of_additional_cases.marginalised_risk_correction` integrates them
+    out with the Gamma moment generating function instead.
 
     ``R_pre``, ``R_post`` and ``k`` may each be a scalar or a vector of posterior draws; the
     layout of the block does not depend on them, so a whole posterior is handled in one call.

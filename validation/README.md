@@ -8,7 +8,7 @@ outputs are evidence about the *implementation*, not about the outbreak.
 | Script | What it answers | Written to |
 | --- | --- | --- |
 | `run_sampler_benchmark.py` | Which latent parameterisation should the project use? (Stage 3, §6.3) | `results/sampler_benchmark.md` + two CSVs |
-| `run_rac_validation.py` | Are the RAC calculators, the reset state and the latent reconstruction right? (Stage 4, §5.1/§6.4) | `results/rac_validation.md` + five CSVs and a figure |
+| `run_rac_validation.py` | Are the RAC calculators and the reset state right, is the latent marginalisation exact, and how far apart are the two estimators? (§5.1/§6.4) | `results/rac_validation.md` + six CSVs and a figure |
 | `run_evidence_validation.py` | Are the marginal likelihoods right, on the real series? (Stage 6, §6.5) | `results/evidence_validation.md` + three CSVs |
 | `run_onset_particle_mcmc_check.py` | Do the onset filters, matched RAC state and PMMH route agree with PyMC? (Stage 8, §6.6) | `results/onset_particle_mcmc_validation.md` + three CSVs |
 

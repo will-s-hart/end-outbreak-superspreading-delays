@@ -4,40 +4,54 @@
 %   data/equateur_2018_onsets.csv
 %   results/naive_models_fixed_k/dlo_posterior.nc
 %   results/naive_models_fixed_k/dlo_rac.csv
+%   results/naive_models_fixed_k/dlo_rac_diagnostics.csv
 %   results/naive_models_fixed_k/model_evidence.json
 %   results/naive_models_fixed_k/sse_posterior.nc
 %   results/naive_models_fixed_k/sse_rac.csv
+%   results/naive_models_fixed_k/sse_rac_diagnostics.csv
 %   results/naive_models_fixed_k/ssi_posterior.nc
 %   results/naive_models_fixed_k/ssi_rac.csv
+%   results/naive_models_fixed_k/ssi_rac_diagnostics.csv
 %   results/naive_models_estimated_k/dispersion_posteriors.json
 %   results/naive_models_estimated_k/dlo_posterior.nc
 %   results/naive_models_estimated_k/dlo_rac.csv
+%   results/naive_models_estimated_k/dlo_rac_diagnostics.csv
 %   results/naive_models_estimated_k/model_evidence.json
 %   results/naive_models_estimated_k/sse_posterior.nc
 %   results/naive_models_estimated_k/sse_rac.csv
+%   results/naive_models_estimated_k/sse_rac_diagnostics.csv
 %   results/naive_models_estimated_k/ssi_posterior.nc
 %   results/naive_models_estimated_k/ssi_rac.csv
+%   results/naive_models_estimated_k/ssi_rac_diagnostics.csv
 %   results/onset_models_fixed_k/model_evidence.json
 %   results/onset_models_fixed_k/sse_posterior.nc
 %   results/onset_models_fixed_k/sse_rac.csv
+%   results/onset_models_fixed_k/sse_rac_diagnostics.csv
 %   results/onset_models_fixed_k/sse_so_posterior.nc
 %   results/onset_models_fixed_k/sse_so_rac.csv
+%   results/onset_models_fixed_k/sse_so_rac_diagnostics.csv
 %   results/onset_models_fixed_k/ssi_posterior.nc
 %   results/onset_models_fixed_k/ssi_rac.csv
+%   results/onset_models_fixed_k/ssi_rac_diagnostics.csv
 %   results/onset_models_fixed_k/ssi_so_posterior.nc
 %   results/onset_models_fixed_k/ssi_so_rac.csv
+%   results/onset_models_fixed_k/ssi_so_rac_diagnostics.csv
 %   results/onset_models_estimated_k/dispersion_posteriors.json
 %   results/onset_models_estimated_k/model_evidence.json
 %   results/onset_models_estimated_k/sse_posterior.nc
 %   results/onset_models_estimated_k/sse_rac.csv
+%   results/onset_models_estimated_k/sse_rac_diagnostics.csv
 %   results/onset_models_estimated_k/sse_so_posterior.nc
 %   results/onset_models_estimated_k/sse_so_rac.csv
+%   results/onset_models_estimated_k/sse_so_rac_diagnostics.csv
 %   results/onset_models_estimated_k/ssi_posterior.nc
 %   results/onset_models_estimated_k/ssi_rac.csv
+%   results/onset_models_estimated_k/ssi_rac_diagnostics.csv
 %   results/onset_models_estimated_k/ssi_so_posterior.nc
 %   results/onset_models_estimated_k/ssi_so_rac.csv
+%   results/onset_models_estimated_k/ssi_so_rac_diagnostics.csv
 %
-% 488 entries.
+% 493 entries.
 \defresultnum{data.days}{111}
 \defresultnum{data.ertarrivaldate}{8 May 2018}
 \defresultnum{data.ertarrivalday}{33}
@@ -70,9 +84,10 @@
 \defresultnum{delays.tost.sd}{4.57}
 \defresultnum{delays.tost.variance}{20.88}
 \defresultnum{naivemodelsestimatedk.chains}{4}
-\defresultnum{naivemodelsestimatedk.diagnostics.divergences}{0}
-\defresultnum{naivemodelsestimatedk.diagnostics.maxrhat}{1.00}
-\defresultnum{naivemodelsestimatedk.diagnostics.minbulkess}{4074}
+\defresultnum{naivemodelsestimatedk.diagnostics.divergences}{54}
+\defresultnum{naivemodelsestimatedk.diagnostics.fits}{330}
+\defresultnum{naivemodelsestimatedk.diagnostics.maxrhat}{1.005}
+\defresultnum{naivemodelsestimatedk.diagnostics.minbulkess}{3653}
 \defresultnum{naivemodelsestimatedk.dlo-vs-sse.medianratio}{0.75}
 \defresultnum{naivemodelsestimatedk.dlo-vs-sse.overlap}{0.589}
 \defresultnum{naivemodelsestimatedk.dlo-vs-sse.probabilitygreater}{0.219}
@@ -88,9 +103,9 @@
 \defresultnum{naivemodelsestimatedk.dlo.logevidencese}{0.002}
 \defresultnum{naivemodelsestimatedk.dlo.probability}{\ensuremath{2\times 10^{-4}}}
 \defresultnum{naivemodelsestimatedk.dlo.rac.final}{0.032}
-\defresultnum{naivemodelsestimatedk.dlo.rac.mcse}{0.0012}
-\defresultnum{naivemodelsestimatedk.dlo.rac.mcselate}{0.0012}
-\defresultnum{naivemodelsestimatedk.dlo.rac.reference}{0.429}
+\defresultnum{naivemodelsestimatedk.dlo.rac.mcse}{0.0028}
+\defresultnum{naivemodelsestimatedk.dlo.rac.mcselate}{0.0023}
+\defresultnum{naivemodelsestimatedk.dlo.rac.reference}{0.427}
 \defresultnum{naivemodelsestimatedk.dlo.rac01.date}{never}
 \defresultnum{naivemodelsestimatedk.dlo.rac01.day}{never}
 \defresultnum{naivemodelsestimatedk.dlo.rac05.date}{21 July 2018}
@@ -118,9 +133,9 @@
 \defresultnum{naivemodelsestimatedk.sse.logevidencese}{0.002}
 \defresultnum{naivemodelsestimatedk.sse.probability}{\ensuremath{4\times 10^{-7}}}
 \defresultnum{naivemodelsestimatedk.sse.rac.final}{0.010}
-\defresultnum{naivemodelsestimatedk.sse.rac.mcse}{0.0005}
-\defresultnum{naivemodelsestimatedk.sse.rac.mcselate}{0.0005}
-\defresultnum{naivemodelsestimatedk.sse.rac.reference}{0.170}
+\defresultnum{naivemodelsestimatedk.sse.rac.mcse}{0.0027}
+\defresultnum{naivemodelsestimatedk.sse.rac.mcselate}{0.0014}
+\defresultnum{naivemodelsestimatedk.sse.rac.reference}{0.169}
 \defresultnum{naivemodelsestimatedk.sse.rac01.date}{24 July 2018}
 \defresultnum{naivemodelsestimatedk.sse.rac01.day}{110}
 \defresultnum{naivemodelsestimatedk.sse.rac05.date}{13 July 2018}
@@ -145,8 +160,8 @@
 \defresultnum{naivemodelsestimatedk.ssi.logevidencese}{0.023}
 \defresultnum{naivemodelsestimatedk.ssi.probability}{1.00}
 \defresultnum{naivemodelsestimatedk.ssi.rac.final}{0.006}
-\defresultnum{naivemodelsestimatedk.ssi.rac.mcse}{0.0026}
-\defresultnum{naivemodelsestimatedk.ssi.rac.mcselate}{0.0026}
+\defresultnum{naivemodelsestimatedk.ssi.rac.mcse}{0.0038}
+\defresultnum{naivemodelsestimatedk.ssi.rac.mcselate}{0.0038}
 \defresultnum{naivemodelsestimatedk.ssi.rac.reference}{0.107}
 \defresultnum{naivemodelsestimatedk.ssi.rac01.date}{21 July 2018}
 \defresultnum{naivemodelsestimatedk.ssi.rac01.day}{107}
@@ -163,16 +178,17 @@
 \defresultnum{naivemodelsestimatedk.targetaccept}{0.90}
 \defresultnum{naivemodelsestimatedk.tune}{2000}
 \defresultnum{naivemodelsfixedk.chains}{4}
-\defresultnum{naivemodelsfixedk.diagnostics.divergences}{0}
-\defresultnum{naivemodelsfixedk.diagnostics.maxrhat}{1.00}
-\defresultnum{naivemodelsfixedk.diagnostics.minbulkess}{4855}
+\defresultnum{naivemodelsfixedk.diagnostics.divergences}{3}
+\defresultnum{naivemodelsfixedk.diagnostics.fits}{330}
+\defresultnum{naivemodelsfixedk.diagnostics.maxrhat}{1.003}
+\defresultnum{naivemodelsfixedk.diagnostics.minbulkess}{4003}
 \defresultnum{naivemodelsfixedk.dlo.logevidence}{\ensuremath{-97.1}}
 \defresultnum{naivemodelsfixedk.dlo.logevidencese}{0.001}
 \defresultnum{naivemodelsfixedk.dlo.probability}{\ensuremath{4\times 10^{-6}}}
 \defresultnum{naivemodelsfixedk.dlo.rac.final}{0.032}
-\defresultnum{naivemodelsfixedk.dlo.rac.mcse}{0.0009}
-\defresultnum{naivemodelsfixedk.dlo.rac.mcselate}{0.0009}
-\defresultnum{naivemodelsfixedk.dlo.rac.reference}{0.413}
+\defresultnum{naivemodelsfixedk.dlo.rac.mcse}{0.0031}
+\defresultnum{naivemodelsfixedk.dlo.rac.mcselate}{0.0020}
+\defresultnum{naivemodelsfixedk.dlo.rac.reference}{0.412}
 \defresultnum{naivemodelsfixedk.dlo.rac01.date}{never}
 \defresultnum{naivemodelsfixedk.dlo.rac01.day}{never}
 \defresultnum{naivemodelsfixedk.dlo.rac05.date}{21 July 2018}
@@ -192,8 +208,8 @@
 \defresultnum{naivemodelsfixedk.sse.logevidencese}{0.001}
 \defresultnum{naivemodelsfixedk.sse.probability}{\ensuremath{3\times 10^{-10}}}
 \defresultnum{naivemodelsfixedk.sse.rac.final}{0.005}
-\defresultnum{naivemodelsfixedk.sse.rac.mcse}{0.0010}
-\defresultnum{naivemodelsfixedk.sse.rac.mcselate}{0.0010}
+\defresultnum{naivemodelsfixedk.sse.rac.mcse}{0.0013}
+\defresultnum{naivemodelsfixedk.sse.rac.mcselate}{0.0011}
 \defresultnum{naivemodelsfixedk.sse.rac.reference}{0.093}
 \defresultnum{naivemodelsfixedk.sse.rac01.date}{20 July 2018}
 \defresultnum{naivemodelsfixedk.sse.rac01.day}{106}
@@ -214,8 +230,8 @@
 \defresultnum{naivemodelsfixedk.ssi.logevidencese}{0.019}
 \defresultnum{naivemodelsfixedk.ssi.probability}{1.00}
 \defresultnum{naivemodelsfixedk.ssi.rac.final}{0.007}
-\defresultnum{naivemodelsfixedk.ssi.rac.mcse}{0.0015}
-\defresultnum{naivemodelsfixedk.ssi.rac.mcselate}{0.0015}
+\defresultnum{naivemodelsfixedk.ssi.rac.mcse}{0.0043}
+\defresultnum{naivemodelsfixedk.ssi.rac.mcselate}{0.0031}
 \defresultnum{naivemodelsfixedk.ssi.rac.reference}{0.123}
 \defresultnum{naivemodelsfixedk.ssi.rac01.date}{22 July 2018}
 \defresultnum{naivemodelsfixedk.ssi.rac01.day}{108}
@@ -232,9 +248,10 @@
 \defresultnum{naivemodelsfixedk.targetaccept}{0.90}
 \defresultnum{naivemodelsfixedk.tune}{2000}
 \defresultnum{onsetmodelsestimatedk.chains}{4}
-\defresultnum{onsetmodelsestimatedk.diagnostics.divergences}{0}
-\defresultnum{onsetmodelsestimatedk.diagnostics.maxrhat}{1.00}
-\defresultnum{onsetmodelsestimatedk.diagnostics.minbulkess}{3575}
+\defresultnum{onsetmodelsestimatedk.diagnostics.divergences}{22}
+\defresultnum{onsetmodelsestimatedk.diagnostics.fits}{440}
+\defresultnum{onsetmodelsestimatedk.diagnostics.maxrhat}{1.010}
+\defresultnum{onsetmodelsestimatedk.diagnostics.minbulkess}{1143}
 \defresultnum{onsetmodelsestimatedk.draws}{2000}
 \defresultnum{onsetmodelsestimatedk.fixedk}{estimated}
 \defresultnum{onsetmodelsestimatedk.nmodels}{4}
@@ -256,8 +273,8 @@
 \defresultnum{onsetmodelsestimatedk.sse.logevidencese}{0.001}
 \defresultnum{onsetmodelsestimatedk.sse.probability}{\ensuremath{1\times 10^{-8}}}
 \defresultnum{onsetmodelsestimatedk.sse.rac.final}{0.010}
-\defresultnum{onsetmodelsestimatedk.sse.rac.mcse}{0.0009}
-\defresultnum{onsetmodelsestimatedk.sse.rac.mcselate}{0.0009}
+\defresultnum{onsetmodelsestimatedk.sse.rac.mcse}{0.0026}
+\defresultnum{onsetmodelsestimatedk.sse.rac.mcselate}{0.0015}
 \defresultnum{onsetmodelsestimatedk.sse.rac.reference}{0.170}
 \defresultnum{onsetmodelsestimatedk.sse.rac01.date}{24 July 2018}
 \defresultnum{onsetmodelsestimatedk.sse.rac01.day}{110}
@@ -271,16 +288,16 @@
 \defresultnum{onsetmodelsestimatedk.sse.rpre.lower}{0.98}
 \defresultnum{onsetmodelsestimatedk.sse.rpre.median}{2.09}
 \defresultnum{onsetmodelsestimatedk.sse.rpre.upper}{4.77}
-\defresultnum{onsetmodelsestimatedk.sseso-vs-sse.shift01}{12}
-\defresultnum{onsetmodelsestimatedk.sseso-vs-sse.shift05}{12}
+\defresultnum{onsetmodelsestimatedk.sseso-vs-sse.shift01}{11}
+\defresultnum{onsetmodelsestimatedk.sseso-vs-sse.shift05}{11}
 \defresultnum{onsetmodelsestimatedk.sseso-vs-ssiso.medianratio}{1.02}
 \defresultnum{onsetmodelsestimatedk.sseso-vs-ssiso.overlap}{0.980}
 \defresultnum{onsetmodelsestimatedk.sseso-vs-ssiso.probabilitygreater}{0.505}
 \defresultnum{onsetmodelsestimatedk.sseso.evidencegain}{\ensuremath{+0.01}}
-\defresultnum{onsetmodelsestimatedk.sseso.gap.date}{8 June 2018}
-\defresultnum{onsetmodelsestimatedk.sseso.gap.day}{64}
-\defresultnum{onsetmodelsestimatedk.sseso.gap.max}{0.269}
-\defresultnum{onsetmodelsestimatedk.sseso.gap.shift01}{6}
+\defresultnum{onsetmodelsestimatedk.sseso.gap.date}{9 June 2018}
+\defresultnum{onsetmodelsestimatedk.sseso.gap.day}{65}
+\defresultnum{onsetmodelsestimatedk.sseso.gap.max}{0.274}
+\defresultnum{onsetmodelsestimatedk.sseso.gap.shift01}{7}
 \defresultnum{onsetmodelsestimatedk.sseso.gap.shift05}{6}
 \defresultnum{onsetmodelsestimatedk.sseso.k.interval}{0.178 (0.088--0.351)}
 \defresultnum{onsetmodelsestimatedk.sseso.k.lower}{0.088}
@@ -293,21 +310,21 @@
 \defresultnum{onsetmodelsestimatedk.sseso.logevidencese}{0.038}
 \defresultnum{onsetmodelsestimatedk.sseso.probability}{0.48}
 \defresultnum{onsetmodelsestimatedk.sseso.rac.final}{0.002}
-\defresultnum{onsetmodelsestimatedk.sseso.rac.mcse}{0.0180}
-\defresultnum{onsetmodelsestimatedk.sseso.rac.mcselate}{0.0023}
-\defresultnum{onsetmodelsestimatedk.sseso.rac.reference}{0.032}
-\defresultnum{onsetmodelsestimatedk.sseso.rac01.date}{12 July 2018}
-\defresultnum{onsetmodelsestimatedk.sseso.rac01.day}{98}
-\defresultnum{onsetmodelsestimatedk.sseso.rac05.date}{1 July 2018}
-\defresultnum{onsetmodelsestimatedk.sseso.rac05.day}{87}
+\defresultnum{onsetmodelsestimatedk.sseso.rac.mcse}{0.0030}
+\defresultnum{onsetmodelsestimatedk.sseso.rac.mcselate}{0.0015}
+\defresultnum{onsetmodelsestimatedk.sseso.rac.reference}{0.034}
+\defresultnum{onsetmodelsestimatedk.sseso.rac01.date}{13 July 2018}
+\defresultnum{onsetmodelsestimatedk.sseso.rac01.day}{99}
+\defresultnum{onsetmodelsestimatedk.sseso.rac05.date}{2 July 2018}
+\defresultnum{onsetmodelsestimatedk.sseso.rac05.day}{88}
 \defresultnum{onsetmodelsestimatedk.sseso.rat.final}{0.001}
-\defresultnum{onsetmodelsestimatedk.sseso.rat.mcse}{0.0152}
-\defresultnum{onsetmodelsestimatedk.sseso.rat.mcselate}{0.0013}
+\defresultnum{onsetmodelsestimatedk.sseso.rat.mcse}{0.0042}
+\defresultnum{onsetmodelsestimatedk.sseso.rat.mcselate}{0.0024}
 \defresultnum{onsetmodelsestimatedk.sseso.rat.reference}{0.013}
 \defresultnum{onsetmodelsestimatedk.sseso.rat01.date}{6 July 2018}
 \defresultnum{onsetmodelsestimatedk.sseso.rat01.day}{92}
-\defresultnum{onsetmodelsestimatedk.sseso.rat05.date}{25 June 2018}
-\defresultnum{onsetmodelsestimatedk.sseso.rat05.day}{81}
+\defresultnum{onsetmodelsestimatedk.sseso.rat05.date}{26 June 2018}
+\defresultnum{onsetmodelsestimatedk.sseso.rat05.day}{82}
 \defresultnum{onsetmodelsestimatedk.sseso.rpost.interval}{0.28 (0.08--0.95)}
 \defresultnum{onsetmodelsestimatedk.sseso.rpost.lower}{0.08}
 \defresultnum{onsetmodelsestimatedk.sseso.rpost.median}{0.28}
@@ -334,9 +351,9 @@
 \defresultnum{onsetmodelsestimatedk.ssi.logevidencese}{0.022}
 \defresultnum{onsetmodelsestimatedk.ssi.probability}{0.03}
 \defresultnum{onsetmodelsestimatedk.ssi.rac.final}{0.006}
-\defresultnum{onsetmodelsestimatedk.ssi.rac.mcse}{0.0045}
-\defresultnum{onsetmodelsestimatedk.ssi.rac.mcselate}{0.0045}
-\defresultnum{onsetmodelsestimatedk.ssi.rac.reference}{0.106}
+\defresultnum{onsetmodelsestimatedk.ssi.rac.mcse}{0.0041}
+\defresultnum{onsetmodelsestimatedk.ssi.rac.mcselate}{0.0034}
+\defresultnum{onsetmodelsestimatedk.ssi.rac.reference}{0.108}
 \defresultnum{onsetmodelsestimatedk.ssi.rac01.date}{21 July 2018}
 \defresultnum{onsetmodelsestimatedk.ssi.rac01.day}{107}
 \defresultnum{onsetmodelsestimatedk.ssi.rac05.date}{10 July 2018}
@@ -350,13 +367,13 @@
 \defresultnum{onsetmodelsestimatedk.ssi.rpre.median}{1.54}
 \defresultnum{onsetmodelsestimatedk.ssi.rpre.upper}{3.67}
 \defresultnum{onsetmodelsestimatedk.ssiso-vs-ssi.shift01}{8}
-\defresultnum{onsetmodelsestimatedk.ssiso-vs-ssi.shift05}{8}
+\defresultnum{onsetmodelsestimatedk.ssiso-vs-ssi.shift05}{7}
 \defresultnum{onsetmodelsestimatedk.ssiso.evidencegain}{\ensuremath{+0.04}}
-\defresultnum{onsetmodelsestimatedk.ssiso.gap.date}{9 June 2018}
-\defresultnum{onsetmodelsestimatedk.ssiso.gap.day}{65}
-\defresultnum{onsetmodelsestimatedk.ssiso.gap.max}{0.240}
+\defresultnum{onsetmodelsestimatedk.ssiso.gap.date}{11 June 2018}
+\defresultnum{onsetmodelsestimatedk.ssiso.gap.day}{67}
+\defresultnum{onsetmodelsestimatedk.ssiso.gap.max}{0.236}
 \defresultnum{onsetmodelsestimatedk.ssiso.gap.shift01}{6}
-\defresultnum{onsetmodelsestimatedk.ssiso.gap.shift05}{5}
+\defresultnum{onsetmodelsestimatedk.ssiso.gap.shift05}{6}
 \defresultnum{onsetmodelsestimatedk.ssiso.k.interval}{0.175 (0.088--0.353)}
 \defresultnum{onsetmodelsestimatedk.ssiso.k.lower}{0.088}
 \defresultnum{onsetmodelsestimatedk.ssiso.k.median}{0.175}
@@ -368,16 +385,16 @@
 \defresultnum{onsetmodelsestimatedk.ssiso.logevidencese}{0.020}
 \defresultnum{onsetmodelsestimatedk.ssiso.probability}{0.49}
 \defresultnum{onsetmodelsestimatedk.ssiso.rac.final}{0.002}
-\defresultnum{onsetmodelsestimatedk.ssiso.rac.mcse}{0.0010}
-\defresultnum{onsetmodelsestimatedk.ssiso.rac.mcselate}{0.0010}
-\defresultnum{onsetmodelsestimatedk.ssiso.rac.reference}{0.037}
+\defresultnum{onsetmodelsestimatedk.ssiso.rac.mcse}{0.0033}
+\defresultnum{onsetmodelsestimatedk.ssiso.rac.mcselate}{0.0017}
+\defresultnum{onsetmodelsestimatedk.ssiso.rac.reference}{0.038}
 \defresultnum{onsetmodelsestimatedk.ssiso.rac01.date}{13 July 2018}
 \defresultnum{onsetmodelsestimatedk.ssiso.rac01.day}{99}
-\defresultnum{onsetmodelsestimatedk.ssiso.rac05.date}{2 July 2018}
-\defresultnum{onsetmodelsestimatedk.ssiso.rac05.day}{88}
+\defresultnum{onsetmodelsestimatedk.ssiso.rac05.date}{3 July 2018}
+\defresultnum{onsetmodelsestimatedk.ssiso.rac05.day}{89}
 \defresultnum{onsetmodelsestimatedk.ssiso.rat.final}{0.001}
-\defresultnum{onsetmodelsestimatedk.ssiso.rat.mcse}{0.0026}
-\defresultnum{onsetmodelsestimatedk.ssiso.rat.mcselate}{0.0026}
+\defresultnum{onsetmodelsestimatedk.ssiso.rat.mcse}{0.0039}
+\defresultnum{onsetmodelsestimatedk.ssiso.rat.mcselate}{0.0037}
 \defresultnum{onsetmodelsestimatedk.ssiso.rat.reference}{0.015}
 \defresultnum{onsetmodelsestimatedk.ssiso.rat01.date}{7 July 2018}
 \defresultnum{onsetmodelsestimatedk.ssiso.rat01.day}{93}
@@ -394,9 +411,10 @@
 \defresultnum{onsetmodelsestimatedk.targetaccept}{0.95}
 \defresultnum{onsetmodelsestimatedk.tune}{2000}
 \defresultnum{onsetmodelsfixedk.chains}{4}
-\defresultnum{onsetmodelsfixedk.diagnostics.divergences}{0}
-\defresultnum{onsetmodelsfixedk.diagnostics.maxrhat}{1.00}
-\defresultnum{onsetmodelsfixedk.diagnostics.minbulkess}{4190}
+\defresultnum{onsetmodelsfixedk.diagnostics.divergences}{93}
+\defresultnum{onsetmodelsfixedk.diagnostics.fits}{440}
+\defresultnum{onsetmodelsfixedk.diagnostics.maxrhat}{1.009}
+\defresultnum{onsetmodelsfixedk.diagnostics.minbulkess}{1190}
 \defresultnum{onsetmodelsfixedk.draws}{2000}
 \defresultnum{onsetmodelsfixedk.fixedk}{0.18}
 \defresultnum{onsetmodelsfixedk.nmodels}{4}
@@ -404,8 +422,8 @@
 \defresultnum{onsetmodelsfixedk.sse.logevidencese}{0.001}
 \defresultnum{onsetmodelsfixedk.sse.probability}{\ensuremath{7\times 10^{-12}}}
 \defresultnum{onsetmodelsfixedk.sse.rac.final}{0.005}
-\defresultnum{onsetmodelsfixedk.sse.rac.mcse}{0.0011}
-\defresultnum{onsetmodelsfixedk.sse.rac.mcselate}{0.0011}
+\defresultnum{onsetmodelsfixedk.sse.rac.mcse}{0.0018}
+\defresultnum{onsetmodelsfixedk.sse.rac.mcselate}{0.0009}
 \defresultnum{onsetmodelsfixedk.sse.rac.reference}{0.093}
 \defresultnum{onsetmodelsfixedk.sse.rac01.date}{20 July 2018}
 \defresultnum{onsetmodelsfixedk.sse.rac01.day}{106}
@@ -421,11 +439,11 @@
 \defresultnum{onsetmodelsfixedk.sse.rpre.upper}{5.48}
 \defresultnum{onsetmodelsfixedk.sseso-vs-sse.shift01}{7}
 \defresultnum{onsetmodelsfixedk.sseso-vs-sse.shift05}{7}
-\defresultnum{onsetmodelsfixedk.sseso.gap.date}{8 June 2018}
-\defresultnum{onsetmodelsfixedk.sseso.gap.day}{64}
-\defresultnum{onsetmodelsfixedk.sseso.gap.max}{0.269}
+\defresultnum{onsetmodelsfixedk.sseso.gap.date}{9 June 2018}
+\defresultnum{onsetmodelsfixedk.sseso.gap.day}{65}
+\defresultnum{onsetmodelsfixedk.sseso.gap.max}{0.275}
 \defresultnum{onsetmodelsfixedk.sseso.gap.shift01}{7}
-\defresultnum{onsetmodelsfixedk.sseso.gap.shift05}{7}
+\defresultnum{onsetmodelsfixedk.sseso.gap.shift05}{6}
 \defresultnum{onsetmodelsfixedk.sseso.latents.marginalised}{52}
 \defresultnum{onsetmodelsfixedk.sseso.latents.sampled}{58}
 \defresultnum{onsetmodelsfixedk.sseso.latents.total}{110}
@@ -433,21 +451,21 @@
 \defresultnum{onsetmodelsfixedk.sseso.logevidencese}{0.036}
 \defresultnum{onsetmodelsfixedk.sseso.probability}{0.49}
 \defresultnum{onsetmodelsfixedk.sseso.rac.final}{0.002}
-\defresultnum{onsetmodelsfixedk.sseso.rac.mcse}{0.0105}
-\defresultnum{onsetmodelsfixedk.sseso.rac.mcselate}{0.0008}
-\defresultnum{onsetmodelsfixedk.sseso.rac.reference}{0.033}
+\defresultnum{onsetmodelsfixedk.sseso.rac.mcse}{0.0026}
+\defresultnum{onsetmodelsfixedk.sseso.rac.mcselate}{0.0026}
+\defresultnum{onsetmodelsfixedk.sseso.rac.reference}{0.035}
 \defresultnum{onsetmodelsfixedk.sseso.rac01.date}{13 July 2018}
 \defresultnum{onsetmodelsfixedk.sseso.rac01.day}{99}
 \defresultnum{onsetmodelsfixedk.sseso.rac05.date}{2 July 2018}
 \defresultnum{onsetmodelsfixedk.sseso.rac05.day}{88}
 \defresultnum{onsetmodelsfixedk.sseso.rat.final}{0.001}
-\defresultnum{onsetmodelsfixedk.sseso.rat.mcse}{0.0083}
-\defresultnum{onsetmodelsfixedk.sseso.rat.mcselate}{0.0005}
+\defresultnum{onsetmodelsfixedk.sseso.rat.mcse}{0.0040}
+\defresultnum{onsetmodelsfixedk.sseso.rat.mcselate}{0.0023}
 \defresultnum{onsetmodelsfixedk.sseso.rat.reference}{0.013}
 \defresultnum{onsetmodelsfixedk.sseso.rat01.date}{6 July 2018}
 \defresultnum{onsetmodelsfixedk.sseso.rat01.day}{92}
-\defresultnum{onsetmodelsfixedk.sseso.rat05.date}{25 June 2018}
-\defresultnum{onsetmodelsfixedk.sseso.rat05.day}{81}
+\defresultnum{onsetmodelsfixedk.sseso.rat05.date}{26 June 2018}
+\defresultnum{onsetmodelsfixedk.sseso.rat05.day}{82}
 \defresultnum{onsetmodelsfixedk.sseso.rpost.interval}{0.27 (0.08--0.87)}
 \defresultnum{onsetmodelsfixedk.sseso.rpost.lower}{0.08}
 \defresultnum{onsetmodelsfixedk.sseso.rpost.median}{0.27}
@@ -463,9 +481,9 @@
 \defresultnum{onsetmodelsfixedk.ssi.logevidencese}{0.020}
 \defresultnum{onsetmodelsfixedk.ssi.probability}{0.03}
 \defresultnum{onsetmodelsfixedk.ssi.rac.final}{0.007}
-\defresultnum{onsetmodelsfixedk.ssi.rac.mcse}{0.0016}
-\defresultnum{onsetmodelsfixedk.ssi.rac.mcselate}{0.0016}
-\defresultnum{onsetmodelsfixedk.ssi.rac.reference}{0.121}
+\defresultnum{onsetmodelsfixedk.ssi.rac.mcse}{0.0043}
+\defresultnum{onsetmodelsfixedk.ssi.rac.mcselate}{0.0026}
+\defresultnum{onsetmodelsfixedk.ssi.rac.reference}{0.122}
 \defresultnum{onsetmodelsfixedk.ssi.rac01.date}{22 July 2018}
 \defresultnum{onsetmodelsfixedk.ssi.rac01.day}{108}
 \defresultnum{onsetmodelsfixedk.ssi.rac05.date}{11 July 2018}
@@ -480,8 +498,8 @@
 \defresultnum{onsetmodelsfixedk.ssi.rpre.upper}{3.88}
 \defresultnum{onsetmodelsfixedk.ssiso-vs-ssi.shift01}{9}
 \defresultnum{onsetmodelsfixedk.ssiso-vs-ssi.shift05}{8}
-\defresultnum{onsetmodelsfixedk.ssiso.gap.date}{10 June 2018}
-\defresultnum{onsetmodelsfixedk.ssiso.gap.day}{66}
+\defresultnum{onsetmodelsfixedk.ssiso.gap.date}{11 June 2018}
+\defresultnum{onsetmodelsfixedk.ssiso.gap.day}{67}
 \defresultnum{onsetmodelsfixedk.ssiso.gap.max}{0.236}
 \defresultnum{onsetmodelsfixedk.ssiso.gap.shift01}{6}
 \defresultnum{onsetmodelsfixedk.ssiso.gap.shift05}{6}
@@ -492,16 +510,16 @@
 \defresultnum{onsetmodelsfixedk.ssiso.logevidencese}{0.019}
 \defresultnum{onsetmodelsfixedk.ssiso.probability}{0.49}
 \defresultnum{onsetmodelsfixedk.ssiso.rac.final}{0.002}
-\defresultnum{onsetmodelsfixedk.ssiso.rac.mcse}{0.0024}
-\defresultnum{onsetmodelsfixedk.ssiso.rac.mcselate}{0.0024}
+\defresultnum{onsetmodelsfixedk.ssiso.rac.mcse}{0.0036}
+\defresultnum{onsetmodelsfixedk.ssiso.rac.mcselate}{0.0015}
 \defresultnum{onsetmodelsfixedk.ssiso.rac.reference}{0.038}
 \defresultnum{onsetmodelsfixedk.ssiso.rac01.date}{13 July 2018}
 \defresultnum{onsetmodelsfixedk.ssiso.rac01.day}{99}
 \defresultnum{onsetmodelsfixedk.ssiso.rac05.date}{3 July 2018}
 \defresultnum{onsetmodelsfixedk.ssiso.rac05.day}{89}
 \defresultnum{onsetmodelsfixedk.ssiso.rat.final}{0.001}
-\defresultnum{onsetmodelsfixedk.ssiso.rat.mcse}{0.0039}
-\defresultnum{onsetmodelsfixedk.ssiso.rat.mcselate}{0.0039}
+\defresultnum{onsetmodelsfixedk.ssiso.rat.mcse}{0.0043}
+\defresultnum{onsetmodelsfixedk.ssiso.rat.mcselate}{0.0025}
 \defresultnum{onsetmodelsfixedk.ssiso.rat.reference}{0.015}
 \defresultnum{onsetmodelsfixedk.ssiso.rat01.date}{7 July 2018}
 \defresultnum{onsetmodelsfixedk.ssiso.rat01.day}{93}
@@ -517,9 +535,10 @@
 \defresultnum{onsetmodelsfixedk.ssiso.rpre.upper}{4.48}
 \defresultnum{onsetmodelsfixedk.targetaccept}{0.90}
 \defresultnum{onsetmodelsfixedk.tune}{2000}
-\defresultnum{overall.diagnostics.divergences}{0}
-\defresultnum{overall.diagnostics.maxrhat}{1.00}
-\defresultnum{overall.diagnostics.minbulkess}{3575}
+\defresultnum{overall.diagnostics.divergences}{172}
+\defresultnum{overall.diagnostics.fits}{1540}
+\defresultnum{overall.diagnostics.maxrhat}{1.010}
+\defresultnum{overall.diagnostics.minbulkess}{1143}
 \defresultnum{priors.R.median}{1.0}
 \defresultnum{priors.R.quantilelower}{0.2}
 \defresultnum{priors.R.quantileupper}{5.0}

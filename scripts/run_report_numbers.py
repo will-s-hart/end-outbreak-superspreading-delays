@@ -43,7 +43,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-import arviz as az
 import numpy as np
 import pandas as pd
 import xarray as xr
@@ -224,6 +223,15 @@ def read_risk_curve(path: Path) -> pd.DataFrame:
     frame = pd.read_csv(path)
     frame["date"] = pd.to_datetime(frame["date"])
     return frame
+
+
+def read_diagnostics(path: Path) -> pd.DataFrame:
+    """One model's per-conditioning-day sampler diagnostics."""
+    if not path.exists():
+        raise FileNotFoundError(
+            f"no sampler diagnostics at {path}; the `rac` rule writes them beside the curve"
+        )
+    return pd.read_csv(path)
 
 
 def open_posterior(path: Path) -> xr.DataTree:
@@ -481,49 +489,50 @@ class Diagnostics:
     maximum ``R̂`` and the minimum effective sample size, not about their averages. Aggregating
     the same way twice — per analysis and over all of them — is what lets the report make the
     global claim from a global number rather than from one analysis's.
+
+    The set is every fit behind every curve, not just the fits to the complete record: the
+    estimand conditions on the record through each day, so each curve rests on one fit per
+    conditioning day and a claim that leaves them out would cover a small fraction of the study.
     """
 
+    fits: int
     max_rhat: float
     min_bulk_ess: float
     divergences: int
 
     def merged_with(self, other: Diagnostics) -> Diagnostics:
         return Diagnostics(
+            fits=self.fits + other.fits,
             max_rhat=max(self.max_rhat, other.max_rhat),
             min_bulk_ess=min(self.min_bulk_ess, other.min_bulk_ess),
             divergences=self.divergences + other.divergences,
         )
 
 
-def measure_diagnostics(posteriors: dict[str, xr.DataTree]) -> Diagnostics:
-    """Convergence over a set of fits, for the scalars the report quotes."""
-    scalars = [_scalar_posterior(posterior) for posterior in posteriors.values()]
+def measure_diagnostics(tables: dict[str, pd.DataFrame]) -> Diagnostics:
+    """Convergence over every conditioning-day fit of every model in one analysis.
+
+    Read from the per-day tables the ``rac`` step writes rather than recomputed, so the numbers
+    the report quotes are the ones the pipeline's own acceptance gate applied. Those cover every
+    sampled variable, latent block included — which is a stronger claim than the reported
+    scalars alone, and the one the gate enforces.
+    """
     return Diagnostics(
-        max_rhat=max(float(np.asarray(az.rhat(scalar).to_array()).max()) for scalar in scalars),
-        min_bulk_ess=min(float(np.asarray(az.ess(scalar).to_array()).min()) for scalar in scalars),
-        divergences=sum(
-            int(np.asarray(posterior.sample_stats["diverging"]).sum())
-            for posterior in posteriors.values()
-        ),
+        fits=sum(len(table) for table in tables.values()),
+        max_rhat=max(float(table["max_r_hat"].max()) for table in tables.values()),
+        min_bulk_ess=min(float(table["min_ess_bulk"].min()) for table in tables.values()),
+        divergences=sum(int(table["divergences"].sum()) for table in tables.values()),
     )
 
 
 def add_diagnostics(numbers: NumberFile, diagnostics: Diagnostics, prefix: str) -> None:
     """Write one set of convergence figures under ``<prefix>.diagnostics``."""
-    numbers.set(f"{prefix}.diagnostics.maxrhat", fixed(diagnostics.max_rhat, 2))
+    numbers.set(f"{prefix}.diagnostics.fits", str(diagnostics.fits))
+    # Three decimals, not two: the acceptance gate is at 1.01, and "1.00" would not let a reader
+    # tell a comfortable pass from a marginal one.
+    numbers.set(f"{prefix}.diagnostics.maxrhat", fixed(diagnostics.max_rhat, 3))
     numbers.set(f"{prefix}.diagnostics.minbulkess", str(int(np.floor(diagnostics.min_bulk_ess))))
     numbers.set(f"{prefix}.diagnostics.divergences", str(diagnostics.divergences))
-
-
-def _scalar_posterior(posterior: xr.DataTree) -> xr.Dataset:
-    """The reported scalars of one fit, as a dataset arviz can take diagnostics of.
-
-    The latents are excluded deliberately: they are a block of tens of coordinates whose
-    individual diagnostics are not what "the fit converged" means here, and including them would
-    let one badly mixed nuisance coordinate stand in for the parameters the report quotes.
-    """
-    dataset = posterior.posterior.to_dataset()
-    return dataset[[name for name in (*REPRODUCTION_NUMBERS, DISPERSION) if name in dataset]]
 
 
 # --- the cross-analysis subtractions -----------------------------------------------------
@@ -621,7 +630,12 @@ def collect(
             add_parameters(numbers, posteriors[model], prefix)
             add_latent_block(numbers, posteriors[model], model, data, delays, prefix)
             add_risk_curve(numbers, curves[model], data, prefix)
-        diagnostics = measure_diagnostics(posteriors)
+        diagnostics = measure_diagnostics(
+            {
+                model: read_diagnostics(directory / f"{model}_rac_diagnostics.csv")
+                for model in models
+            }
+        )
         add_diagnostics(numbers, diagnostics, slug(analysis))
         overall = diagnostics if overall is None else overall.merged_with(diagnostics)
         add_onset_shifts(numbers, analysis, curves)
@@ -647,6 +661,7 @@ def _analysis_files(directory: Path, models: list[str]) -> Iterator[Path]:
     for model in models:
         yield directory / f"{model}_posterior.nc"
         yield directory / f"{model}_rac.csv"
+        yield directory / f"{model}_rac_diagnostics.csv"
     yield directory / "model_evidence.json"
     dispersion = directory / "dispersion_posteriors.json"
     if dispersion.exists():

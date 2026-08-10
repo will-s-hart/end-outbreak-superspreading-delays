@@ -88,8 +88,15 @@ def risk_curve_panel(
     ``first_day`` trims the *view*, not the curves: every model is still drawn over the whole
     window and the settling markers are unaffected, so a trimmed panel cannot show a different
     crossing date from an untrimmed one. It exists because the interesting part of the curve is
-    its descent, and on a figure where this panel shares its row the run-up from day 0 — where
-    all three models sit flat at 1 — compresses that descent into the right-hand third.
+    its descent, and on a figure where this panel shares its row the opening weeks — where every
+    model has already reached 1 and stays there — compress that descent into the right-hand
+    third. From the ERT's arrival to the last observed case there is nothing to see.
+
+    An untrimmed panel does show something the old retrospective estimand could not: the risk
+    *climbing* over the first days of the outbreak, from well under 1 on day 1. That is
+    real-time conditioning — early on the record is one case and a few days of silence, so the
+    posterior is prior-dominated — and the day-to-day roughness there is genuine too, since
+    each day is its own fit on its own data.
     """
     utils.plot_incidence(ax, data.dates, data.onsets)
     utils.mark_thresholds(ax)
@@ -122,8 +129,9 @@ def risk_curve_panel(
     ax.set_xlabel("conditioning day $t$ (2018)")
     ax.set_ylabel("risk of additional cases")
     ax.set_title("Risk of at least one further case after day $t$")
-    # Mid-left: the curves sit flat at ~1 until the last observed case and the onset bars are
-    # confined to the bottom, so this is the one large region of the panel that stays empty.
+    # Mid-left: the curves sit at ~1 from the opening weeks until the last observed case, and
+    # the onset bars are confined to the bottom, so this is the one large region that stays
+    # empty on both the trimmed and the untrimmed view.
     ax.legend(loc="center left", bbox_to_anchor=(0.015, 0.55))
     utils.panel_label(ax, letter)
 

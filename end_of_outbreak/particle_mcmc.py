@@ -1,10 +1,12 @@
 """Particle marginal Metropolis–Hastings over the transmission parameters (§6.6).
 
 This module is deliberately outside every Snakemake dependency list. PMMH is an independent
-validation route to the PyMC posterior, not a results path: the report analyses continue to use
-NUTS and the smoothed latent state. The distinction matters because a particle filter supplies
-filtering states; the resulting RAC/RAT curve is a sensitivity analysis, not an equality target
-for the main MCMC curve.
+validation route to the PyMC posterior, not a results path: the report analyses use NUTS.
+
+Its parameter posterior is the whole-record one, and its states are *filtering* states, so its
+RAC/RAT curve targets :mod:`end_of_outbreak.filtered_risk` — the comparison estimator, which
+conditions the same way — and agreement there is a test. It is not comparable with the
+headline curves, which refit per conditioning day.
 
 The Markov chain runs in ``(log R_pre, log R_post, log k)``. A bootstrap particle filter
 provides an unbiased likelihood estimate ``L_hat``; retaining that estimate on rejection gives

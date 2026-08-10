@@ -407,6 +407,7 @@ def compare_rac_methods(
     sampler: fitting.SamplerSettings,
     n_draws: int,
     n_particles: int,
+    stride: int,
     seed: int,
 ) -> pd.DataFrame:
     """Signed gap between the two estimators, per model and per conditioning day.
@@ -416,9 +417,16 @@ def compare_rac_methods(
     question is how large the difference is and which way it runs, day by day. **DLO and SSE
     are the control**: with no latent state their gap is entirely the parameter conditioning,
     so whatever the latent models show on top of that is the cost of the second approximation.
+
+    ``stride`` thins the conditioning days, because the refit side costs one MCMC fit per day
+    kept and the gap is a smooth function of ``t`` — every fifth day describes it as well as
+    every day, at a fifth of the price. The last day of the window is always included: it is
+    the one day on which the filtering law *is* the full-record law, so the gap there is a
+    pure measure of the parameter conditioning.
     """
     columns: dict[str, Any] = {}
-    days = refit_risk.conditioning_days(data.onsets.size)
+    every_day = refit_risk.conditioning_days(data.onsets.size)
+    days = np.union1d(every_day[::stride], every_day[-1:])
     for index, model in enumerate(models):
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
@@ -677,6 +685,13 @@ def parse_arguments(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--variance-repeats", type=int, default=12)
     parser.add_argument("--matched-pair-repeats", type=int, default=5)
     parser.add_argument(
+        "--method-stride",
+        type=int,
+        default=5,
+        help="conditioning days to compare the two estimators on, as a stride over the window; "
+        "the refit side costs one MCMC fit per day kept",
+    )
+    parser.add_argument(
         "--simulation-stride",
         type=int,
         default=10,
@@ -760,6 +775,7 @@ def main(argv: list[str] | None = None) -> None:
             sampler=sampler,
             n_draws=int(config["rac"]["filtering"]["n_draws"]),
             n_particles=int(config["rac"]["filtering"]["n_particles"]),
+            stride=arguments.method_stride,
             seed=arguments.seed,
         )
         frame.to_csv(output_dir / "rac_method_comparison.csv", index=False)

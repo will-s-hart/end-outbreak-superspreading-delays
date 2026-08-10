@@ -3,8 +3,9 @@ Snakemake rule from a script in `scripts/`, and everything here feeds a figure o
 
 | Path | What it is |
 | --- | --- |
-| `<analysis>/<model>_posterior.nc` | Tier-1 MCMC draws, one file per model. |
-| `<analysis>/<model>_rac.csv` | Tier-2 RAC curve (plus RAT, for the onset-anchored models). |
+| `<analysis>/<model>_posterior.nc` | Tier-1 MCMC draws for the fit to the complete record, one file per model. It feeds the evidence and dispersion steps, and serves as the last conditioning day's fit. |
+| `<analysis>/<model>_rac.csv` | Tier-1 RAC curve (plus RAT, for the onset-anchored models), from one fit per conditioning day. |
+| `<analysis>/<model>_rac_diagnostics.csv` | Tier-1 sampler diagnostics for those fits, one row per conditioning day. The per-day posteriors themselves are not kept. |
 | `<analysis>/model_evidence.json` | Tier-2 marginal likelihoods and posterior model probabilities. |
 | `<analysis>/dispersion_posteriors.json` | Tier-2 `k` posterior summaries and their pairwise divergences — only for the analyses that estimate `k`. |
 | `delay_distributions.csv` | Tier-2 discrete incubation, TOST, target serial-interval and implied serial-interval distributions for Supplementary Fig. S1. |

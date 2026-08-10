@@ -152,7 +152,12 @@ IMPLEMENTED_ANALYSES = [
 # `input` trigger tracks the *set* of input files rather than their contents -- so editing
 # config.yaml does NOT invalidate a rule unless the changed value is recorded here.
 def analysis_params(analysis):
-    """Config values that change what a fit for `analysis` produces."""
+    """Config values that change what a fit for `analysis` produces.
+
+    Shared by every rule that samples, so keep it to what a *fit* depends on. Settings that
+    only affect a later step belong in that step's own `params:` -- otherwise changing the
+    particle count of an approximation nobody is running would re-fit every model.
+    """
     block = ANALYSES[analysis]
     return {
         "fixed_k": block.get("fixed_k"),
@@ -161,6 +166,17 @@ def analysis_params(analysis):
         "latent_parameterisation": config.get("latent_parameterisation"),
         "negligible_latent_threshold": config.get("negligible_latent_threshold"),
     }
+
+
+# What the `rac` step produces depends on which estimator is selected, where the curve starts,
+# and -- under the filtering estimator -- how many draws and particles it uses.
+#
+# `rac.convergence` is deliberately absent. It decides whether a curve whose fits look shaky
+# stops the build; it does not change a single number in the curve, so putting it here would
+# make tightening a threshold re-run hours of MCMC to reproduce the identical output.
+RAC_PARAMS = {
+    key: config.get("rac", {}).get(key) for key in ("method", "first_day", "filtering")
+}
 
 
 # Delay distributions, the analysis window and the R-switch day feed every tier.
@@ -281,6 +297,7 @@ rule rac:
         diagnostics="results/{analysis}/{model}_rac_diagnostics.csv",
     params:
         analysis=lambda wildcards: analysis_params(wildcards.analysis),
+        rac=RAC_PARAMS,
         shared=SHARED_PARAMS,
     shell:
         "python {input.script} rac"

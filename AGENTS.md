@@ -1,55 +1,38 @@
 # AGENTS.md
 
-Instructions for coding agents working in this repository.
+Instructions for coding agents working in this repository. Read all of it; it is short by design.
+Detail lives in the files under *Where to read more* — go there when you are about to touch the
+thing they describe, not before.
 
-## Project
+## The study
 
-Research code for a study of how (i) the **mechanism** generating heterogeneity in
-transmission and (ii) the common practice of treating **symptom-onset dates as infection
-dates** affect the estimated risk of relaxing outbreak-control interventions. The case study
-is the 2018 Équateur Province (DRC) Ebola outbreak.
+How do (i) the **mechanism** generating heterogeneity in transmission and (ii) the common
+practice of treating **symptom-onset dates as infection dates** affect the estimated risk of
+relaxing outbreak-control interventions? The case study is the 2018 Équateur Province (DRC)
+Ebola outbreak.
 
 Five models are compared, all driven by the same onset-to-onset serial interval:
 
-| Model | Anchoring | Overdispersion acts at the level of | Latents (all / sampled) |
+| Model | Anchoring | Overdispersion acts at the level of | Latents |
 | --- | --- | --- | --- |
-| `dlo` | infections (naive) | the day (`NB` on aggregate incidence, fixed `k`) | none |
+| `dlo` | infections (naive) | the day (`NB` on aggregate incidence) | none |
 | `sse` | infections (naive) | the transmission event (`NB(RΛ, kΛ)`) | none |
-| `ssi` | infections (naive) | the individual (latent Gamma infectivity) | `Y_t`, 31 / **30** |
-| `sse_so` | symptom onsets | the transmission event | `λ̃_t`, 110 / **58** |
-| `ssi_so` | symptom onsets | the individual | `Y_t`, 31 / **30** |
+| `ssi` | infections (naive) | the individual (latent Gamma infectivity) | `Y_t` |
+| `sse_so` | symptom onsets | the transmission event | `λ̃_t` |
+| `ssi_so` | symptom onsets | the individual | `Y_t` |
 
-The second latent count is what the sampler actually sees: the rest are integrated out in
-closed form, exactly (see *The latent block* below). `cori` and `cori_so` are also built, as the
-`k → ∞` Poisson limits — they are validation targets, not compared models.
+`cori` and `cori_so` are also built, as the `k → ∞` Poisson limits — **validation targets, not
+compared models**, and they stay out of the four analyses. Four analyses, configured in
+`config/config.yaml`: the naive models at a transplanted `k` and at an estimated `k`, then the
+naive and onset-anchored models likewise.
 
-The output quantity throughout is the **risk of additional cases (RAC)**. It is a
-**retrospective reset posterior predictive**, not a filtering probability — the shorthand
-`P(· | data up to day t)` is misleading and the estimand is a procedure:
-
-> Fit parameters *and latents* to the complete record (days 0–110). For each day `t`, retain
-> the inferred state attached to the history through `t`, discard the realised trajectory
-> after `t`, reset `R` to `R_pre`, and simulate a counterfactual future. RAC(t) is the
-> posterior probability that this future contains at least one further case.
-
-The retained state is therefore **smoothed** — informed by data after day `t` — for the latent
-models. That is a deliberate decision, not an oversight. For the onset-anchored models the
-reset state must also reconstruct the **incubation pipeline** (infected before `t`, not yet
-symptomatic); restarting the recursion from observed onsets alone silently drops it and
-understates RAC.
-
-A companion quantity, the **risk of additional transmission (RAT)**, is the probability of at
-least one further *transmission event* after that day. Under the three naive models the two
-coincide by assumption — that identification is exactly the conflation this project is about
-— and they separate only under `sse_so`/`ssi_so`, where the gap is the contribution of the
-latent pipeline of already-infected but not-yet-symptomatic individuals. **Use RAC everywhere
-except the supplementary analysis that treats RAT explicitly, and the methodology supporting
-it.** `RAC(t) ≥ RAT(t)` always.
-
-`starter_docs/implementation_plan.md` is the **source of truth** for model definitions,
-conventions and the staged plan — read the relevant section before changing any analytic
-formula or convention. It is untracked (it lives under a directory with its own `.gitignore`),
-so it is available locally but not in the published repo.
+The output quantity is the **risk of additional cases (RAC)**, a real-time reset posterior
+predictive: fit parameters *and* latents to the record through day `t` alone, reset `R` to
+`R_pre`, and ask for the posterior probability of at least one further case. **Every conditioning
+day gets its own fit** — about 110 per model, which is why the pipeline takes hours. The
+companion **risk of additional transmission (RAT)** separates from RAC only under the
+onset-anchored models, and is reported only in the supplementary analysis. See
+[docs/risk.md](docs/risk.md).
 
 ## Tooling
 
@@ -59,28 +42,79 @@ The environment is managed by **pixi**. All commands run through `pixi run`:
 | --- | --- |
 | `pixi run fmt` | `ruff format end_of_outbreak scripts validation tests` |
 | `pixi run lint` | `ruff check end_of_outbreak scripts validation tests` |
-| `pixi run typecheck` | `ty check end_of_outbreak scripts validation tests` (clears `VIRTUAL_ENV` first) |
+| `pixi run typecheck` | `ty check end_of_outbreak scripts validation tests` |
 | `pixi run test` | `pytest` |
 | `pixi run check` | all four of the above, in order |
 | `pixi run pipeline` | `snakemake --profile config/snakemake_profile -j4` |
 | `pixi run pipeline-dry` | dry run: what would re-run, and why |
 
-**Run `pixi run check` and fix every issue before committing.** No exceptions — a failing
-lint, type or test check is not "pre-existing", it is the current state of the tree.
+**Run `pixi run check` and fix every issue before committing.** No exceptions — a failing lint,
+type or test check is not "pre-existing", it is the current state of the tree.
 
 `snakemake-minimal` comes from bioconda (conda-forge does not carry it); everything else is
 conda-forge, with `ruff` and `ty` from PyPI.
 
-## Conventions
+## Running the analyses — read this before starting anything long
+
+A full `refit_daily` pipeline is **hours** of MCMC, and it monopolises the machine while it runs.
+So the division of labour is:
+
+> **Agents run the quick route locally to see that a new or edited analysis works and what it
+> roughly says. Full daily-refit runs are the user's, on the cluster, unless they say otherwise.**
+
+The quick route is `rac.method: single_fit_filtered` — one fit per model, latents filtered per
+conditioning day — which turns hours into minutes:
+
+```sh
+pixi run python scripts/run_<analysis>.py rac --model <model> \
+  --posterior results/<analysis>/<model>_posterior.nc \
+  --method single_fit_filtered --diagnostics /tmp/d.csv --output /tmp/rac.csv
+```
+
+It is a genuine approximation and **never a committed result** ([docs/risk.md](docs/risk.md)); it
+is for checking that a change runs, produces sane numbers, and moves things in the direction you
+expected. When the answer needs to be the estimand, hand it to the user for a cluster run —
+`cluster/README.md`, local-only like `starter_docs/`.
+
+Two habits that follow from this, both learned the hard way:
+
+- **Do not edit a rule's inputs while a long run is in flight.** `config/config.yaml` and
+  `scripts/analysis_driver.py` are inputs to every `rac` rule, so touching either marks all
+  fourteen curves stale even when the change provably cannot alter a number. Land pipeline
+  changes *before* starting the run, not during it.
+- **Do not delete a committed result to force a re-run.** If an output is stale, let the rerun
+  triggers say so; if they do not, the fix is a missing entry in a rule's `params:`.
+
+## Git workflow
+
+- Commit regularly with descriptive messages. Run `pixi run check` first.
+- The default branch is `main`. Branch for feature work rather than committing to `main` directly.
+- `starter_docs/` is untracked by design and must stay that way.
+
+## Conventions that are easy to get wrong
 
 ### Mathematical notation
 
-Ruff ignores `N802`/`N803`/`N806`/`N999`, so identifiers keep the notation of the
-implementation plan: `R_pre`, `R_post`, `F_r`, `Y`, `Lambda`, `C_t`. Keep that capitalisation
-rather than renaming to snake case. `RUF001`–`RUF003` are ignored too, so prose may use en
-dashes, accents (Équateur) and mathematical symbols.
+Ruff ignores `N802`/`N803`/`N806`/`N999`, so identifiers keep the notation of the implementation
+plan: `R_pre`, `R_post`, `F_r`, `Y`, `Lambda`, `C_t`. Keep that capitalisation rather than
+renaming to snake case. `RUF001`–`RUF003` are ignored too, so prose may use en dashes, accents
+(Équateur) and mathematical symbols. Prefer descriptive names over brevity everywhere else, even
+at the cost of verbosity.
 
-Prefer descriptive names over brevity everywhere else, even at the cost of verbosity.
+### Day indexing and the `R` switch
+
+Day 0 is the first observed onset (5 April 2018). The ERT arrived on day 33 and withdrew on day
+110; the analysis window is days 0–110 inclusive (111 rows). Day 0 is an initial condition in
+every model, so likelihoods run over days 1–110 and **risk curves start at day 1** — a "fit to the
+record through day 0" is the prior.
+
+`R` switches from `R_pre` to `R_post` on day 33 **in each model's own time index**;
+`renewal.switch_index` is the single home of that convention, so don't re-derive it inline. The
+resulting timing asymmetry between the naive and onset-anchored models is a deliberate,
+reportable result, not a bug — and it is **~11 days**, the mean **incubation period**, because the
+two conventions differ by the gap between a transmission and the resulting onset. It is *not* the
+15.3 d serial interval, which is the infector-onset to infectee-onset gap and does not separate
+the conventions.
 
 ### Delay-weight indexing
 
@@ -94,625 +128,201 @@ distributions. Never hard-code the offset; use the constants in `delay_distribut
 | `f_tost` (onset → transmission) | 0 | `TOST_FIRST_LAG` |
 
 `f_inc` must have **no mass at lag 0** — that is what makes the onset-anchored recursion well
-ordered. `f_tost` may. At most one of the two may be supported at lag 0.
+ordered. `f_tost` may. At most one of the two may be supported at lag 0. `survival_weights` and
+`tost_survival_weights` live here too, for the same reason: they are survival functions of these
+distributions, and putting them anywhere else drags an unrelated module into a dependency list.
 
-### The model core
-
-`renewal.py` carries the renewal operator in two interchangeable forms. Use
-`delay_weighted_sum` when the driving series is observed data (DLO, SSE, Cori-SO) and
-`delay_design_matrix` when it is latent and the sum must stay symbolic (SSI, SSE-SO, SSI-SO);
-they agree exactly. `switch_index` is the single home of the `R`-switch convention — don't
-re-derive it inline.
-
-`pymc_models` builds every model: `build_naive_model` for the infection-anchored ones,
-`build_onset_anchored_model` for the onset-anchored ones, `build_model` to dispatch on
-anchoring from the shared delay triple. `fitting.fit_model` is the one place that turns a built
-model into an `InferenceData`, and it records on the result the things the draws do not carry —
-the latent parameterisation, and the value of any parameter that was *fixed* rather than
-estimated (a fixed parameter is a constant in the graph, so it never appears in the posterior).
-`forward_simulation.simulate_naive` covers the naive models.
-`simulate_onset_anchored_convenient` draws the direct onset recursion used for inference;
-`simulate_onset_anchored_natural` additionally draws explicit infections and their incubation
-allocations. They are distributionally equivalent by Poisson splitting, and
-`simulate_onset_anchored` dispatches between them. Before extending any of them:
-
-- **`cori` and `cori_so` are not compared models.** They are the Poisson `k → ∞` limits,
-  present as the targets of the collapse checks. Keep them out of the four analyses.
-- **`R_pre`, `R_post` and `k` each take either a fixed `float` or a `LogNormalPrior`.** A fixed
-  value becomes a constant in the graph rather than a random variable, so the fixed-`k`
-  analyses and the fixed-`θ` particle-filter checks share one builder with the estimated-`k`
-  analyses.
-- **`latent_parameterisation` is a required argument for any model with latents.** There is no
-  silent default; `config/config.yaml` is the source of truth.
-- **Days with zero force of infection are dropped from the likelihood**
-  (`renewal.likelihood_days`): the observation there is a point mass at 0. A *positive* count
-  on such a day raises rather than being dropped silently. Nothing is dropped on the real
-  series — the index case drives every day at `max_lag = 110`.
-- `pymc_models.compile_joint_logp` evaluates a built model's joint density at named values on
-  their **natural** scale — no log transforms, no Jacobian. `compile_observation_logp` gives the
-  likelihood term alone, which is the only way to compare two models whose latent blocks differ
-  in size.
-
-### The latent block — settled in Stage 3
-
-**Default: `marginalised_inverse_cdf`.** Recorded in `config/config.yaml`; the comparison it
-rests on is `validation/results/sampler_benchmark.md` (74 MCMC runs). Two independent mechanisms,
-and they compose:
-
-- **Exact marginalisation.** A latent that reaches no observation day carrying a case enters the
-  likelihood only through the `exp(−Σ_j μ_j)` factor, which is linear in the latents and so
-  factorises. Its Gamma prior is conjugate to that, giving
-  `∫ Gamma(y; k·scale, k) e^{−c y} dy = (1 + c/k)^{−k·scale}` and a conditional posterior
-  `Gamma(k·scale, k + c)`. On the real series this removes **52 of SSE-SO's 110** latents —
-  exactly the pathological tail, since the last case is on day 58 — and one of SSI's/SSI-SO's
-  31. **No approximation whatsoever**, and nothing is lost: recover a removed latent after the
-  fit from `latent_parameterisations.conditional_posterior`, which is what the RAC reset state
-  needs.
-- **Inverse-CDF reparameterisation.** Sample `Uniform(0, 1)` and push through the Gamma quantile
-  function. `pm.icdf` *does* have a gradient in this PyTensor, so this runs under NUTS — the
-  trade-off §6.3 anticipated (better geometry, gradient-free samplers only) does not arise.
-
-What the benchmark actually established, and should not be re-litigated:
-
-- **It is a geometry problem, not a warm-up problem.** Mean-1 rescaling changes nothing (3999 of
-  4000 draws divergent on SSE-SO, same as the untouched model), and *more* tuning makes `R̂`
-  worse, not better. Rescaling is a pure translation on the log scale, so the shape and hence
-  the curvature are untouched — exactly as §6.3 argued.
-- **The geometric-mean start is not representable.** `E[log Y] ≈ −1/α`, and SSE-SO's untouched
-  shapes reach `α = 2.7 × 10⁻⁶`, so the typical value is `exp(−3.7 × 10⁵)` — zero in double
-  precision. `LOG_UNDERFLOW` marks the wall at `α ≈ 1.4 × 10⁻³`. A coordinate whose typical set
-  is outside the floating-point range cannot be tuned into behaving.
-- **Divergent runs are not merely noisy.** The untouched SSE-SO fits report `R_post` between
-  0.24 and 0.30 where every converged run gives 0.32–0.33.
-- **`negligible_latent_threshold` is `0.0` and is not needed.** No threshold both clears the
-  underflow wall and leaves the likelihood alone: ~10⁻² is needed for the shapes and costs ~0.1
-  nats, which is a 10% shift in every Bayes factor. Marginalisation removes the same coordinates
-  for free, and every surviving latent has `λ_t ≥ 0.136`. The knob stays only as a fallback for
-  a pathological latent that is genuinely *coupled* to the data, which marginalisation cannot
-  touch.
-- **Inverse-CDF and mean-1 rescaling do not compose** — the Gamma quantile function is
-  scale-equivariant, so stacking them is provably a no-op. `LatentParameterisation` refuses the
-  combination rather than pretending to benchmark it.
-- Do not implement "log-scale latents with a Jacobian"; it duplicates PyMC's default transform.
-
-**Rebuild the marginalised latents before computing RAC or RAT — this is the one way to get the
-default silently wrong.** The removed latents are exactly the days from the last observed case
-(day 58) onwards, which is exactly the range a late conditioning day `t` needs for its
-incubation pipeline. They are *not* in `idata.posterior`; `model_days` returns only the sampled
-days, so an array indexed by position will look plausible and be truncated at day 57. Call
-`pymc_models.marginalised_latent_conditional` once per posterior draw of `(R_pre, R_post, k)`,
-draw from the `Gamma(shape, rate)` it returns, and splice the result onto the sampled block to
-get a complete latent path by day. That is exact — the removed latents are conditionally
-independent of the sampled ones as well as of each other — and it is done once per draw, not
-once per `t`, so the one-fit-serves-every-day economy of §5.6 is untouched.
-
-Validate that reconstruction with a **matched pair of fits**: `marginalised_inverse_cdf` (needs
-reconstruction) against plain `inverse_cdf` (nothing removed) must give the same RAC curve
-within Monte-Carlo error. That is why both stay in the registry. Stage 4 ran it and it passes;
-see *The RAC calculators* below.
-
-`pymc_models.latent_block_structure` is the single source for a block's layout — the days, the
-scales, and the two coupling weight vectors with `c_u = R_pre·a_u + R_post·b_u`. The builders
-use it too, so it cannot drift from what they build.
-
-### The RAC calculators — Stage 4
-
-`risk_of_additional_cases.py` holds the estimand and nothing else: `pooled_remaining_weight`
-(Λ(t)), the closed forms of §5.3, the posterior averaging, the reconstruction the default
-parameterisation makes necessary, and the matched forward-simulation cross-checks. For the
-onset-anchored models, `onset_event_probabilities` analytically averages the conditional zero
-events over the reconstructed Poisson incubation pipeline and returns both RAC and RAT. Things
-to know before touching it:
-
-- **RAC(t) is one number per day, not a distribution.** It is a posterior *probability*, so the
-  average over draws happens inside it: `risk_curve` returns `1 − mean_draws exp(log P)`. Use
-  `monte_carlo_standard_error` when comparing two curves — the between-chain spread is the
-  scale any such comparison has to be judged against.
-- **Λ(t) is the whole retained state for SSE and SSI — and is not enough for DLO.** DLO applies
-  a fresh, force-of-infection-independent `k` on every future day, so it needs the whole
-  profile `(μ_j)_{j>t}` from `future_force_of_infection`. Collapsing it to Λ(t) would silently
-  turn DLO into a different model, and the §5.4 headline would vanish with it.
-- **A parameter that was *fixed* in the fit is not in the posterior.** Pass `fixed_k` for the
-  fixed-`k` analyses, and `fixed_R_pre`/`fixed_R_post` too for the fixed-`θ` cross-checks.
-- **The onset reset state has two pieces.** Future transmission from retained onset cohorts and
-  the incubation pipeline of people infected by `t` but not yet symptomatic must both be
-  retained. `onset_event_probabilities` gives `log P(no RAC) = -H(t) - M(t)` and
-  `log P(no RAT) = -H(t) - M(t)[1 - exp(-c)]`; restarting from observed onsets alone drops
-  `M(t)` and understates RAC.
-- **Those forms are exact and are written out in the report**, as Proposition 2 of
-  `report/report.tex` §4.3 with a proof: `W(t)` is the TOST-survival-weighted retained driving
-  series, `M(t)` the incubation-survival-weighted expected infections at the *historical* `R`,
-  and `c = k log(1 + R*/k)` (or `R*` in the Poisson limit) the per-case zero-offspring exponent,
-  with `H(t) = c·W(t)` for SSE-SO and `R*·W(t)` for Cori-SO/SSI-SO. **If you change the
-  arithmetic, change the proposition.** `tests/test_stage8_onset.py` pins them three ways: a
-  transcription of the proposition as plain double sums (no design matrices, so it checks the
-  formulae rather than a shared abstraction), a degenerate-delay case where they collapse to one
-  line, and the `R* = 0` case where RAT is exactly zero.
-- **SSE-SO needs its day-`T` boundary latent rebuilt too.** It cannot reach any fitted onset
-  because incubation starts at lag 1, but its infections belong to the day-`T` reset pipeline;
-  its conditional law is therefore its Gamma prior.
-- **`cori`/`cori_so` remain validation targets**, not compared models, here as everywhere.
-
-**Never compare a filtering RAC with a smoothed one and call agreement a pass.** The estimand
-resets from a smoothed state (§5.1, §5.6); a particle filter's forward pass gives filtering
-states. `particle_filter.ParticleFilterResult` names both — `latent_paths` are the ancestral
-(smoothing) draws, while `filtering_remaining_weight` and `filtering_pipeline_mean` are
-equal-weight filtering snapshots — so the equality check uses the former and the §5.6
-measurement uses the latter. Adaptive resampling may leave the live particle cloud weighted;
-do not replace the explicitly resampled filtering snapshots with an unweighted average of that
-live cloud.
-
-What Stage 4 established (`validation/results/rac_validation.md`, and the checks it summarises):
-
-- **The external validation passes exactly.** Thompson et al.'s convention differs from this
-  project's by exactly one day, `γ(t) = Λ(t − 1)`, so their eqs. (3)–(5) are this pipeline's
-  arithmetic at `k → ∞` with their Gamma posterior for `R`. Their published Équateur `R`
-  estimate is recovered (`Gamma(28, 10.65)`, mode 2.53 — Fig. S3D dashed) and so is their risk
-  curve (Fig. S3E dashed).
-- **§5.4, measured.** At `k = 0.18` and `R = 2.6` on this series, DLO's RAC sits within 10% of
-  the Poisson limit while SSE's is three to four times smaller (day 90: 0.41 vs 0.12, Poisson
-  0.44). The same `k` does far less work in DLO. The inequality behind it —
-  `−RΛ ≤ Σ_j φ(μ_j) ≤ φ(Λ)` for `φ(μ) = −k log(1 + Rμ/k)` — is universal; the *direction* of
-  the comparison with SSE is a property of a thin, spread-out profile, not a theorem, so do not
-  restate it as one.
-- **SSI's RAC is *above* SSE's after the final case, and that is not a bug** (day 90: 0.123 vs
-  0.093). Both differences flow from one fact: **SSI's heterogeneity is attached to people you
-  have been watching; SSE's is attached to events that have not happened yet.** So SSI's
-  residual risk is revised downwards by weeks of silence and SSE's is not (`E[Λ_Y]/Λ ≈ 0.35`
-  late in the series), while at matched means SSE's remaining risk is a rare burst and SSI's is
-  spread over 54 people who all still exist. At day 90, matched at 0.40 expected further cases:
-  SSE has a 9% chance of anything at all but ~4.3 cases if it fires; SSI has a 32% chance of
-  typically 1.2. RAC asks only "any further case?", so it reads 9% against 32%. See §5.4 for the
-  full decomposition. **Do not present §5.4 as "DLO is the odd one out"** — DLO and SSI are on
-  the same side of SSE, for the same reason.
-- **The ordering is specific to RAC and to this setting** — check both before claiming it
-  anywhere. Ask "would transmission re-establish?" instead of "any further case?" and it
-  reverses on the same data (SSI 0.021 against SSE 0.036), because a burst of four re-establishes
-  far more readily than a lone case. Run our own RAC code on the companion project's regime — one
-  index case, `R = 2` throughout, no intervention — and SSI comes out *below* SSE at 0.37 of it,
-  matching `sse-ssi-pmo` Fig. 1. Neither difference flips the ordering alone; §5.4 has the 2×2.
-- **The §5.6 gap has both signs, as §5.6 predicted.** Smoothed minus filtering is strongly
-  positive early (up to +0.64 around day 2, where the filter has not yet seen the cases that
-  reveal a high infectivity) and negative after the last case (mean −0.03, worst −0.15 around
-  day 70). Report it as measured, not as a claimed direction.
-
-What Stage 8 established (`validation/results/onset_particle_mcmc_validation.md`):
-
-- **Natural and convenient onset simulation agree**, and the deterministic one-day-incubation
-  limit recovers Cori/SSE/SSI after shifting the naive switch by one day.
-- **The pipeline reset is pinned independently.** With future `R = 0`, RAT is exactly zero and
-  RAC is exactly the probability that the retained Poisson incubation pipeline is non-empty;
-  explicit reset simulation agrees with both conditional zero-probabilities.
-- **The onset particle route is practical and independent.** At 250 particles the largest
-  measured `Var(log L_hat)` is 0.081; particle-smoothed and MCMC-smoothed RAC agree within
-  0.0214 on the real series; and PMMH/PyMC 95% intervals overlap for all six synthetic
-  parameter comparisons. Filtering remains a sensitivity estimand: filtering minus smoothed
-  RAC is strongly negative early (about −0.63 to −0.66 at its largest) and mildly positive
-  after the final onset (mean about +0.013).
-
-### The analysis and plotting scripts — Stage 5
-
-`scripts/run_<analysis>.py` carries **one subcommand per pipeline tier** — `fit`, `rac`,
-`evidence`, and `dispersion` where `k` is estimated — and each Snakemake rule invokes exactly one
-of them. `scripts/plot_<analysis>.py` reads what those wrote and draws it. Four things worth
-knowing before writing the next pair:
-
-- **Everything that varies between the four analyses comes from `config/config.yaml`,** keyed by
-  a module-level `ANALYSIS` constant. Stage 7 factored the rest into `scripts/analysis_driver.py`,
-  so a run script is now a docstring, that constant, and a one-line `main`. The driver could not
-  go in `scripts/utils.py`, which is in `PLOT_CORE` — fit-driving logic there would make every
-  restyle a reason to re-run MCMC — so it is named in `FIT_CORE`, `RAC_CORE`, `EVIDENCE_CORE` and
-  `DISPERSION_CORE` instead. The **plot** scripts stay one per analysis, because what differs
-  between figures is the panel *arrangement*; the panels themselves are in
-  `scripts/figure_panels.py` (in `PLOT_CORE`), which is also the one place under `scripts/` that
-  imports `risk_of_additional_cases`.
-- **The layout follows the number of parameter posteriors, and the RAC panel's *view* follows the
-  layout.** A fixed-`k` figure has two (`R_pre`, `R_post`), so it is four panels with the RAC
-  spanning the bottom row; an estimated-`k` figure has three, so it is five, with the pie dropping
-  beside the RAC curves. Where the RAC panel shares its row it starts at the ERT's arrival
-  (`risk_curve_panel(first_day=...)`), because all the curves sit flat at 1 until well past the
-  last case and the run-up from day 0 would otherwise squeeze the descent into the right-hand
-  third. **`first_day` trims the view only** — every curve is still drawn over the whole window
-  and the settling markers are untouched, so a trimmed panel can never show a different crossing
-  date from an untrimmed one. Figs. 3 and 4 take the same two layouts.
-- **The RAC step writes the Monte-Carlo standard error beside the curve.** RAC(t) is a posterior
-  *average*, so it carries Monte-Carlo error, and a curve published without it cannot be
-  compared with another one. The curve and the error come from a single evaluation of the
-  per-draw log-probabilities — call `posterior_state` then
-  `log_probability_of_no_further_cases`, rather than `risk_curve_from_posterior`, which discards
-  them.
-- **The latent reconstruction needs a seed, and a different stream per model.** It is a Monte
-  Carlo draw like any other; `reconstruction_rng` derives it from the analysis's sampler seed
-  and the model's index, so curves that are meant to be independent are not silently correlated
-  through a shared stream. (Stage 4 hit exactly that bug in the matched-pair check.)
-- **A fit is an `xarray.DataTree`, and its I/O is xarray's.** `arviz.InferenceData` is a
-  deprecated alias for `xr.DataTree` in arviz 1.x, so `fitting.save_fit`/`load_fit` use
-  `DataTree.to_netcdf` and `xr.open_datatree`, both pinned to `fitting.NETCDF_ENGINE`
-  (`h5netcdf` — a fit has groups, so it is NETCDF4 and needs an HDF5 backend). `load_fit` loads
-  eagerly rather than leaving a lazy handle on a results file. Keep using arviz for what it is
-  still for — `az.summary` and the rest of the diagnostics.
-- **A plotting script computes nothing and fabricates nothing.** `utils.read_model_evidence` and
-  `utils.read_dispersion_summary` raise when their file is absent instead of falling back: a pie
-  chart of placeholder numbers is indistinguishable from a real one on the page, and so is a
-  legend quoting a median the figure worked out for itself. The single piece of method the
-  figure tier borrows is `RiskCurve.first_day_below`, because "the day a curve settles below a
-  threshold" is a definition the report quotes, and it must not drift between the marker on the
-  panel and the number in the text. That is why `risk_of_additional_cases` is the one tier-2
-  module in `PLOT_CORE`.
-
-### Model evidence — Stage 6
-
-`model_evidence.py` computes `p(D_{1:110} | model)` with the parameters *and* the latents
-integrated out, and turns a set of them into posterior model probabilities under §6.2's uniform
-prior over models. Four things to know:
-
-- **The density being normalised is the built model's own joint log-density.** The module calls
-  `pymc_models.build_model` with the arguments the fit was run with rather than writing the
-  likelihood out again, so the integral estimated is the one that was sampled. That is why
-  `R_pre`, `R_post` and `k` must be passed **exactly as they were passed to `fit_model`** — a
-  `float` where the parameter was fixed (no prior factor) and a `LogNormalPrior` where it was
-  estimated. The prior is part of the question and is not recoverable from the draws.
-- **The integral is done in PyMC's unconstrained coordinates, Jacobian included.**
-  `UnconstrainedTarget` is the one place that knows this. Getting the transform's *direction*
-  wrong shifts every evidence by a constant — a perfectly plausible number and a wrong Bayes
-  factor — so it is pinned against `compile_joint_logp` in the tests rather than trusted.
-- **Bridge sampling is the default**; prior Monte Carlo and importance sampling are the §6.5
-  agreement checks, and `log_evidence_by_quadrature` is the deterministic answer for a model
-  with at most three free coordinates. Do not add a harmonic-mean estimator.
-- **Exact latent marginalisation does not change the evidence** and nothing needs reconstructing
-  here — unlike the RAC calculators, which do need the removed latents back.
-
-What Stage 6 established (`validation/results/evidence_validation.md`):
-
-- **Bridge sampling reproduces deterministic quadrature** for DLO and SSE on the real series to
-  1.1 × 10⁻³ and 2.9 × 10⁻³ nats (1.4 and 2.6 standard errors), with the quadrature box's
-  boundary density 41–44 nats below its peak. This is the only check in the stage that is not
-  sampler-against-sampler.
-- **The three estimators agree on real-series SSI**, all within their own error bars. Importance
-  sampling sits 2.1 combined s.e. below bridge sampling — a pass, but the largest discrepancy
-  anywhere in the study; treat a future move past ~3 as a regression, not as noise.
-- **The evidence is invariant to the latent parameterisation** (32 vs 33 free coordinates,
-  1.3 combined s.e. apart), which is what shows the marginalisation `pm.Potential` carries the
-  whole removed factor and not just its shape.
-
-### The dispersion posteriors — Stage 7
-
-`posterior_comparison.py` summarises one positive scalar's posterior and measures how far two of
-them differ, and the `dispersion` rule turns the `k` draws of an estimated-`k` analysis into
-`results/<analysis>/dispersion_posteriors.json`. Three measures, because none of them says
-enough alone: the **median ratio** (location, but not width), the **overlap** `∫ min(p_a, p_b)`
-(scale-free, symmetric, and finite where a KL divergence would not be), and
-**`P(k_a > k_b)`** for independent draws. All are computed on the log scale, as the density plots
-are; the overlap is invariant to that choice, since both densities pick up the same Jacobian.
-Every *pair* is compared rather than a designated reference model, so the same file serves
-Analysis 4, which has no DLO.
-
-What Stage 7 measured on the real series, under the shared `LogNormal(0.18)` prior:
-
-| | DLO | SSE | SSI |
-| --- | --- | --- | --- |
-| posterior median `k` (95% CrI) | 0.38 (0.23–0.63) | 0.50 (0.31–0.85) | 0.14 (0.07–0.27) |
-| log evidence, `k` fixed → estimated | −97.1 → −93.2 | −106.8 → −99.4 | −84.8 → −84.5 |
-| RAC first below 0.05 | day 107 | day 99 | day 96 |
-| RAC first below 0.01 | **never** | day 110 | day 107 |
-
-- **The divergence is real but it is not DLO against the rest.** DLO vs SSI: overlap 0.094,
-  median ratio 2.7, `P(k_DLO > k_SSI) = 0.99`. SSE vs SSI: overlap 0.032, ratio 3.6, 0.999. But
-  **DLO vs SSE: overlap 0.59** and `P(k_DLO > k_SSE) = 0.22` — the two are barely distinguishable.
-  Do not write this up as "DLO's `k` is the odd one out"; SSI's is, and DLO and SSE agree. That
-  split is along the line aim 3 predicts, not aim 2's — see the next bullet.
-- **The split is day-level against individual-level, which is where onset-as-infection bites
-  hardest.** DLO and SSE both attach their excess variance to a **day**: DLO to the day's
-  aggregate incidence, SSE to the day's pooled transmission through a freshly drawn `λ_t`. SSI
-  attaches it to the **individual**. The series being fitted is *onsets*, and the incubation
-  period (mean 11.4 d, SD 8.1 d) scatters each day's infections forward over a wide kernel — so a
-  naive model reading onsets as infections sees day-to-day variation that the convolution has
-  already largely averaged out, and answers with a larger `k` (less overdispersion) than the
-  infection process carried. **Day-level dispersion is attenuated by the conflation itself.**
-  SSI is close to invariant to it, because the convolution *regroups* individuals across days and
-  the aggregate infectivity of `n` i.i.d. individuals is `Gamma(kn, k)` whichever `n` they are:
-  regrouping moves the cohorts, not the variance. This is a mechanism for the measurement, not a
-  second measurement — Analysis 2 has no non-naive arm, so it cannot separate this from the
-  purely structural difference of §5.4. **Stage 9 is the test:** it predicts SSE-SO's `k`
-  posterior sits *below* naive SSE's, towards SSI's and towards the literature 0.18. Record the
-  comparison there whichever way it comes out.
-- **Only SSI's posterior is compatible with the literature `k = 0.18`.** DLO's and SSE's both sit
-  above the prior's own 97.5th percentile (0.36) despite it being deliberately informative. The
-  evidence gains say the same thing more sharply: letting `k` move is worth **7.4 nats to SSE and
-  3.9 to DLO but only 0.26 to SSI**, so Analysis 1 was charging DLO and SSE for a value that was
-  never theirs — and `k = 0.18` really is SSI's number on this series.
-- **The §5.4 effect survives estimating `k`, which is the point of the Fig. 1 / Fig. 2 pair.**
-  Each model at its own best `k` still puts eleven days between DLO's and SSI's 0.05 crossing,
-  and DLO still never reaches 0.01 inside the window. The misapplication of a literature `k`
-  makes the gap; the day-level *mechanism* keeps it.
-
-### The onset-anchored analyses — Stage 9
-
-Analyses 3 and 4 compare `sse`, `ssi`, `sse_so` and `ssi_so`; the headline main-figure curves
-are RAC, while `figures/onset_models_rat/` reports RAC and RAT together. Under estimated `k`:
-
-| | SSE | SSI | SSE-SO | SSI-SO |
-| --- | ---: | ---: | ---: | ---: |
-| posterior median `k` | 0.501 | 0.140 | 0.178 | 0.175 |
-| posterior median `R_post` | 0.634 | 0.731 | 0.279 | 0.255 |
-| RAC first below 0.05 | day 99 | day 96 | day 87 | day 88 |
-| RAC first below 0.01 | day 110 | day 107 | day 98 | day 99 |
-
-- **Onset anchoring advances the RAC crossings by 8–12 days.** SSI-SO crosses both thresholds
-  eight days before SSI; SSE-SO crosses both twelve days before SSE. This is close to the
-  11.4-day mean incubation period and is a report headline, not a plotting artefact.
-- **Why the direction is earlier.** The total onset-to-onset serial interval is shared, so this
-  is not caused by giving the SO models a shorter generation interval. The decomposition changes
-  which side of conditioning day `t` a transmission occupies. The SO models place infection at
-  transmission time: infections already generated under historical `R_post` stay in the
-  incubation pipeline when controls are reset, and the remaining TOST opportunity of older
-  cohorts is already largely exhausted. The naive models move those infection decisions to the
-  later symptom-onset date and apply the reset `R_pre` there, making residual transmission look
-  younger and persist longer. The same indexing error applies the ERT effect to onsets rather
-  than transmissions, explaining why naive `R_post` is much higher; post-arrival onsets that
-  arose from pre-arrival infections are otherwise charged to the controlled period.
-- **The Stage-7 attenuation prediction passes.** SSE-SO's `k` moves below SSE's towards 0.18
-  (median ratio 2.81, overlap 0.089, `P(k_SSE > k_SSE-SO) = 0.992`), whereas SSI changes much
-  less (overlap 0.750). Incubation convolution attenuates day-level dispersion when onsets are
-  treated as infections; individual-level dispersion is comparatively stable to regrouping.
-- **Do not universalise the 8–12-day direction.** It is measured under this reset convention,
-  switch convention, outbreak history and posterior. The incubation-scale explanation is the
-  mechanism for this result, not a theorem for arbitrary time series or interventions.
-
-### The report — Stage 10
-
-`report/report.tex` is written as an **outward-facing paper skeleton**, not as a write-up of this
-codebase: abstract, short introduction, data and delays, models, the RAC/RAT estimand with its
-closed forms as propositions, inference, one results section per analysis with bullet findings, a
-crossings table, the RAC/RAT supplement, the sensitivity analyses listed but not run, and two
-appendices. It compiles to `report/report.pdf` through the `report` rule, which is tier 3 like the
-figures. Four structural rules hold it in that register:
-
-- **Implementation detail lives in Appendix B ("Code and reproducibility"), not in the methods.**
-  pixi, Snakemake, tiers, file layouts, the no-fallback rule, `validation/` — all of it belongs
-  there. A methods section that explains how *this repository* is arranged is the failure mode;
-  the companion project's `notes.tex` is the register to aim at.
-- **Derivations are `proposition`/`proof`/`remark` environments** (amsthm), numbered and
-  cross-referenced, with the §4 natural-vs-convenient equivalence in Appendix A.
-- **Both Poisson limits appear.** `cori` and `cori_so` are introduced together as the `k → ∞`
-  limits of the two families, named as the collapse-check targets and as the external-replication
-  model — they are still not fitted and still not compared models. Mentioning one without the
-  other reads as an oversight.
-- **Verification is stated as results of checks**, with tolerances, in one methods subsection.
-  The `validation/results/*.md` files are named once, in Appendix B.
-
-- **The report quotes no literal number.** It writes `\resultnum{<key>}`; the tier-2
-  `report_numbers` rule runs `scripts/run_report_numbers.py`, which reads what the other tier-2
-  rules wrote and emits `results/report_numbers.tex` as `\defresultnum{key}{value}` lines. **An
-  undefined key is a LaTeX error, not a blank** — that is the whole point, and it is the same
-  no-fallback rule `utils.read_model_evidence` enforces for the figures. Values that look like
-  inputs rather than results (serial interval, priors, sampler settings, latent counts) are
-  macros too, so editing `config/config.yaml` edits the methods section.
-- **Keys carry no underscores**, because they are expanded through `\csname`: an analysis or
-  model name is slugged to letters and digits only (`onset_models_estimated_k` →
-  `onsetmodelsestimatedk`, `sse_so` → `sseso`). The mapping is mechanical, not a table.
-- **Rounding lives in the script, not in the prose**, so the same quantity cannot appear to two
-  decimal places in one section and three in another. Anything that can be negative goes through
-  `math_mode`, so TeX sets a minus rather than a hyphen.
-- **`run_report_numbers.py` computes nothing new.** Posterior summaries come from
-  `posterior_comparison.summarise_posterior` (the same call `dispersion_posteriors.json` makes)
-  and crossings from `RiskCurve.first_day_below` (the same call the figure markers make). The
-  three cross-analysis quantities it forms — the onset-vs-naive crossing shift, the fixed→estimated
-  log-evidence gain, and the RAC/RAT gap — are subtractions of numbers already in `results/`, done
-  there so no sentence has to do arithmetic.
-- **It takes `IMPLEMENTED_ANALYSES` on the command line.** The Snakefile owns that list; the
-  script must not grow a second copy.
-- **Validation numbers are the one exception and are always attributed.** `validation/` outputs
-  never feed `rule all`, so the report cannot depend on them; the few it quotes (the §5.6
-  filtering comparison, the PMMH and quadrature checks, the Thompson replication) name the
-  `validation/results/*.md` file they come from.
-- **`latexmk`/`pdflatex` are the pipeline's only external toolchain dependency.** pixi does not
-  provide TeX. The rule checks and says so rather than failing with "command not found".
-- `tests/test_report_numbers.py` checks the two committed files against each other — every key
-  used is defined, every included figure exists, every recorded source still exists — which is
-  Stage 10's acceptance criterion turned into a regression test.
-
-**Three optional follow-ups were declined at Stage 10**, per §9 of the plan, which asked for the
-decision to be taken here. The report does not reference the companion project, so neither the
-`P(sustained transmission)` panel nor the reset-convention panel would answer a question the
-document raises; both are recorded in §5.4 as prose instead. The `sse-ssi-pmo` regression test is
-the cheapest of the three and remains the one to do first if any is revisited.
-
-### Day indexing
-
-Day 0 is the first observed onset (5 April 2018). The ERT arrived on day 33 and withdrew on
-day 110; the analysis window is days 0–110 inclusive (111 rows). Day 0 is an initial condition
-in every model, so likelihoods run over days 1–110. `R` switches from `R_pre` to `R_post` on
-day 33 **in each model's own time index**. The resulting timing asymmetry between the naive and
-onset-anchored models is a deliberate, reportable result, not a bug — and it is **~11 days**,
-the mean **incubation period**, because the two conventions differ by the gap between a
-transmission and the resulting onset. It is *not* the 15.3 d serial interval, which is the
-infector-onset to infectee-onset gap and does not separate the conventions.
-
-### Module layout
-
-Flat package `end_of_outbreak/` (no `src/`), with `scripts/` for analysis and plotting.
-
-- Keep modules **genuinely separable**. The Snakemake rules list the exact package modules
-  each rule depends on, so that editing `particle_filter.py` re-runs no MCMC fits. A
-  kitchen-sink `utils.py` inside the package, or a fat `__init__.py` that re-exports
-  everything, would defeat that scheme — don't add either.
-- Reusable *method* goes in the package, and so does **config parsing**
-  (`configuration.py`): both script trees need it, and the Snakemake rules have to be able
-  to name it in their `input:` lists, which they cannot do for a file under `scripts/`.
-  Presentation-only helpers — figure styling and the like — go in `scripts/utils.py`, which
-  computes nothing: every number a figure draws was written to `results/` by a tier-2 rule.
-- Strict split between **compute-and-save** scripts and **load-and-plot** scripts, so
-  restyling a figure never re-runs MCMC.
-- Analysis scripts are named for what they do, never for figure numbers.
-
-### Where a new script or output file goes
+## Where a new script or output file goes
 
 Two trees, and the split is by **purpose, not by cost**:
 
 | | Report analyses | Validation studies |
 | --- | --- | --- |
 | Scripts | `scripts/run_*.py`, `scripts/plot_*.py` | `validation/run_*.py` |
-| Outputs | `results/<analysis>/`, `figures/<analysis>/`, `report/` | `validation/results/` |
+| Outputs | `results/`, `figures/`, `report/` | `validation/results/` |
 | Driven by | a Snakemake rule | run on demand |
 | In `rule all` / a tier's dependency list | yes | **never** |
 
-So: benchmarks, cross-checks, replications of other people's results, degeneracy measurements
-and anything else whose subject is *the implementation rather than the outbreak* go in
-`validation/`, with a written `.md` summary beside the data. Anything that feeds a figure or a
-number in the report goes in `scripts/` and `results/`. **Do not put a check's output under
-`results/`** — the point of the split is that everything there can be taken as a report input
-without further checking. `validation/README.md` states the local conventions; `particle_mcmc.py`
-is the model to follow for the package side (validation *method* still lives in the package, it
-just stays out of every rule's dependency list).
+Benchmarks, cross-checks, replications of other people's results and anything else whose subject
+is *the implementation rather than the outbreak* go in `validation/`, with a written `.md` summary
+beside the data. Anything that feeds a figure or a number in the report goes in `scripts/` and
+`results/`. **Do not put a check's output under `results/`** — the point of the split is that
+everything there can be taken as a report input without further checking. Validation *method*
+still lives in the package (`particle_mcmc.py` is the model to follow); it just stays out of every
+rule's dependency list. `validation/` is covered by `pixi run check`, and its outputs are
+committed.
 
-`validation/` is covered by `pixi run check` like everything else, and its outputs are committed.
+## Module layout
 
-### Pipeline
+Flat package `end_of_outbreak/` (no `src/`), with `scripts/` for analysis and plotting.
 
-`Snakefile` drives everything in three tiers — `fit` (MCMC, minutes–hours), `rac`/`evidence`/
-`dispersion`/`report_numbers` (seconds–minutes), `figure`/`report` (seconds) — so a change at one
-tier never re-runs the tiers above it. When adding a module, **add it to the right dependency
-list at the top of the `Snakefile`** (`FIT_CORE`, `RAC_CORE`, `EVIDENCE_CORE`,
+- Keep modules **genuinely separable**. The Snakemake rules list the exact package modules each
+  rule depends on, so that editing a plotting-facing definition re-runs no MCMC. A kitchen-sink
+  `utils.py` inside the package, or a fat `__init__.py` that re-exports everything, would defeat
+  that scheme — don't add either.
+- **Split by what a thing is, and the tiers follow.** The risk lives in three modules for that
+  reason: `risk_of_additional_cases.py` is the estimand (tier 1, since `refit_daily` drives fits
+  from it), `refit_risk.py` and `filtered_risk.py` are the two ways of *acquiring the state* it
+  evaluates, and `risk_curves.py` is the curve container the figure and report tiers read.
+  Keeping `first_day_below` beside the closed forms would put a presentation-facing definition on
+  the dependency list of ~1500 fits. **If a rule's dependency list looks wrong, the fix is usually
+  a module boundary, not a workaround in the `Snakefile`.**
+- Reusable *method* goes in the package, and so does **config parsing** (`configuration.py`):
+  both script trees need it, and the Snakemake rules must be able to name it in their `input:`
+  lists, which they cannot do for a file under `scripts/`. Presentation-only helpers go in
+  `scripts/utils.py`, which computes nothing.
+- Strict split between **compute-and-save** and **load-and-plot** scripts.
+- Analysis scripts are named for what they do, never for figure numbers.
+
+`particle_filter.py` **is** in `RAC_CORE`, because `single_fit_filtered` is a selectable results
+path. `particle_mcmc.py` stays out of every rule's list.
+
+## Pipeline
+
+`Snakefile` drives everything in three tiers — `fit`/`rac` (MCMC, minutes–hours),
+`evidence`/`dispersion`/`report_numbers` (seconds–minutes), `figure`/`report` (seconds) — so a
+change at one tier never re-runs the tiers above it. When adding a module, **add it to the right
+dependency list at the top of the `Snakefile`** (`FIT_CORE`, `RAC_CORE`, `EVIDENCE_CORE`,
 `DISPERSION_CORE`, `REPORT_NUMBERS_CORE`, `PLOT_CORE`); Snakemake's `code` trigger hashes only a
 rule's own body and does not follow Python imports.
 
-The `rac` rule writes `results/<analysis>/<model>_rac.csv`. That file carries the
-supplementary **RAT** column too, for the onset-anchored models — one derived-results file per
-model, named for the headline quantity.
+**`rac` sits in tier 1, not tier 2, and that is not an oversight.** The estimand is a fit per
+conditioning day, so "recomputing a risk curve never re-runs a fit" cannot hold for it. It holds
+everywhere else: `fit`, `evidence` and `dispersion` describe the model given the whole record, and
+restyling a figure re-runs no MCMC. **`rule fit` still runs** — the evidence and dispersion steps
+need the full-record posterior, and `rac` reuses it as the last conditioning day's fit rather than
+repeating it, which also keeps the end of the curve and those summaries on one posterior. The
+per-day posteriors are not persisted; `<model>_rac_diagnostics.csv` is what survives them.
 
-One tier-2 rule applies to only some analyses, and it keys off the config rather than a
-hard-coded list of names: `dispersion` runs where `fixed_k` is null (`estimates_dispersion`), and
-the `figure` rule picks its output up through `dispersion_summary_of`, which returns nothing for
-the fixed-`k` analyses. The separate `rat_figure` rule builds the §5.5 RAC/RAT supplement from
-the two onset analyses' derived CSVs; it performs no analysis of its own. Two rules span the
-analyses rather than sitting inside one: `report_numbers` (tier 2) and `report` (tier 3) — see
-*The report* above.
+Three more things the pipeline rests on:
 
-Per-analysis parameters live in `config/config.yaml`, keyed per analysis so that tweaking the
-`k` prior for the estimated-`k` analyses does not invalidate the fixed-`k` fits. Seeds live
-there too.
+- **`IMPLEMENTED_ANALYSES` at the top of the `Snakefile`, not `config["analyses"]`, is what the
+  targets are built from.** Keep future config-only analyses out of it until their `run_`/`plot_`
+  scripts exist.
+- **Any config value that changes a rule's output must appear in that rule's `params:` — and
+  nothing else should.** A key placed too high re-runs work it does not affect: `analysis_params()`
+  is shared with the `fit` rule, so a `rac`-only setting belongs in `RAC_PARAMS`, or changing a
+  particle count would re-fit every model. A setting that changes no output at all — the
+  convergence criteria below — belongs in neither.
+- **But note that `config/config.yaml` is itself an `input:` of every rule, and the `input`
+  trigger is content-based.** So *any* edit to it — including one to a value in no `params:` at
+  all — currently marks every fit stale. Verified with `pipeline-dry`: changing only the
+  convergence thresholds reports `reason: Updated input files: config/config.yaml` for all
+  fourteen fits. That makes the `params:` lists a belt-and-braces second line of defence rather
+  than the mechanism, and it means **a one-line config edit costs a full pipeline run** unless
+  you can show the outputs are already current and record that with `snakemake --touch`.
+  Dropping the file from the `input:` lists would make `params:` load-bearing and edits cheap, at
+  the cost of the safety net; it has not been done, because it would mean betting hours of
+  compute on those lists being complete. Weigh that before editing the config casually.
+- Scripts take `argparse` arguments and are invoked from `shell:`, never through Snakemake's
+  `script:` directive, so every script stays runnable and debuggable on its own.
 
-**`IMPLEMENTED_ANALYSES` at the top of the `Snakefile`, not `config["analyses"]`, is what the
-targets are built from.** All four current analyses are implemented. `rule all` and the
-convenience aggregates (`fits`, `results`, `figures`) iterate the explicit list; keep future
-config-only analyses out of it until their `run_`/`plot_` scripts exist.
+### The convergence gate is a regression test, not a discovery tool
 
-**Any config value that changes a rule's output must appear in that rule's `params:`.** The
-default profile drops the `mtime` trigger, and the `input` trigger tracks the *set* of input
-files rather than their contents — so listing `config.yaml` under `input:` does **not** make a
-rule re-run when a value inside it changes. `analysis_params()` at the top of the `Snakefile`
-collects these; extend it when you add a config key that affects results.
+Each risk curve rests on ~110 fits, so every one is checked and
+`<model>_rac_diagnostics.csv` records the result per day. **The curve and the table are always
+written**, and are identical whatever the criteria say: `rac.convergence` in the config decides
+only whether a shaky-looking set of fits *stops the build*.
 
-`results/` and `figures/` are committed. Git does not preserve mtimes, so the default profile
-(`config/snakemake_profile/`) drops the `mtime` rerun trigger; after a fresh clone,
-`snakemake --touch` restores mtime consistency if you want it.
+```yaml
+rac:
+  convergence: {max_r_hat: 1.02, divergence_fraction: 0.01, on_failure: error}
+```
 
-Scripts take `argparse` arguments and are invoked from `shell:` directives, never via
-Snakemake's `script:` directive, so that every script stays runnable and debuggable on its own.
+- **`on_failure: warn` while exploring**, which prints the offending days to stderr and carries
+  on. Refusing to write a curve that has already been computed, because one day out of a hundred
+  and ten was marginal, costs an hour of sampling and tells you nothing the diagnostics table does
+  not — and Snakemake deletes a failed job's outputs, so the evidence goes with it too.
+- **`error` once a configuration is known to pass**, which is what it is set to: the gate is a
+  regression test on the sampling, not a way of discovering that a model is hard.
 
-### Testing
+**Read the thresholds as a maximum over ~1540 fits × ~60 variables**, not as the familiar
+single-fit `R̂ < 1.01`. That multiplicity is why `max_r_hat` is 1.02 rather than 1.01: on a
+complete run the observed maximum is **1.0100**, on one day of SSE-SO with **no divergences** —
+noise on the hardest model, not a fit that failed. A stuck chain lands far above the threshold,
+not just over it. The full calibration is recorded in `config/config.yaml`; re-derive it from
+`<model>_rac_diagnostics.csv` before moving the number, and treat a *pattern* of days creeping up
+as the sampler saying something rather than as a threshold to raise.
+
+`results/` and `figures/` are committed. Git does not preserve mtimes, so the profile drops the
+`mtime` rerun trigger; after a fresh clone, `snakemake --touch` restores consistency if you want
+it.
+
+## Testing
 
 `pytest`, tests under `tests/`. Validation is by property rather than by golden file wherever
-possible: normalisation, moment additivity, limiting cases (`k → ∞` collapsing SSE/SSI onto
-Cori), likelihood-vs-simulation agreement, and analytic-vs-particle-filter agreement.
+possible: normalisation, moment additivity, limiting cases (`k → ∞` collapsing SSE/SSI onto Cori),
+likelihood-vs-simulation agreement, and analytic-vs-particle-filter agreement.
 
-**Likelihood-vs-simulation, for models with latents.** For the closed-form models the check is
-direct: enumerate short histories, evaluate the built model's likelihood for each, compare with
-the simulator's frequencies. For SSI and the SO models the simulator has to match the
-*marginal* of the counts while the builder supplies the *joint* with the latents. The bridge is
-that the latent priors are conditionally independent given the counts —
-`p(I) = E_{Y ~ Π Gamma(k I_u, k)}[Π_t Poisson(...)]` — so a naive Monte-Carlo marginalisation is
-unbiased and cheap. The fast vectorised integrand used for it is pinned against the built
-model's joint density at random points first; don't skip that step, or the test degenerates
-into checking a reimplementation against itself.
+Two rules carry most of the weight, and both are explained where they apply
+([docs/models.md](docs/models.md), [docs/risk.md](docs/risk.md)):
 
-There are **two** particle-filter checks, and they answer different questions — don't collapse
-them into one:
+- **Never check a reimplementation against itself.** Where a test needs a fast reimplementation of
+  something the package computes, pin it against the package's own version at random points
+  first.
+- **Match the conditioning before calling agreement a pass.** There are two particle-filter
+  checks and they answer different questions: the fixed-`θ` arithmetic check compares against the
+  particle *smoother*, while PMMH is a *filtering* route whose target is `filtered_risk`.
+  Agreement is required in both — of different things.
 
-- **Fixed `(R_pre, R_post, k)`, conditioning matched to the pipeline.** The equality check:
-  a regression test that the RAC arithmetic is right. Agreement is required.
-- **Particle MCMC (PMMH) over the parameters.** The pipeline check: an independent route to
-  the posterior sharing no machinery with the PyMC fits, which is the main guard against the
-  latent-parameterisation risk. SBC cannot substitute — it validates an implementation
-  against itself, so a misconception shared by the model and the simulator survives it.
+Checks that need MCMC on the real series live in `validation/`, not `tests/`; the tests carry the
+same comparisons on short histories, which is what keeps `pixi run test` quick.
 
-  For the latent models a PMMH RAC curve **should not** match the MCMC one: the filter
-  conditions on *filtering* latents, the pipeline on *smoothed* ones. The gap is the §5.6
-  approximation, and measuring it is the point. Don't "fix" it.
+## Settled decisions — do not silently revisit
 
-PMMH mixes only if the variance of the estimated log-likelihood is roughly 1–3 at the mode.
-`particle_mcmc.py` is validation, not a results path — it stays out of `rule all` and out of
-every tier's dependency list. The go/no-go has been measured for both routes: Stage 4 covers SSI
-in `validation/results/rac_smc_variance.csv`; Stage 8 covers SSE-SO/SSI-SO in
-`validation/results/onset_smc_variance.csv`, with a maximum variance of 0.081 at 250 particles.
+Each is argued out in `starter_docs/implementation_plan.md` and, where noted, backed by a
+committed measurement.
 
-The equality check itself lives in `validation/run_rac_validation.py` rather than in `tests/`
-where it needs MCMC on the real series; the tests carry the same comparisons on short
-histories, which is what keeps `pixi run test` quick.
-
-**Two committed text files are checked against each other**, in `tests/test_report_numbers.py`:
-every `\resultnum` key `report/report.tex` uses must be defined in `results/report_numbers.tex`,
-every figure it includes must exist, and every file the macros were read from must still be
-there. That is Stage 10's acceptance criterion as a regression test, and it needs no MCMC. It is
-also the only test that loads a `scripts/` program — by path, with `importlib`, since `scripts/`
-is deliberately not a package.
-
-## Decisions already taken
-
-Do not silently revisit these; they are argued out in the implementation plan.
-
-1. **Serial interval.** The generic EVD estimate (mean 15.3 d, SD 9.3 d) is used for all five
-   models. Its variance budget of 86.49 d² admits published EVD incubation estimates; the
-   outbreak-specific estimate (mean 19.46, SD 6.08) does not, and is retained only for a
-   sensitivity analysis.
-2. **Naming and reporting of the risk.** **RAC** (risk of additional cases) is the headline
-   quantity, used throughout; **RAT** (risk of additional transmission) appears only in the
-   supplementary analysis and its methodology. For the onset-anchored models compute **both**
-   and report the gap between them.
-3. **Latents at the conditioning day.** Use the full-data (smoothed) posterior for every day —
-   one fit per model. The methods section must state the approximation and the measured signed
-   filtering comparison: smoothing is strongly upward early and mildly downward after the last
-   onset, not a universal one-direction bias.
-4. **`R` switch.** Day 33 in each model's own time index (see *Day indexing* above).
-5. **Naming.** The day-level negative-binomial model is `DLO`, not the older "CIO"; the package
-   is `end_of_outbreak`.
-6. **SSI-SO infectivity prior.** `Y_t | D_t ~ Gamma(k D_t, k)`. The `Gamma(k I_t, k)` written
-   in `starter_docs/models.jpeg` is a transcription slip.
-7. **Particle MCMC is a check, never a results path.** Main analyses stay in PyMC. See
-   *Testing* above and §6.6 of the implementation plan.
-8. **Latent parameterisation.** `marginalised_inverse_cdf`, chosen by the Stage-3 benchmark
-   (`validation/results/sampler_benchmark.md`). `negligible_latent_threshold` is `0.0` — the
-   approximation it offered is unnecessary once the uncoupled latents are integrated out
-   exactly. See *The latent block* above.
-9. **Model evidence by bridge sampling**, with prior Monte Carlo and importance sampling kept as
-   the §6.5 agreement checks and quadrature as the exact answer where the space is small enough.
-   Validated in Stage 6; see *Model evidence* above.
-10. **Fits are stored as NETCDF4 via xarray**, engine `h5netcdf`, read back with
-    `xr.open_datatree`. See *The analysis and plotting scripts* above.
-11. **The report quotes no literal number.** Every figure in the prose is a `\resultnum{<key>}`
-    expanded from `results/report_numbers.tex`, which a tier-2 rule generates from the other
-    tier-2 outputs; an undefined key is a compile error. See *The report* above.
+| Decision | Where it is argued |
+| --- | --- |
+| **Serial interval:** the generic EVD estimate (mean 15.3 d, SD 9.3 d) for all five models. Its variance budget of 86.49 d² admits published EVD incubation estimates; the outbreak-specific estimate (19.46, 6.08) does not, and is kept only for a sensitivity analysis. | plan §2 |
+| **RAC is the headline, RAT the supplement.** For the onset-anchored models compute both and report the gap. | [docs/risk.md](docs/risk.md) |
+| **Real-time conditioning:** parameters *and* latents fitted to the record through day `t`, one fit per conditioning day. `single_fit_filtered` is a comparison, never a results path. The old smoothed route is gone. | [docs/risk.md](docs/risk.md), plan §5.6 |
+| **`R` switches on day 33 in each model's own time index.** | *Day indexing*, above |
+| **Naming:** the day-level negative-binomial model is `DLO`, not the older "CIO"; the package is `end_of_outbreak`. | — |
+| **SSI-SO infectivity prior** is `Y_t \| D_t ~ Gamma(k D_t, k)`. The `Gamma(k I_t, k)` in `starter_docs/models.jpeg` is a transcription slip. | plan §4 |
+| **Particle MCMC is a check, never a results path.** | [docs/risk.md](docs/risk.md) |
+| **Latent parameterisation:** `marginalised_inverse_cdf`, with `negligible_latent_threshold = 0.0`. | [docs/models.md](docs/models.md), `validation/results/sampler_benchmark.md` |
+| **Model evidence by bridge sampling**, with the other estimators as agreement checks. | [docs/models.md](docs/models.md), `validation/results/evidence_validation.md` |
+| **Fits are stored as NETCDF4 via xarray**, engine `h5netcdf`, read back with `xr.open_datatree`. `arviz.InferenceData` is a deprecated alias for `xr.DataTree` in arviz 1.x, so the I/O is xarray's; keep arviz for `az.summary` and the diagnostics. | `fitting.NETCDF_ENGINE` |
+| **The report quotes no literal number.** | `report/README.md` |
 
 ## Open items
 
-- **Incubation period.** Currently WHO Ebola Response Team (2014), NEJM 371:1481–1495, gamma
-  with mean 11.4 d and SD 8.1 d, which leaves a residual TOST of mean 3.9 d and SD 4.57 d.
-  Configurable in `config/config.yaml`; `check_delay_budget` rejects any estimate whose
-  variance exceeds the serial interval's.
-- **The six sensitivity analyses, listed in §11 of the report and none of them run.** In the
-  plan's order of value: the outbreak-specific serial interval (naive models only — it is
-  structurally inadmissible for the onset-anchored ones, and saying so is itself a result); the
-  incubation/TOST decomposition; filtering rather than smoothed latents, integrated over the
-  parameter posterior; the shifted `R`-switch that separates structure from indexing; a non-empty
-  initial incubation pipeline; and prior sensitivity. The first, second, fourth and fifth are one
-  config value apiece and no new code.
-- **Three optional follow-ups to the §5.4 finding were declined at Stage 10** and stay declined
-  unless asked for. See *The report* above for why, and "Optional extensions" at the end of §9 of
-  the plan for what they are.
-## Git workflow
+- **Incubation period.** Currently WHO Ebola Response Team (2014), NEJM 371:1481–1495, gamma with
+  mean 11.4 d and SD 8.1 d, leaving a residual TOST of mean 3.9 d and SD 4.57 d. Configurable in
+  `config/config.yaml`; `check_delay_budget` rejects any estimate whose variance exceeds the
+  serial interval's.
+- **Six sensitivity analyses, listed in the report and none of them run.** In order of value: the
+  outbreak-specific serial interval (naive models only — it is structurally inadmissible for the
+  onset-anchored ones, and saying so is itself a result); the incubation/TOST decomposition;
+  **retrospective rather than real-time conditioning**, retaining the day-`t` state from a fit to
+  the complete record, which asks a different question rather than approximating this one; the
+  shifted `R`-switch that separates structure from indexing; a non-empty initial incubation
+  pipeline; and prior sensitivity. The first, second, fourth and fifth are one config value apiece
+  and no new code.
+- **Three optional follow-ups to the mechanism finding were declined** and stay declined unless
+  asked for. The report does not reference the companion project, so neither the
+  `P(sustained transmission)` panel nor the reset-convention panel would answer a question the
+  document raises; both are recorded as prose instead. The `sse-ssi-pmo` regression test is the
+  cheapest of the three and remains the one to do first if any is revisited.
+- **Per-fit process spawn dominates the cheap models' cost.** Each conditioning-day fit starts
+  four chain processes, which is a large fraction of a two-second fit. If the pipeline's runtime
+  ever matters, the lever is reusing a sampler across days in `fitting.fit_model`, not the
+  Snakemake scheduling.
 
-- Commit regularly with descriptive messages. Run `pixi run check` first.
-- The default branch is `main`. Branch for feature work rather than committing to `main`
-  directly.
-- `starter_docs/` is untracked by design and must stay that way.
+## Where to read more
+
+Go to these when you are about to change the thing they describe.
+
+| File | What it covers |
+| --- | --- |
+| [docs/risk.md](docs/risk.md) | The estimand, the two estimators, the closed forms, the affine representation and the exact latent marginalisation, the onset reset state, matching conditioning against the particle routes |
+| [docs/models.md](docs/models.md) | The renewal core, the builders and simulators, the latent block and what the sampler benchmark settled, model evidence, dispersion comparison |
+| [docs/findings.md](docs/findings.md) | What the study has measured, and which file holds each number. **Read it before "fixing" a surprising result** |
+| `starter_docs/implementation_plan.md` | The source of truth for model definitions and conventions. Untracked, so local only |
+| `cluster/README.md` | Running the full pipeline on ARC, and `racstat` for watching one. Untracked, so local only |
+| `scripts/README.md` | The script table, the tier conventions, figure layout rules, the no-fallback rule |
+| `validation/README.md` | What each validation study answers and where it writes |
+| `report/README.md` | The report's register, and the generated-numbers scheme |
+| `results/README.md`, `figures/README.md`, `data/README.md` | What each committed output is |

@@ -1,5 +1,5 @@
 Committed figures (PDF + PNG), one subdirectory per analysis, drawn by `scripts/plot_*.py` from
-what the tier-2 rules wrote to `results/`.
+what the earlier tiers wrote to `results/`.
 
 | Path | What it is |
 | --- | --- |
