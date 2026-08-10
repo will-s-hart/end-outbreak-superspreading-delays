@@ -262,8 +262,9 @@ Two rules carry most of the weight, and both are explained where they apply
   first.
 - **Match the conditioning before calling agreement a pass.** There are two particle-filter
   checks and they answer different questions: the fixed-`θ` arithmetic check compares against the
-  particle *smoother*, while PMMH is a *filtering* route whose target is `filtered_risk`.
-  Agreement is required in both — of different things.
+  particle *smoother* — both sides conditioned on the whole record, which is what makes it a test
+  of the closed forms and not of the estimand — while PMMH is a *filtering* route whose target is
+  `filtered_risk`. Agreement is required in both, of different things.
 
 Checks that need MCMC on the real series live in `validation/`, not `tests/`; the tests carry the
 same comparisons on short histories, which is what keeps `pixi run test` quick.
