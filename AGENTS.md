@@ -62,7 +62,9 @@ A full `refit_daily` pipeline is **hours** of MCMC, and it monopolises the machi
 So the division of labour is:
 
 > **Agents run the quick route locally to see that a new or edited analysis works and what it
-> roughly says. Full daily-refit runs are the user's, on the cluster, unless they say otherwise.**
+> roughly says. All cluster work is a manual job for the user: agents must not push inputs, start,
+> monitor, cancel or pull a cluster run unless the user explicitly requests that exact action in
+> the current conversation.**
 
 The quick route is `rac.method: single_fit_filtered` — one fit per model, latents filtered per
 conditioning day — which turns hours into minutes:
@@ -75,8 +77,12 @@ pixi run python scripts/run_risk_curves.py --analysis <analysis> --model <model>
 
 It is a genuine approximation and **never a committed result** ([docs/risk.md](docs/risk.md)); it
 is for checking that a change runs, produces sane numbers, and moves things in the direction you
-expected. When the answer needs to be the estimand, hand it to the user for a cluster run —
-`cluster/README.md`, local-only like `starter_docs/`.
+expected. If the edited analysis feeds a figure, agents must also render the applicable quick-route
+figure(s) to a clearly named temporary directory, present the PNGs or direct file links to the user
+for visual checking, and keep those previews in place through the handoff. Saying only that the
+agent inspected a temporary figure is not sufficient. When the answer needs to be the estimand,
+give the user the manual commands from `cluster/README.md` (local-only like `starter_docs/`) and
+stop; do not execute any cluster command on the user's behalf without their explicit request.
 
 Two habits that follow from this, both learned the hard way:
 
