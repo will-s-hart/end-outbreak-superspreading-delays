@@ -1010,22 +1010,27 @@ mechanism alone.
 \subsection{Posterior sampling}
 \label{sec:sampling}
 
-All fits use Hamiltonian Monte Carlo (the No-U-Turn sampler, as implemented in PyMC), with
-\resultnum{naivemodelsfixedk.chains} chains of \resultnum{naivemodelsfixedk.draws} draws after
-\resultnum{naivemodelsfixedk.tune} tuning iterations in every analysis, at a target acceptance
-probability of \resultnum{naivemodelsfixedk.targetaccept} in Analyses~1--3 and
-\resultnum{onsetmodelsestimatedk.targetaccept} in Analysis~4. Each fit jointly estimates $\Rpre$,
-$\Rpost$, any latent states, and --- in Analyses~2 and~4 --- $k$. Because the estimand conditions
-on the record through the day in question (Section~\ref{sec:smoothing}), each model is fitted once
-per conditioning day, and the diagnostics below cover all of those fits. The evidence and
-dispersion comparisons are properties of a model given the whole record, and use the fit to the
-complete series, which also serves as the final conditioning day.
+All fits use PyMC, with \resultnum{naivemodelsfixedk.chains} chains of
+\resultnum{naivemodelsfixedk.draws} draws after \resultnum{naivemodelsfixedk.tune} tuning
+iterations in every analysis. Fits with fixed $k$, and estimated-$k$ fits without an inverse-CDF
+latent block, use Hamiltonian Monte Carlo throughout (the No-U-Turn sampler, NUTS). In
+estimated-$k$ fits of \ssi{}, \sseso{} and \ssiso{}, the Gamma quantile is differentiable with
+respect to its probability coordinate but not its shape. PyMC therefore uses a compound kernel:
+univariate Slice sampling for $k$, and NUTS for $\Rpre$, $\Rpost$ and the latent Uniform
+coordinates. This is the same compound sampler evaluated by the parameterisation benchmark. The
+NUTS target acceptance probability is \resultnum{naivemodelsfixedk.targetaccept} in
+Analyses~1--3 and \resultnum{onsetmodelsestimatedk.targetaccept} in Analysis~4. Each fit jointly
+estimates $\Rpre$, $\Rpost$, any latent states, and --- in Analyses~2 and~4 --- $k$. Because the
+estimand conditions on the record through the day in question (Section~\ref{sec:smoothing}), each
+model is fitted once per conditioning day, and the diagnostics below cover all of those fits. The
+evidence and dispersion comparisons are properties of a model given the whole record, and use the
+fit to the complete series, which also serves as the final conditioning day.
 
 \paragraph{Convergence.} The four analyses rest on
 \resultnum{overall.diagnostics.fits} fits in total. Across every one of them, and over every
 sampled variable including the latent blocks, the worst $\hat{R}$ is
 \resultnum{overall.diagnostics.maxrhat}, the smallest bulk effective sample size is
-\resultnum{overall.diagnostics.minbulkess}, and the total number of divergent transitions is
+\resultnum{overall.diagnostics.minbulkess}, and the total number of divergent NUTS transitions is
 \resultnum{overall.diagnostics.divergences}. Per analysis the minimum bulk effective sample sizes
 are \resultnum{naivemodelsfixedk.diagnostics.minbulkess},
 \resultnum{naivemodelsestimatedk.diagnostics.minbulkess},
