@@ -292,13 +292,13 @@ def future_force_of_infection(
     serial interval can no longer reach the retained cases and ``μ_j`` is identically zero, so
     the infinite product of §5.3 is finite.
     """
-    counts = np.asarray(counts, dtype=np.float64)
+    counts_float = np.asarray(counts, dtype=np.float64)
     w = np.asarray(serial_interval, dtype=np.float64)
     days = np.asarray(days, dtype=np.int64)
     profile = np.zeros((days.size, w.size), dtype=np.float64)
-    day_index = np.arange(counts.size, dtype=np.int64)
+    day_index = np.arange(counts_float.size, dtype=np.int64)
     for row, t in enumerate(days):
-        retained = np.where(day_index <= t, counts, 0.0)
+        retained = np.where(day_index <= t, counts_float, 0.0)
         reachable = renewal.delay_weighted_sum(
             retained, w, first_lag=SERIAL_INTERVAL_FIRST_LAG, n_days=int(t) + 1 + w.size
         )

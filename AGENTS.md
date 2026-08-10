@@ -53,8 +53,8 @@ The environment is managed by **pixi**. All commands run through `pixi run`:
 **Run `pixi run check` and fix every issue before committing.** No exceptions — a failing lint,
 type or test check is not "pre-existing", it is the current state of the tree.
 
-`snakemake-minimal` comes from bioconda (conda-forge does not carry it); everything else is
-conda-forge, with `ruff` and `ty` from PyPI.
+Snakemake and its Slurm executor come from bioconda; the scientific stack is conda-forge, with
+`ruff` and `ty` from PyPI. The lock covers macOS ARM, Linux x86-64 and Windows x86-64.
 
 ## Running the analyses — read this before starting anything long
 

@@ -285,14 +285,14 @@ def plot_model_probability_pie(
     """
     models = list(probabilities)
     values = [probabilities[model] for model in models]
-    wedges, _ = ax.pie(
+    wedges = ax.pie(
         values,
         colors=[model_colour(model) for model in models],
         radius=0.95,
         startangle=90,
         counterclock=False,
         wedgeprops={"linewidth": 0.6, "edgecolor": "white"},
-    )
+    )[0]
     labels = [
         f"{model_label(model)}  {_probability_text(probabilities[model], minimum_label)}"
         for model in models
@@ -354,7 +354,7 @@ def mark_intervention_dates(
         )
         ax.annotate(
             text,
-            xy=(date, label_y),
+            xy=(mdates.date2num(date), label_y),
             xycoords=("data", "axes fraction"),
             xytext=(3 if side == "left" else -3, 0),
             textcoords="offset points",
