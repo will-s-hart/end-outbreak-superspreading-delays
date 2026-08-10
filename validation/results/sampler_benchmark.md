@@ -52,10 +52,15 @@ Gamma quantile function gives a bounded, flat-prior space whose geometry does no
 shape at all. On the untouched 110-latent SSE-SO block it produces **zero divergences** and
 `R̂ = 1.00`.
 
-§6.3 expected this option to preclude NUTS, on the grounds that `icdf` has no gradient. **That
-is not true of the PyTensor in use here**: `pm.icdf` on a Gamma differentiates fine, so the
-inverse-CDF variant runs under NUTS like any other and the anticipated trade-off — better
-geometry, gradient-free samplers only — never arises.
+§6.3 expected this option to preclude NUTS, on the grounds that `icdf` has no gradient. More
+precisely, the PyTensor in use differentiates the Gamma quantile with respect to its probability
+coordinate but not its shape. The inverse-CDF uniforms therefore run under NUTS. With fixed `k`
+the whole sampled block is NUTS; with estimated `k`, PyMC uses the compound step `Slice: [k]`
+plus `NUTS: [R_pre, R_post, <latent>_uniform]`. The estimated-`k` rows below measured that exact
+compound sampler, which performed well; there was no later switch to Slice caused by a dependency
+change. Thus the anticipated trade-off — better geometry but gradient-free sampling of the
+entire block — still does not arise, although the original wording “runs under NUTS like any
+other” was too broad.
 
 **Exact marginalisation of the uncoupled latents.** A latent that reaches no observation day
 carrying a case enters the likelihood only through `exp(−Σ_j μ_j)`, which is linear in the

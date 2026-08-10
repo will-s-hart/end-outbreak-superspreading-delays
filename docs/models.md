@@ -55,7 +55,12 @@ mechanisms, and they compose:
   exactly the pathological tail, since the last case is on day 58 — and one of SSI's/SSI-SO's 31.
   **No approximation whatsoever.** Shorter windows remove more.
 - **Inverse-CDF reparameterisation.** Sample `Uniform(0, 1)` and push through the Gamma quantile
-  function. `pm.icdf` *does* have a gradient in this PyTensor, so this runs under NUTS.
+  function. PyTensor differentiates the Gamma quantile with respect to the probability
+  coordinate, so the sampled uniforms can run under NUTS. It does **not** differentiate the
+  quantile with respect to the Gamma shape: when `k` is estimated, PyMC therefore uses the
+  compound step `Slice: [k]` plus `NUTS: [R_pre, R_post, <latent>_uniform]`. With fixed `k` the
+  whole sampled block runs under NUTS. This is the sampler configuration used by the original
+  estimated-`k` benchmark, not a fallback introduced by a later dependency change.
 
 `pymc_models.latent_block_structure` is the single source for a block's layout — the days, the
 scales, and the two coupling weight vectors with `c_u = R_pre·a_u + R_post·b_u`. The builders use

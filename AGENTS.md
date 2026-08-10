@@ -291,7 +291,7 @@ committed measurement.
 | **Naming:** the day-level negative-binomial model is `DLO`, not the older "CIO"; the package is `end_of_outbreak`. | — |
 | **SSI-SO infectivity prior** is `Y_t \| D_t ~ Gamma(k D_t, k)`. The `Gamma(k I_t, k)` in `starter_docs/models.jpeg` is a transcription slip. | plan §4 |
 | **Particle MCMC is a check, never a results path.** | [docs/risk.md](docs/risk.md) |
-| **Latent parameterisation:** `marginalised_inverse_cdf`, with `negligible_latent_threshold = 0.0`. | [docs/models.md](docs/models.md), `validation/results/sampler_benchmark.md` |
+| **Latent parameterisation:** `marginalised_inverse_cdf`, with `negligible_latent_threshold = 0.0`. Gamma `icdf` is differentiable in its probability coordinate but not its shape: fixed-`k` fits use NUTS throughout, while estimated-`k` fits deliberately use `Slice: [k]` plus NUTS for the `R` parameters and latent uniforms. That compound sampler is what the benchmark validated. | [docs/models.md](docs/models.md), `validation/results/sampler_benchmark.md` |
 | **Model evidence by bridge sampling**, with the other estimators as agreement checks. | [docs/models.md](docs/models.md), `validation/results/evidence_validation.md` |
 | **Fits are stored as NETCDF4 via xarray**, engine `h5netcdf`, read back with `xr.open_datatree`. `arviz.InferenceData` is a deprecated alias for `xr.DataTree` in arviz 1.x, so the I/O is xarray's; keep arviz for `az.summary` and the diagnostics. | `fitting.NETCDF_ENGINE` |
 | **The report quotes no literal number.** | `report/README.md` |
