@@ -108,6 +108,12 @@ def fit_model(
         of the latent true-count block under incomplete reporting, which is handed
         :class:`end_of_outbreak.reporting.SingleSiteCountMetropolis` because PyMC's own choice
         for it silently stops moving on a series this long.
+
+        The chains are run **in this process**, one after another. Parallelism belongs a level
+        up, over the conditioning days of a refit curve, where there are a hundred independent
+        fits rather than four chains; see :mod:`end_of_outbreak.parallel`. This costs nothing
+        in reproducibility — ``pm.sample`` seeds chain ``c`` from ``random_seed`` the same way
+        however many processes it runs them in, which ``tests/test_parallel.py`` pins.
     progressbar
         Off by default, since fits are normally run from the pipeline.
     """
@@ -157,7 +163,9 @@ def fit_model(
             draws=settings.draws,
             tune=settings.tune,
             chains=settings.chains,
-            cores=settings.chains,
+            # One process, chains in sequence. See the `sampler` parameter above: the fits
+            # themselves are the parallel axis, not the chains within one.
+            cores=1,
             random_seed=settings.seed,
             initvals=initial_values or None,
             progressbar=progressbar,

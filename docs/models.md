@@ -96,6 +96,35 @@ The comparison is `validation/results/sampler_benchmark.md` (74 MCMC runs).
 - **Do not implement "log-scale latents with a Jacobian"**; it duplicates PyMC's default
   transform.
 
+### Where the cores go
+
+`fitting.fit_model` samples with `cores=1`: a fit's chains run one after another in the calling
+process. That is not a concession — it is where the parallelism was moved *to*. The expensive
+step in this project is `refit_daily`, which is ~110 independent fits per model, so the days are
+the axis worth spreading over, and `refit_risk.risk_by_refitting(n_jobs=…)` does exactly that
+through `end_of_outbreak/parallel.py`. Three things improve at once: the worker pool is built
+once instead of four processes being spawned and torn down per fit; the width is set by the
+machine rather than capped at `chains`; and no worker waits on a slow chain of a fit that is
+otherwise finished.
+
+Nothing about a posterior changes. `pm.sample` derives chain `c`'s seed from `random_seed`
+before it chooses how many processes to run them in, so `cores=1` and `cores=4` give
+bit-identical draws — confirmed across all four step-method mixes this project uses (NUTS
+throughout, `Slice: [k]` plus NUTS, and both with and without the count block) and pinned in
+`tests/test_parallel.py`. Every conditioning day likewise carries a seed derived from the
+analysis and the day, fixed before any of them start, so the curve is the same at any `n_jobs`.
+That is why the `Snakefile` leaves `parallel` out of `RAC_CORE` and `threads` out of the `rac`
+params: neither can change a number, and treating them as rerun triggers would re-run hours of
+MCMC to reproduce a byte-identical file.
+
+Two things a worker needs, and both are silent when missing. It needs its **own PyTensor
+compile directory**, because the shared module cache is guarded by a lock file and every worker
+compiles the same unseen graph at the same moment on the first day of a curve. And it needs
+**single-threaded BLAS and OpenMP**, or eight workers each spawn eight threads and oversubscribe
+the machine eightfold. `parallel.prepare_worker` handles both, and it runs only in workers —
+repointing the compile directory of an interactive session would throw away a warm cache for the
+life of the process.
+
 ## Model evidence
 
 `model_evidence.py` computes `p(D_{1:110} | model)` with the parameters *and* the latents

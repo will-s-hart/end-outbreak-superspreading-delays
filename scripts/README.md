@@ -40,7 +40,9 @@ Conventions, all of them load-bearing:
   conditioning day, so the curve is one MCMC fit per day — about 110 per model — and it writes
   `..._rac_diagnostics.csv` beside the curve, one row per day, failing outright if any of those
   fits did not converge. `--method single_fit_filtered` swaps in the fast approximation for
-  prototyping; it is not a results path.
+  prototyping; it is not a results path. **`--jobs N` spreads the days over `N` worker
+  processes** and changes nothing else — each day's seed is fixed before any of them start — so
+  the pipeline passes Snakemake's `{threads}` and it appears in no rule's `params:`.
 - **Named for what they do**, never for figure numbers.
 - **The figure layout follows the number of parameter posteriors, and the RAC panel's *view*
   follows the layout.** A fixed-`k` figure has two (`R_pre`, `R_post`), so it is four panels with

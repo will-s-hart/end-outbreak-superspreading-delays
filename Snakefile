@@ -70,6 +70,12 @@ FIT_CORE = RUN_DRIVER + code(
 # absent: the curve container and the "settles below" rule belong to the figure and report
 # tiers, and naming them here would put a presentation-facing definition on the dependency list
 # of every fit.
+#
+# `parallel` is absent for the same reason `rac.convergence` is absent from the params: it
+# decides which process runs a fit, not what the fit returns. Every conditioning day carries a
+# seed fixed before any of them start, so the curve is identical at any worker count, and
+# `tests/test_parallel.py` pins that. Listing it would make a scheduling tweak a reason to
+# re-run hours of MCMC for a byte-identical file.
 RAC_CORE = RUN_DRIVER + code(
     "configuration",
     "branching_process",
@@ -350,6 +356,14 @@ rule rac:
         analysis=lambda wildcards: analysis_params(wildcards.analysis),
         rac=lambda wildcards: rac_params_of(wildcards.analysis),
         shared=SHARED_PARAMS,
+    # One worker per core, over the conditioning days -- the fits themselves are sequential
+    # (`fitting.fit_model` samples with `cores=1`), so this is the whole of the step's
+    # parallelism. Snakemake caps it at the job's own `-j`, so a local `-j4` gives four.
+    #
+    # Deliberately NOT in `params:`: the curve is identical at any thread count, and recording
+    # it as a rerun trigger would re-run hours of MCMC to reproduce a byte-identical file. Use
+    # the profile's `set-threads` to change it without touching this rule.
+    threads: 8
     shell:
         "python {input.script}"
         " --analysis {wildcards.analysis}"
@@ -358,6 +372,7 @@ rule rac:
         " --data {input.data}"
         " --config {input.config}"
         " --diagnostics {output.diagnostics}"
+        " --jobs {threads}"
         " --output {output.curve}"
 
 

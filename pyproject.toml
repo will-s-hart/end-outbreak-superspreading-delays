@@ -2,7 +2,7 @@
 name = "end-outbreak-superspreading-delays"
 version = "0.1.0"
 description = "End-of-outbreak decision-making under superspreading and onset-date delays"
-requires-python = ">=3.12,<3.14"
+requires-python = ">=3.12"
 dependencies = [
     "numpy>=2.0",
     "scipy>=1.13",
@@ -14,6 +14,12 @@ dependencies = [
     # HDF5 backend. Without one the tier-1 -> tier-2 handoff fails at the first save_fit.
     "h5netcdf>=1.3",
     "pyyaml>=6.0",
+    # The RAC step runs one fit per conditioning day and spreads them over worker processes
+    # (end_of_outbreak/parallel.py). joblib's loky backend is what makes that safe: it reuses
+    # its workers across the ~110 fits and can pin each one to a single BLAS thread, which
+    # `concurrent.futures` cannot do once NumPy is imported.
+    "joblib>=1.3",
+    "tqdm>=4.66",
 ]
 
 [build-system]
@@ -32,7 +38,18 @@ channels = ["conda-forge", "bioconda"]
 platforms = ["osx-arm64", "linux-64", "win-64"]
 
 [tool.pixi.dependencies]
-python = ">=3.12,<3.14"
+# The upper bound is gone now that the pipeline no longer asks `pm.sample` for more than one
+# process: chain-level multiprocessing forks an already-multi-threaded interpreter, which is
+# what 3.13 deprecates and 3.14 moves away from. `fitting.fit_model` samples with `cores=1` and
+# the parallelism lives in `end_of_outbreak/parallel.py` instead.
+#
+# Verified rather than assumed: the full suite passes on 3.14.6, and an unbounded solve keeps
+# every numerical package at the version locked here -- pymc 6.2.0, pytensor 3.2.4, numpy 2.4.6,
+# scipy 1.18.0, arviz 1.2.0 -- so moving up does not drag the scientific stack with it. The lock
+# is deliberately left on 3.13 until someone runs `pixi update python`; relaxing the constraint
+# and changing the interpreter are separate decisions, and the second one invalidates nothing
+# but should not happen in the middle of a cluster run.
+python = ">=3.12"
 numpy = ">=2.0"
 scipy = ">=1.13"
 pandas = ">=2.0"
@@ -41,6 +58,8 @@ pymc = ">=6.0"
 arviz = ">=0.18"
 h5netcdf = ">=1.3"
 pyyaml = ">=6.0"
+joblib = ">=1.3"
+tqdm = ">=4.66"
 
 # PyTensor compiles small C extensions at runtime. Conda clang 21 misroutes its ``-ld64``
 # compatibility flag on current macOS; clang 22 handles the same link command correctly.

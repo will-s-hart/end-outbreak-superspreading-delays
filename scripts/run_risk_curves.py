@@ -28,7 +28,7 @@ def command_risk(args: argparse.Namespace) -> None:
 
     if method == analysis_driver.REFIT_DAILY:
         estimate, diagnostics = analysis_driver._rac_by_refitting(
-            setting, model, days=days, posterior=args.posterior
+            setting, model, days=days, posterior=args.posterior, jobs=int(args.jobs)
         )
     else:
         estimate, diagnostics = analysis_driver._rac_by_filtering(
@@ -84,6 +84,7 @@ def parse_arguments(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--diagnostics", type=Path)
     parser.add_argument("--method", choices=analysis_driver.RAC_METHODS)
     parser.add_argument("--output", type=Path, required=True)
+    analysis_driver.add_jobs_argument(parser)
     return parser.parse_args(argv)
 
 

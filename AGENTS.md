@@ -56,6 +56,12 @@ type or test check is not "pre-existing", it is the current state of the tree.
 Snakemake and its Slurm executor come from bioconda; the scientific stack is conda-forge, with
 `ruff` and `ty` from PyPI. The lock covers macOS ARM, Linux x86-64 and Windows x86-64.
 
+**Python has no upper bound, and the lock is on 3.13 anyway.** The bound existed because
+chain-level multiprocessing forks an already-multi-threaded interpreter; nothing in the pipeline
+does that now (`fitting.fit_model` samples with `cores=1`). The suite passes on 3.14.6 and an
+unbounded solve keeps every numerical package at the version already locked, so the interpreter
+can move whenever someone runs `pixi update python` — just not in the middle of a cluster run.
+
 ## Running the analyses — read this before starting anything long
 
 A full `refit_daily` pipeline is **hours** of MCMC, and it monopolises the machine while it runs.
@@ -183,7 +189,9 @@ Flat package `end_of_outbreak/` (no `src/`), with `scripts/` for analysis and pl
 - Analysis scripts are named for what they do, never for figure numbers.
 
 `particle_filter.py` **is** in `RAC_CORE`, because `single_fit_filtered` is a selectable results
-path. `particle_mcmc.py` stays out of every rule's list.
+path. `particle_mcmc.py` stays out of every rule's list. `parallel.py` also stays out, for the
+opposite reason to `risk_curves.py`: it decides which process runs a fit, never what the fit
+returns, so listing it would make a scheduling tweak a reason to re-run hours of MCMC.
 
 ## Pipeline
 
@@ -224,6 +232,13 @@ Three more things the pipeline rests on:
   compute on those lists being complete. Weigh that before editing the config casually.
 - Scripts take `argparse` arguments and are invoked from `shell:`, never through Snakemake's
   `script:` directive, so every script stays runnable and debuggable on its own.
+- **`rule rac` is the only wide rule.** It declares `threads: 8` and passes `--jobs {threads}`,
+  which spreads the conditioning days over worker processes; every other rule takes Snakemake's
+  default of one thread, because a fit's chains now run in one process. Change the width in the
+  *profile* (`set-threads`), not in the `Snakefile`: `threads` is part of a rule's code, so
+  editing it there would make a change of core count a reason to re-run every curve. The cluster
+  profile deliberately sets no `cpus_per_task`, so a Slurm request follows `threads` and the two
+  cannot drift apart.
 
 ### The convergence gate is a regression test, not a discovery tool
 
@@ -298,6 +313,7 @@ committed measurement.
 | **A reporting delay's as-of day is an explicit argument, never `len(counts) - 1`.** Our windows include their conditioning day; `end-of-outbreak-vbd`'s stop strictly before it, so the same expression means different days in the two projects. | [docs/risk.md](docs/risk.md) |
 | **The latent true counts get `reporting.SingleSiteCountMetropolis`** — the only step this project chooses rather than leaving to PyMC. PyMC's default proposal for a vector discrete variable freezes the block solid past ~20 days, silently. Never "simplify" this back to automatic assignment; a test on a long series is what catches it. | [docs/models.md](docs/models.md) |
 | **The filter is adapted in the counts too**, drawing the *unreported* cases from `Poisson((1−π)μ)` and weighting by `Poisson(c; πμ)`. Proposing the totals and reweighting by the binomial kills the whole cloud on any busy day. Negative-binomial count laws (DLO, SSE) are refused, not approximated. | [docs/risk.md](docs/risk.md) |
+| **A fit's chains run in one process (`cores=1`); the parallel axis is the conditioning days.** `refit_risk` spreads them over a worker pool, so throughput is capped by the machine rather than by `chains`. Bit-identical draws either way — PyMC seeds chain `c` before it decides how many processes to run. Never move parallelism back inside `pm.sample`. | [docs/models.md](docs/models.md), `tests/test_parallel.py` |
 | **The report quotes no literal number.** | `report/README.md` |
 
 ## Open items

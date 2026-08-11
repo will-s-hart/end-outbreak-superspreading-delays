@@ -266,7 +266,7 @@ def command_rac(args: argparse.Namespace) -> None:
 
     if method == REFIT_DAILY:
         estimate, diagnostics = _rac_by_refitting(
-            setting, model, days=days, posterior=args.posterior
+            setting, model, days=days, posterior=args.posterior, jobs=int(args.jobs)
         )
     else:
         estimate, diagnostics = _rac_by_filtering(
@@ -331,13 +331,17 @@ def _report_convergence(
 
 
 def _rac_by_refitting(
-    setting: AnalysisSetting, model: str, *, days: np.ndarray, posterior: Path
+    setting: AnalysisSetting, model: str, *, days: np.ndarray, posterior: Path, jobs: int = 1
 ) -> tuple[rac.DailyRiskEstimate, pd.DataFrame]:
     """The gold standard: one fit per conditioning day, with every day's diagnostics kept.
 
     The full-record fit the pipeline already holds is reused for the last conditioning day
     rather than repeated, so the end of the curve and the evidence and dispersion summaries
     describe the same posterior.
+
+    ``jobs`` spreads the days over worker processes. It changes the wall time and nothing else:
+    each day carries a seed derived from the analysis and the day, so the curve is the same
+    whether one process or eight produced it.
     """
     data = setting.data
     R_pre, R_post = setting.reproduction_number_priors()
@@ -358,6 +362,7 @@ def _rac_by_refitting(
         seed_for_day=setting.daily_fit_seed(model),
         final_day_fit=fitting.load_fit(posterior),
         on_day=lambda day: _report_day(model, day, reported),
+        n_jobs=jobs,
     )
     diagnostics = pd.DataFrame(
         {
@@ -564,6 +569,22 @@ def _write_json(path: str | Path, payload: dict[str, Any]) -> None:
 # ---------------------------------------------------------------------------------------
 
 
+def add_jobs_argument(parser: argparse.ArgumentParser) -> None:
+    """The worker-process count for ``refit_daily``, shared with ``scripts/run_risk_curves.py``.
+
+    A command-line flag rather than a config value, and deliberately absent from the
+    ``Snakefile``'s ``rac`` params. How many cores a machine has changes how long the curve
+    takes and not one number in it, so recording it as a rerun trigger would re-run hours of
+    MCMC to reproduce a byte-identical file. The pipeline passes Snakemake's ``{threads}``.
+    """
+    parser.add_argument(
+        "--jobs",
+        type=int,
+        default=1,
+        help="worker processes to spread the conditioning days over (refit_daily only)",
+    )
+
+
 def parse_arguments(analysis: str, argv: list[str] | None = None) -> argparse.Namespace:
     """The four subcommands, with the analysis baked in by the calling run script."""
     parser = argparse.ArgumentParser(description=f"pipeline steps for the {analysis} analysis")
@@ -602,6 +623,7 @@ def parse_arguments(analysis: str, argv: list[str] | None = None) -> argparse.Na
         choices=RAC_METHODS,
         help="override config's rac.method; the default refits per conditioning day",
     )
+    add_jobs_argument(risk)
     risk.set_defaults(handler=command_rac)
 
     evidence = common(subcommands.add_parser("evidence", help="model evidence (tier 2)"))

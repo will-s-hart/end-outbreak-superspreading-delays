@@ -55,6 +55,13 @@ estimate is the existing closed form applied to `counts[:t + 1]`. `refit_risk` o
 mathematics: it loops days, calls `fitting.fit_model` on the truncated series, and hands the
 draws to `risk_log_probabilities`.
 
+That independence is also what makes the step affordable. Day `t`'s fit sees its own window and
+its own seed and nothing else, so `risk_by_refitting(n_jobs=…)` spreads the days over worker
+processes — this is where the project spends its cores, which is why a single fit's chains run
+sequentially (see *Where the cores go* in [models.md](models.md)). The days come back in
+completion order and are sorted before anything reads the curve as a time series; the numbers are
+identical at any worker count, because the seeds were fixed before any day started.
+
 ## The closed forms
 
 `risk_of_additional_cases.py` holds the estimands and nothing else. **`risk_log_probabilities` is

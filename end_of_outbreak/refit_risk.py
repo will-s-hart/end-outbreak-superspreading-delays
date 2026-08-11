@@ -32,6 +32,15 @@ consequences worth knowing:
 A hundred and ten fits per model is a hundred and ten chances for one of them to go quietly
 wrong, so every day's sampler diagnostics come back with the curve
 (:class:`DayDiagnostics`) and the caller is expected to act on them.
+
+Where the time goes
+-------------------
+This is the most expensive step in the project by a wide margin, and the days are independent
+by construction — day ``t``'s fit sees ``counts[:t + 1]`` and a seed of its own, and nothing
+else. So it is also the natural place to spend cores: ``n_jobs`` runs the days across worker
+processes (:mod:`end_of_outbreak.parallel`), which is why
+:func:`end_of_outbreak.fitting.fit_model` leaves the chains of a single fit sequential. The
+curve does not depend on ``n_jobs`` — the per-day seeds were fixed before any of them ran.
 """
 
 from __future__ import annotations
@@ -46,7 +55,7 @@ import numpy as np
 import xarray as xr
 from numpy.typing import NDArray
 
-from end_of_outbreak import fitting, reporting
+from end_of_outbreak import fitting, parallel, reporting
 from end_of_outbreak import risk_of_additional_cases as rac
 from end_of_outbreak.delay_distributions import OnsetAnchoredDelays
 from end_of_outbreak.latent_parameterisations import LatentParameterisation
@@ -81,6 +90,20 @@ class DayDiagnostics:
             or self.max_r_hat > max_r_hat
             or self.divergences > divergence_fraction * n_draws
         )
+
+
+@dataclass(frozen=True)
+class DayResult:
+    """One conditioning day's contribution to the curve, as a worker hands it back.
+
+    Small on purpose. The fit itself stays in the worker that produced it: what the curve needs
+    is one day of per-draw log-probabilities and the diagnostics, and shipping a whole
+    ``DataTree`` back per day would cost more than the fit.
+    """
+
+    day: int
+    estimate: rac.DailyRiskEstimate
+    diagnostics: DayDiagnostics
 
 
 @dataclass(frozen=True)
@@ -131,6 +154,7 @@ def risk_by_refitting(
     seed_for_day: Callable[[int], int | None] | None = None,
     final_day_fit: xr.DataTree | None = None,
     on_day: Callable[[DayDiagnostics], None] | None = None,
+    n_jobs: int = 1,
 ) -> RefitRiskResult:
     """RAC and RAT over the conditioning days, one fit per day.
 
@@ -157,7 +181,12 @@ def risk_by_refitting(
         it, and reusing it also guarantees that the end of the curve and those summaries describe
         the same posterior.
     on_day
-        Called with each day's diagnostics as it completes, for progress reporting.
+        Called with each day's diagnostics as it completes, for progress reporting. Under
+        ``n_jobs > 1`` the days complete out of order, so it is called out of order too.
+    n_jobs
+        Worker processes to spread the days over; one, meaning this process, by default. The
+        curve is the same either way — every day carries its own seed — so this is a throughput
+        setting and never a modelling one. See :mod:`end_of_outbreak.parallel`.
     """
     specification = specification_of(model)
     counts = np.asarray(counts, dtype=np.int64)
@@ -170,37 +199,14 @@ def risk_by_refitting(
         )
     settings = fitting.SamplerSettings() if sampler is None else sampler
 
-    parts: list[rac.DailyRiskEstimate] = []
-    diagnostics: list[DayDiagnostics] = []
-    for day in selected:
-        t = int(day)
-        started = time.perf_counter()
-        window = counts[: t + 1]
-        reuse = final_day_fit is not None and t == counts.size - 1
-        idata = (
-            final_day_fit
-            if reuse
-            else fitting.fit_model(
-                specification,
-                window,
-                delays=delays,
-                switch_day=switch_day,
-                R_pre=R_pre,
-                R_post=R_post,
-                k=k,
-                latent_parameterisation=latent_parameterisation,
-                negligible_latent_threshold=negligible_latent_threshold,
-                reporting_model=reporting_model,
-                # The window includes its conditioning day, so day t is the day it was
-                # observed on. Stated here rather than left to fit_model's default, because
-                # this is the one place that knows the two coincide.
-                as_of_day=t,
-                sampler=(
-                    settings if seed_for_day is None else replace_seed(settings, seed_for_day(t))
-                ),
-            )
-        )
-        assert idata is not None
+    # The last day of the window is the whole-record fit, which the pipeline already holds. It
+    # is evaluated here rather than in a worker: shipping a `DataTree` into a worker process
+    # just to skip the sampling it stands in for would cost more than it saves.
+    reused_day = counts.size - 1 if final_day_fit is not None else None
+
+    def contribution(day: int, idata: xr.DataTree, started: float) -> DayResult:
+        """One day's per-draw log-probabilities and diagnostics, given its fit."""
+        window = counts[: day + 1]
         state = rac.posterior_state(
             specification,
             idata,
@@ -212,23 +218,68 @@ def risk_by_refitting(
             negligible_latent_threshold=negligible_latent_threshold,
             reporting_model=fitting.fitted_reporting(idata),
         )
-        parts.append(
-            rac.risk_log_probabilities(
+        return DayResult(
+            day=day,
+            estimate=rac.risk_log_probabilities(
                 specification,
                 state,
                 counts=window,
                 delays=delays,
                 switch_day=switch_day,
-                days=np.array([t], dtype=np.int64),
-            )
+                days=np.array([day], dtype=np.int64),
+            ),
+            diagnostics=summarise_fit(idata, day=day, seconds=time.perf_counter() - started),
         )
-        day_diagnostics = summarise_fit(idata, day=t, seconds=time.perf_counter() - started)
-        diagnostics.append(day_diagnostics)
-        if on_day is not None:
-            on_day(day_diagnostics)
 
+    def evaluate(day: int) -> DayResult:
+        """Fit the window ending on ``day`` and take its contribution to the curve.
+
+        This is what crosses into a worker process, so it must not close over ``final_day_fit``:
+        a closure is pickled once per task, and the whole-record fit is tens of megabytes that
+        no worker ever reads. Hence the separate ``reuse`` path below.
+        """
+        started = time.perf_counter()
+        idata = fitting.fit_model(
+            specification,
+            counts[: day + 1],
+            delays=delays,
+            switch_day=switch_day,
+            R_pre=R_pre,
+            R_post=R_post,
+            k=k,
+            latent_parameterisation=latent_parameterisation,
+            negligible_latent_threshold=negligible_latent_threshold,
+            reporting_model=reporting_model,
+            # The window includes its conditioning day, so day t is the day it was observed on.
+            # Stated here rather than left to fit_model's default, because this is the one place
+            # that knows the two coincide.
+            as_of_day=day,
+            sampler=(
+                settings if seed_for_day is None else replace_seed(settings, seed_for_day(day))
+            ),
+        )
+        return contribution(day, idata, started)
+
+    days_to_fit = [int(day) for day in selected if day != reused_day]
+    results = parallel.map_fits(
+        evaluate,
+        days_to_fit,
+        n_jobs=n_jobs,
+        description=f"{specification.name} conditioning days",
+        on_result=None if on_day is None else (lambda result: on_day(result.diagnostics)),
+    )
+    if final_day_fit is not None and reused_day in {int(day) for day in selected}:
+        reused = contribution(int(reused_day), final_day_fit, time.perf_counter())
+        if on_day is not None:
+            on_day(reused.diagnostics)
+        results.append(reused)
+
+    # `map_fits` returns results as they finish, so the curve has to be put back in day order
+    # before anything reads it as a time series.
+    results.sort(key=lambda result: result.day)
     return RefitRiskResult(
-        estimate=rac.DailyRiskEstimate.concatenate(parts), diagnostics=diagnostics
+        estimate=rac.DailyRiskEstimate.concatenate([result.estimate for result in results]),
+        diagnostics=[result.diagnostics for result in results],
     )
 
 
