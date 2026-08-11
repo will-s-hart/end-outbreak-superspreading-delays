@@ -290,6 +290,33 @@ def build_observation(
     return totals
 
 
+def thin(
+    counts: NDArray[np.int64],
+    *,
+    reporting: ReportingModel,
+    as_of_day: int,
+    rng: np.random.Generator,
+) -> NDArray[np.int64]:
+    """Reported counts drawn from true counts by independent per-case thinning.
+
+    The generative counterpart of :func:`build_observation`, and deliberately *not* part of the
+    simulators in :mod:`end_of_outbreak.forward_simulation`: reporting is conditionally
+    independent of the whole transmission recursion given the true counts, so it composes onto
+    a finished simulation rather than living inside one. That is what lets the
+    likelihood-versus-simulation checks reuse the simulators unchanged.
+
+    Day 0 is returned untouched, matching the ``D_0 = c_0`` convention the models are built on.
+    A leading replicate axis is carried through.
+    """
+    counts = np.asarray(counts, dtype=np.int64)
+    if counts.ndim == 0:
+        raise ValueError("counts must have at least one axis, indexed by day")
+    probability = reporting.probability_by_day(counts.shape[-1], as_of_day=as_of_day)
+    reported = rng.binomial(counts, probability)
+    reported[..., 0] = counts[..., 0]
+    return np.asarray(reported, dtype=np.int64)
+
+
 def _signature(parameters: Sequence[Any]) -> str:
     """A ``CustomDist`` signature for parameters that do not share the output's shape.
 

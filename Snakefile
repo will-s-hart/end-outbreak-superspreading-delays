@@ -60,6 +60,7 @@ FIT_CORE = RUN_DRIVER + code(
     "model_specifications",
     "pymc_models",
     "latent_parameterisations",
+    "reporting",
     "fitting",
 )
 # The RAC step drives a fit per conditioning day (`refit_risk` -> `fitting`, `pymc_models`) or
@@ -76,6 +77,8 @@ RAC_CORE = RUN_DRIVER + code(
     "refit_risk",
     "filtered_risk",
     "particle_filter",
+    "forward_simulation",
+    "reporting",
     "renewal",
     "delay_distributions",
     "outbreak_data",
@@ -147,6 +150,16 @@ IMPLEMENTED_ANALYSES = [
     "onset_models_estimated_k",
 ]
 
+# The reporting sweeps are analyses for `rule fit` and `rule rac`, but not for the tiers above:
+# they have no comparison figure of their own (they share one), no model evidence and no
+# dispersion summary. So they stay out of `IMPLEMENTED_ANALYSES`, which is what drives those,
+# and are listed separately for the rules that do reach them.
+RAC_ONLY_ANALYSES = [
+    "underreporting_60",
+    "underreporting_80",
+]
+SAMPLED_ANALYSES = IMPLEMENTED_ANALYSES + RAC_ONLY_ANALYSES
+
 
 # Everything a rule's result depends on must appear in its `params:`. The default profile
 # drops the `mtime` rerun trigger (committed outputs lose their mtimes on clone), and the
@@ -166,6 +179,7 @@ def analysis_params(analysis):
         "sampler": block["sampler"],
         "latent_parameterisation": config.get("latent_parameterisation"),
         "negligible_latent_threshold": config.get("negligible_latent_threshold"),
+        "reporting": block.get("reporting"),
     }
 
 
@@ -178,6 +192,13 @@ def analysis_params(analysis):
 RAC_PARAMS = {
     key: config.get("rac", {}).get(key) for key in ("method", "first_day", "filtering")
 }
+
+
+# An analysis may override any of those, and the under-reporting sweeps override
+# `first_day`. It belongs here rather than in `analysis_params`, which `rule fit` shares:
+# where a curve starts changes no fit.
+def rac_params_of(analysis):
+    return RAC_PARAMS | dict(ANALYSES[analysis].get("rac") or {})
 
 
 # Delay distributions, the analysis window and the R-switch day feed every tier.
@@ -241,7 +262,21 @@ SUSTAINED_TRANSMISSION_TARGETS = {
     ]
     for setting in SUSTAINED_TRANSMISSION_ANALYSES
 }
-MAIN_TARGETS = ANALYSIS_FIGURE_TARGETS + SUSTAINED_TRANSMISSION_TARGETS["fixed_k"]
+# The reporting sweep. 100% is Analysis 3 rather than a rerun: at pi = 1 the model *is* that
+# model, so reusing the committed curves both saves ~156 fits and makes the figure's baseline
+# the paper's headline result rather than a Monte-Carlo-different twin of it.
+UNDERREPORTING_ANALYSES = {
+    1.0: "onset_models_fixed_k",
+    0.8: "underreporting_80",
+    0.6: "underreporting_60",
+}
+UNDERREPORTING_MODELS = ("sse_so", "ssi_so")
+UNDERREPORTING_TARGETS = [
+    f"figures/underreporting/underreporting.{extension}" for extension in ("pdf", "png")
+]
+MAIN_TARGETS = (
+    ANALYSIS_FIGURE_TARGETS + SUSTAINED_TRANSMISSION_TARGETS["fixed_k"] + UNDERREPORTING_TARGETS
+)
 RST_SUPPLEMENTARY_TARGETS = SUSTAINED_TRANSMISSION_TARGETS["estimated_k"]
 DELAY_FIGURE_TARGETS = [
     f"figures/delay_distributions/delay_distributions.{extension}"
@@ -309,7 +344,7 @@ rule rac:
         diagnostics="results/{analysis}/{model}_rac_diagnostics.csv",
     params:
         analysis=lambda wildcards: analysis_params(wildcards.analysis),
-        rac=RAC_PARAMS,
+        rac=lambda wildcards: rac_params_of(wildcards.analysis),
         shared=SHARED_PARAMS,
     shell:
         "python {input.script}"
@@ -481,6 +516,32 @@ rule sustained_transmission_figure:
         " --output-png {output.png}"
 
 
+rule underreporting_figure:
+    input:
+        racs=[
+            f"results/{analysis}/{model}_rac.csv"
+            for analysis in UNDERREPORTING_ANALYSES.values()
+            for model in UNDERREPORTING_MODELS
+        ],
+        data=ONSETS_CSV,
+        config=CONFIG_FILE,
+        script="scripts/plot_underreporting.py",
+        code=PLOT_CORE,
+    output:
+        pdf="figures/underreporting/underreporting.pdf",
+        png="figures/underreporting/underreporting.png",
+    params:
+        analyses=UNDERREPORTING_ANALYSES,
+        shared=SHARED_PARAMS,
+    shell:
+        "python {input.script}"
+        " --results-root results"
+        " --data {input.data}"
+        " --config {input.config}"
+        " --output-pdf {output.pdf}"
+        " --output-png {output.png}"
+
+
 rule delay_figure:
     input:
         delays="results/delay_distributions.csv",
@@ -530,7 +591,7 @@ rule fits:
     input:
         [
             f"results/{analysis}/{model}_posterior.nc"
-            for analysis in IMPLEMENTED_ANALYSES
+            for analysis in SAMPLED_ANALYSES
             for model in models_of(analysis)
         ],
 
@@ -539,7 +600,7 @@ rule results:
     input:
         [
             f"results/{analysis}/{model}_rac.csv"
-            for analysis in IMPLEMENTED_ANALYSES
+            for analysis in SAMPLED_ANALYSES
             for model in models_of(analysis)
         ],
         [f"results/{analysis}/model_evidence.json" for analysis in IMPLEMENTED_ANALYSES],

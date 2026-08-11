@@ -45,13 +45,14 @@ states, so they estimate the same thing and their agreement is a test.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 import numpy as np
 import scipy.special
 import scipy.stats
 from numpy.typing import NDArray
 
-from end_of_outbreak import renewal
+from end_of_outbreak import forward_simulation, renewal, reporting
 from end_of_outbreak.delay_distributions import TOST_FIRST_LAG, OnsetAnchoredDelays
 from end_of_outbreak.model_specifications import (
     ModelSpecification,
@@ -99,6 +100,15 @@ class ParticleFilterResult:
 
     n_particles: int
 
+    true_count_paths: NDArray[np.float64] | None = None
+    """``(n_particles, n_days)`` smoothed true counts; ``None`` when reporting was complete.
+
+    Under incomplete reporting the counts are themselves latent, so each particle carries its
+    own history of them and the filter *draws* each day instead of reading it. Recorded for the
+    same reason the fits record ``true_incidence``: it is the quantity the reporting assumption
+    is there to recover.
+    """
+
     @property
     def log_evidence(self) -> float:
         """``log p(I_{1:T} | θ)``: unbiased in ``exp``, and exact when the model is latent-free."""
@@ -135,6 +145,8 @@ def filter_naive(
     switch_day: int,
     n_particles: int = 1000,
     resample_threshold: float = 0.5,
+    reporting_model: reporting.ReportingModel | None = None,
+    as_of_day: int | None = None,
     rng: np.random.Generator | None = None,
 ) -> ParticleFilterResult:
     """Run the filter over ``dlo``, ``sse``, ``ssi`` or ``cori`` at fixed parameters.
@@ -147,12 +159,19 @@ def filter_naive(
     parameters
         The fixed ``(R_pre, R_post, k)`` to condition on.
     n_particles
-        Particle count. Irrelevant for the latent-free models, whose answer is exact at any
-        count.
+        Particle count. Irrelevant for the latent-free models under complete reporting, whose
+        answer is exact at any count.
     resample_threshold
         Resample when the effective sample size falls below this fraction of ``n_particles``.
         Adaptive resampling leaves more distinct ancestors alive, which is what the smoothing
         output depends on; the evidence estimate is unbiased either way.
+    reporting_model, as_of_day
+        The reporting assumption, and the day the series was observed on. Under incomplete
+        reporting the true counts join the particle state: each day is *drawn* from the model's
+        own count law rather than read off the data, and weighted by ``Binomial(c_t; D_t, π_t)``
+        instead of by the observation density. The filter stays fully adapted in the latent
+        Gamma, which is still drawn from its exact conditional given the day's now-imputed
+        count.
     rng
         NumPy generator; a fresh default one is used if omitted.
     """
@@ -173,6 +192,11 @@ def filter_naive(
     rng = np.random.default_rng() if rng is None else rng
 
     n_days = counts.size
+    reporting_model = _resolve_reporting(reporting_model)
+    complete = reporting_model.is_complete
+    probability = reporting_model.probability_by_day(
+        n_days, as_of_day=n_days - 1 if as_of_day is None else as_of_day
+    )
     k = parameters.require_k(specification) if specification.has_dispersion else None
     R_by_day = renewal.reproduction_number_by_day(
         parameters.R_pre, parameters.R_post, n_days=n_days, switch_day=switch_day
@@ -181,16 +205,22 @@ def filter_naive(
     reach = survival_weights(w)[:n_days]
     survival[: reach.size] = reach
 
-    latent = specification.latent_variable is not None
+    gamma_latent = specification.latent_variable is not None
+    # Whether there is *any* state to resample: under incomplete reporting the counts are
+    # latent, so even the closed-form models carry a particle history.
+    stochastic = gamma_latent or not complete
     driving = np.zeros((n_particles, n_days), dtype=np.float64)
+    true_counts = None if complete else np.zeros((n_particles, n_days), dtype=np.float64)
     lineage = np.zeros((n_particles, n_days), dtype=np.int64)
     filtering_weight = np.zeros((n_days, n_particles), dtype=np.float64)
 
     driving[:, 0] = (
         rng.gamma(k * counts[0], 1.0 / k, size=n_particles)
-        if latent and k is not None
+        if gamma_latent and k is not None
         else float(counts[0])
     )
+    if true_counts is not None:
+        true_counts[:, 0] = float(counts[0])  # day 0 is the fixed index case
     lineage[:, 0] = np.arange(n_particles, dtype=np.int64)
     filtering_weight[0] = driving[:, 0] * survival[0]
 
@@ -199,17 +229,30 @@ def filter_naive(
     increments = np.zeros(days.size, dtype=np.float64)
     ess = np.zeros(days.size, dtype=np.float64)
     resampled = np.zeros(days.size, dtype=bool)
+    day_counts = np.zeros(n_particles, dtype=np.int64)
 
     for position, day in enumerate(days):
         lags = min(int(day), w.size)
         force_of_infection = driving[:, int(day) - lags : int(day)] @ w[:lags][::-1]
-        log_density = _observation_log_density(
-            specification,
-            count=int(counts[day]),
-            force_of_infection=force_of_infection,
-            R=float(R_by_day[day]),
-            k=k,
-        )
+        if complete:
+            log_density = _observation_log_density(
+                specification,
+                count=int(counts[day]),
+                force_of_infection=force_of_infection,
+                R=float(R_by_day[day]),
+                k=k,
+            )
+        else:
+            day_counts = forward_simulation.draw_counts(
+                specification,
+                force_of_infection,
+                R=float(R_by_day[day]),
+                k=k,
+                rng=rng,
+            )
+            log_density = _reporting_log_density(
+                int(counts[day]), day_counts, float(probability[day])
+            )
 
         increment = float(scipy.special.logsumexp(log_weights + log_density))
         if not np.isfinite(increment):
@@ -222,21 +265,31 @@ def filter_naive(
 
         normalised = np.exp(log_weights)
         ess[position] = 1.0 / float((normalised**2).sum())
-        if latent and ess[position] < resample_threshold * n_particles:
+        if stochastic and ess[position] < resample_threshold * n_particles:
             indices = systematic_resample(normalised, rng)
             driving = driving[indices]
             lineage = lineage[indices]
+            if true_counts is not None:
+                true_counts = true_counts[indices]
+                day_counts = day_counts[indices]
             log_weights = np.full(n_particles, -np.log(n_particles))
             resampled[position] = True
 
-        # Y_t is conditionally independent of everything else given the observed I_t, so it is
-        # drawn after the weighting rather than proposed before it: the filter is fully adapted.
-        if not latent:
-            driving[:, day] = float(counts[day])
-        elif counts[day] > 0:
-            assert k is not None  # every latent model here carries a dispersion parameter
-            driving[:, day] = rng.gamma(k * counts[day], 1.0 / k, size=n_particles)
-        # else: Y_t | I_t = 0 is a point mass at zero, which the array already holds.
+        if true_counts is not None:
+            true_counts[:, day] = day_counts
+        # Y_t is conditionally independent of everything else given I_t, so it is drawn after
+        # the weighting rather than proposed before it: the filter is fully adapted. Under
+        # incomplete reporting I_t is the count this particle just imputed rather than the data.
+        if not gamma_latent:
+            driving[:, day] = float(counts[day]) if complete else day_counts
+        elif complete:
+            if counts[day] > 0:
+                assert k is not None  # every latent model here carries a dispersion parameter
+                driving[:, day] = rng.gamma(k * counts[day], 1.0 / k, size=n_particles)
+            # else: Y_t | I_t = 0 is a point mass at zero, which the array already holds.
+        else:
+            assert k is not None
+            driving[:, day] = _gamma_by_particle(rng, shape=k * day_counts, rate=k)
         lineage[:, day] = np.arange(n_particles, dtype=np.int64)
         current_weight = driving[:, : int(day) + 1] @ survival[: int(day) + 1][::-1]
         # Adaptive resampling may leave the continuing particle cloud weighted.  The public
@@ -245,17 +298,19 @@ def filter_naive(
         # This does not alter the likelihood estimator, the ancestry, or the smoother.
         snapshot_indices = (
             systematic_resample(np.exp(log_weights), rng)
-            if latent
+            if stochastic
             else np.arange(n_particles, dtype=np.int64)
         )
         filtering_weight[day] = current_weight[snapshot_indices]
 
     # A final resample turns the weighted particle set into equally weighted smoothing draws,
     # unless the last step already did it.
-    if latent and not (resampled.size > 0 and resampled[-1]):
+    if stochastic and not (resampled.size > 0 and resampled[-1]):
         indices = systematic_resample(np.exp(log_weights), rng)
         driving = driving[indices]
         lineage = lineage[indices]
+        if true_counts is not None:
+            true_counts = true_counts[indices]
 
     return ParticleFilterResult(
         days=days,
@@ -265,7 +320,8 @@ def filter_naive(
         n_distinct=np.array(
             [np.unique(lineage[:, day]).size for day in range(n_days)], dtype=np.int64
         ),
-        latent_paths=driving if latent else None,
+        latent_paths=driving if gamma_latent else None,
+        true_count_paths=true_counts,
         filtering_remaining_weight=filtering_weight,
         expected_infection_paths=None,
         filtering_pipeline_mean=None,
@@ -282,6 +338,8 @@ def filter_onset_anchored(
     switch_day: int,
     n_particles: int = 1000,
     resample_threshold: float = 0.5,
+    reporting_model: reporting.ReportingModel | None = None,
+    as_of_day: int | None = None,
     rng: np.random.Generator | None = None,
 ) -> ParticleFilterResult:
     """Run the onset-process filter for Cori-SO, SSE-SO or SSI-SO.
@@ -292,6 +350,12 @@ def filter_onset_anchored(
     lag-0 mass. The final day's latent is drawn too: it cannot affect the fitted likelihood,
     but it belongs to the reset state's incubation pipeline and is essential for RAC at the
     boundary of the observation window.
+
+    Under incomplete reporting the onsets themselves join the state: ``D_t`` is drawn from that
+    Poisson rather than read, the particle is weighted by ``Binomial(c_t; D_t, π_t)``, and the
+    day's latent is then drawn from the Gamma law that ``D_t`` implies. The ordering still
+    works, because ``μ_t`` depends on the latents strictly before ``t`` while the day's latent
+    scale depends on the counts up to and including it.
     """
     specification = specification_of(model)
     if specification.anchoring != "onsets":
@@ -306,11 +370,16 @@ def filter_onset_anchored(
     rng = np.random.default_rng() if rng is None else rng
 
     n_days = counts.size
+    reporting_model = _resolve_reporting(reporting_model)
+    complete = reporting_model.is_complete
+    probability = reporting_model.probability_by_day(
+        n_days, as_of_day=n_days - 1 if as_of_day is None else as_of_day
+    )
     k = parameters.require_k(specification) if specification.has_dispersion else None
     R_by_day = renewal.reproduction_number_by_day(
         parameters.R_pre, parameters.R_post, n_days=n_days, switch_day=switch_day
     )
-    tost_sum = renewal.delay_weighted_sum(
+    observed_tost_sum = renewal.delay_weighted_sum(
         counts.astype(np.float64), delays.tost, first_lag=TOST_FIRST_LAG
     )
     tost_survival = np.zeros(n_days, dtype=np.float64)
@@ -320,30 +389,35 @@ def filter_onset_anchored(
     incubation_reach = survival_weights(delays.incubation)[:n_days]
     incubation_survival[: incubation_reach.size] = incubation_reach
 
-    latent = specification.latent_variable is not None
+    gamma_latent = specification.latent_variable is not None
+    stochastic = gamma_latent or not complete
     driving = np.zeros((n_particles, n_days), dtype=np.float64)
     expected = np.zeros((n_particles, n_days), dtype=np.float64)
+    onsets = np.tile(counts.astype(np.float64), (n_particles, 1))
     lineage = np.zeros((n_particles, n_days), dtype=np.int64)
     filtering_weight = np.zeros((n_days, n_particles), dtype=np.float64)
     filtering_pipeline = np.zeros((n_days, n_particles), dtype=np.float64)
+    if not complete:
+        onsets[:, 1:] = 0.0  # every day after the fixed index is imputed as the filter runs
 
     _draw_onset_filter_state(
         specification,
         day=0,
-        count=int(counts[0]),
-        tost_sum=float(tost_sum[0]),
+        count=np.full(n_particles, float(counts[0])),
+        tost_sum=np.full(n_particles, float(observed_tost_sum[0])),
         driving=driving,
         expected=expected,
         R=float(R_by_day[0]),
         k=k,
         tost=delays.tost,
         rng=rng,
+        scalar=complete,
     )
     lineage[:, 0] = np.arange(n_particles, dtype=np.int64)
     filtering_weight[0] = (
         driving[:, 0] * tost_survival[0]
         if specification.name == "ssi_so"
-        else float(counts[0]) * tost_survival[0]
+        else onsets[:, 0] * tost_survival[0]
     )
     filtering_pipeline[0] = expected[:, 0] * incubation_survival[0]
 
@@ -352,12 +426,19 @@ def filter_onset_anchored(
     increments = np.zeros(days.size, dtype=np.float64)
     ess = np.zeros(days.size, dtype=np.float64)
     resampled = np.zeros(days.size, dtype=bool)
+    day_counts = np.zeros(n_particles, dtype=np.float64)
 
     for position, day_value in enumerate(days):
         day = int(day_value)
         lags = min(day, delays.incubation.size)
         mean_onsets = expected[:, day - lags : day] @ delays.incubation[:lags][::-1]
-        log_density = _poisson_log_density(int(counts[day]), mean_onsets)
+        if complete:
+            log_density = _poisson_log_density(int(counts[day]), mean_onsets)
+        else:
+            day_counts = rng.poisson(mean_onsets).astype(np.float64)
+            log_density = _reporting_log_density(
+                int(counts[day]), day_counts, float(probability[day])
+            )
         increment = float(scipy.special.logsumexp(log_weights + log_density))
         if not np.isfinite(increment):
             raise ValueError(
@@ -369,50 +450,58 @@ def filter_onset_anchored(
 
         normalised = np.exp(log_weights)
         ess[position] = 1.0 / float((normalised**2).sum())
-        if latent and ess[position] < resample_threshold * n_particles:
+        if stochastic and ess[position] < resample_threshold * n_particles:
             indices = systematic_resample(normalised, rng)
             driving = driving[indices]
             expected = expected[indices]
             lineage = lineage[indices]
+            if not complete:
+                onsets = onsets[indices]
+                day_counts = day_counts[indices]
             log_weights = np.full(n_particles, -np.log(n_particles))
             resampled[position] = True
 
+        if complete:
+            day_tost_sum = np.full(n_particles, float(observed_tost_sum[day]))
+        else:
+            onsets[:, day] = day_counts
+            lags_tost = min(day + 1, delays.tost.size)
+            day_tost_sum = onsets[:, day + 1 - lags_tost : day + 1] @ delays.tost[:lags_tost][::-1]
         _draw_onset_filter_state(
             specification,
             day=day,
-            count=int(counts[day]),
-            tost_sum=float(tost_sum[day]),
+            count=onsets[:, day],
+            tost_sum=day_tost_sum,
             driving=driving,
             expected=expected,
             R=float(R_by_day[day]),
             k=k,
             tost=delays.tost,
             rng=rng,
+            scalar=complete,
         )
         lineage[:, day] = np.arange(n_particles, dtype=np.int64)
         current_weight = (
             driving[:, : day + 1] @ tost_survival[: day + 1][::-1]
             if specification.name == "ssi_so"
-            else np.full(
-                n_particles,
-                float(counts[: day + 1] @ tost_survival[: day + 1][::-1]),
-                dtype=np.float64,
-            )
+            else onsets[:, : day + 1] @ tost_survival[: day + 1][::-1]
         )
         current_pipeline = expected[:, : day + 1] @ incubation_survival[: day + 1][::-1]
         snapshot_indices = (
             systematic_resample(np.exp(log_weights), rng)
-            if latent
+            if stochastic
             else np.arange(n_particles, dtype=np.int64)
         )
         filtering_weight[day] = current_weight[snapshot_indices]
         filtering_pipeline[day] = current_pipeline[snapshot_indices]
 
-    if latent and not (resampled.size > 0 and resampled[-1]):
+    if stochastic and not (resampled.size > 0 and resampled[-1]):
         indices = systematic_resample(np.exp(log_weights), rng)
         driving = driving[indices]
         expected = expected[indices]
         lineage = lineage[indices]
+        if not complete:
+            onsets = onsets[indices]
 
     return ParticleFilterResult(
         days=days,
@@ -422,7 +511,8 @@ def filter_onset_anchored(
         n_distinct=np.array(
             [np.unique(lineage[:, day]).size for day in range(n_days)], dtype=np.int64
         ),
-        latent_paths=driving if latent else None,
+        latent_paths=driving if gamma_latent else None,
+        true_count_paths=None if complete else onsets,
         filtering_remaining_weight=filtering_weight,
         expected_infection_paths=expected,
         filtering_pipeline_mean=filtering_pipeline,
@@ -439,6 +529,8 @@ def filter_model(
     switch_day: int,
     n_particles: int = 1000,
     resample_threshold: float = 0.5,
+    reporting_model: reporting.ReportingModel | None = None,
+    as_of_day: int | None = None,
     rng: np.random.Generator | None = None,
 ) -> ParticleFilterResult:
     """Dispatch to the filter matching the model's anchoring convention."""
@@ -452,6 +544,8 @@ def filter_model(
             switch_day=switch_day,
             n_particles=n_particles,
             resample_threshold=resample_threshold,
+            reporting_model=reporting_model,
+            as_of_day=as_of_day,
             rng=rng,
         )
     return filter_naive(
@@ -462,6 +556,8 @@ def filter_model(
         switch_day=switch_day,
         n_particles=n_particles,
         resample_threshold=resample_threshold,
+        reporting_model=reporting_model,
+        as_of_day=as_of_day,
         rng=rng,
     )
 
@@ -470,31 +566,79 @@ def _draw_onset_filter_state(
     specification: ModelSpecification,
     *,
     day: int,
-    count: int,
-    tost_sum: float,
+    count: NDArray[np.floating[Any]],
+    tost_sum: NDArray[np.floating[Any]],
     driving: NDArray[np.float64],
     expected: NDArray[np.float64],
     R: float,
     k: float | None,
     tost: NDArray[np.float64],
     rng: np.random.Generator,
+    scalar: bool,
 ) -> None:
-    """Draw the latent attached to an observed onset and set one column of ``E``."""
+    """Draw the latent attached to the day's onsets and set one column of ``E``.
+
+    ``count`` and ``tost_sum`` are per particle. ``scalar`` says they are known to be constant
+    across particles — which is the case whenever the onsets are data — and takes the scalar
+    ``rng`` calls the completely reported filter has always made, so that its draws are
+    unchanged.
+    """
     n_particles = driving.shape[0]
     if specification.name == "cori_so":
-        driving[:, day] = float(count)
+        driving[:, day] = count
         expected[:, day] = R * tost_sum
         return
     assert k is not None
     if specification.name == "sse_so":
-        if tost_sum > 0.0:
-            driving[:, day] = rng.gamma(k * tost_sum, 1.0 / k, size=n_particles)
+        if scalar:
+            if tost_sum[0] > 0.0:
+                driving[:, day] = rng.gamma(k * float(tost_sum[0]), 1.0 / k, size=n_particles)
+        else:
+            driving[:, day] = _gamma_by_particle(rng, shape=k * tost_sum, rate=k)
         expected[:, day] = R * driving[:, day]
         return
-    if count > 0:
-        driving[:, day] = rng.gamma(k * count, 1.0 / k, size=n_particles)
+    if scalar:
+        if count[0] > 0:
+            driving[:, day] = rng.gamma(k * float(count[0]), 1.0 / k, size=n_particles)
+    else:
+        driving[:, day] = _gamma_by_particle(rng, shape=k * count, rate=k)
     lags = min(day + 1, tost.size)
     expected[:, day] = R * (driving[:, day + 1 - lags : day + 1] @ tost[:lags][::-1])
+
+
+def _gamma_by_particle(
+    rng: np.random.Generator, *, shape: NDArray[np.floating[Any]], rate: float
+) -> NDArray[np.float64]:
+    """``Gamma(shape, rate)`` per particle, with a zero shape giving its point mass at zero."""
+    drawn = np.zeros(shape.shape, dtype=np.float64)
+    positive = shape > 0.0
+    if positive.any():
+        drawn[positive] = rng.gamma(shape[positive], 1.0 / rate)
+    return drawn
+
+
+def _reporting_log_density(
+    reported: int, true_counts: NDArray[np.floating[Any]] | NDArray[np.int64], probability: float
+) -> NDArray[np.float64]:
+    """``log Binomial(c_t; D_t, π_t)`` for every particle's imputed true count.
+
+    This replaces the observation density when reporting is incomplete: the particle has
+    already drawn the day's true count from the model, so what the data say about it is only
+    how many of those cases were reported.
+    """
+    counts = np.asarray(true_counts, dtype=np.int64)
+    density = np.full(counts.shape, -np.inf, dtype=np.float64)
+    feasible = counts >= reported
+    if feasible.any():
+        density[feasible] = scipy.stats.binom.logpmf(reported, counts[feasible], probability)
+    return density
+
+
+def _resolve_reporting(
+    reporting_model: reporting.ReportingModel | None,
+) -> reporting.ReportingModel:
+    """Complete reporting is the default, so callers need not pass one."""
+    return reporting.COMPLETE_REPORTING if reporting_model is None else reporting_model
 
 
 def _poisson_log_density(count: int, mean: NDArray[np.float64]) -> NDArray[np.float64]:

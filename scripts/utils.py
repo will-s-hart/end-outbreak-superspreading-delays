@@ -59,6 +59,14 @@ MODEL_COLOURS: dict[str, str] = {
 DECISION_THRESHOLDS: tuple[float, ...] = (0.05, 0.01)
 """The two RAC levels the end-of-outbreak literature declares on; drawn on every RAC panel."""
 
+REPORTING_LINESTYLES: dict[float, str] = {1.0: "-", 0.8: "--", 0.6: ":"}
+"""Linestyle per assumed reporting probability, solid for complete reporting.
+
+The same solid/dashed/dotted ladder ``risk_metrics_panel`` uses for the three risk estimands,
+so a reader carries one convention between the two figures: colour is always the transmission
+mechanism, linestyle always the variant being swept.
+"""
+
 RISK_COLUMN = "risk_of_additional_cases"
 TRANSMISSION_RISK_COLUMN = "risk_of_additional_transmission"
 SUSTAINED_RISK_COLUMN = "risk_of_sustained_transmission"
@@ -93,6 +101,19 @@ def model_label(model: str) -> str:
 def model_colour(model: str) -> str:
     """Fixed colour for a model."""
     return MODEL_COLOURS[model]
+
+
+def reporting_linestyle(probability: float) -> str:
+    """Linestyle for an assumed reporting probability, raising on one with no style.
+
+    No fallback, for the reason the readers of ``model_evidence`` get none: a sweep silently
+    drawn in one linestyle looks exactly like a sweep that found no difference.
+    """
+    for level, style in REPORTING_LINESTYLES.items():
+        if np.isclose(probability, level):
+            return style
+    known = ", ".join(f"{level:.0%}" for level in REPORTING_LINESTYLES)
+    raise KeyError(f"no linestyle for {probability:.0%} reporting; utils defines {known}")
 
 
 def panel_label(ax: Axes, letter: str) -> None:

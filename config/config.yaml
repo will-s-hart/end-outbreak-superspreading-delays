@@ -76,6 +76,34 @@ analyses:
     plot_script: scripts/plot_onset_models_estimated_k.py
     sampler: {draws: 2000, tune: 2000, chains: 4, target_accept: 0.95, seed: 20260808}
 
+  # Under-reporting, at the fixed k of Analysis 3 so that the sweep isolates reporting alone
+  # and its 100% panel *is* that analysis. Only the onset-anchored models are run: the naive
+  # ones are supported and tested but add nothing to the question the figure asks.
+  #
+  # `reporting.probability` is a fixed input, not a parameter. It is not identified from these
+  # data without an external prior, so the figure is deliberately a sweep over assumed values.
+  # A `delay: {mean, sd}` block would add onset-to-report delays, which the package supports and
+  # tests; no analysis uses one, because there are no reporting dates for Equateur.
+  #
+  # The per-analysis `rac.first_day` starts the curves at the ERT's arrival. Before it the
+  # outbreak is growing and the risk is 1 to several decimal places, so the ~32 conditioning
+  # days it saves per model are hours of MCMC for nothing.
+  underreporting_60:
+    models: [sse_so, ssi_so]
+    fixed_k: 0.18
+    reporting: {probability: 0.6}
+    rac: {first_day: 33}
+    run_script: scripts/run_underreporting_60.py
+    sampler: {draws: 2000, tune: 2000, chains: 4, target_accept: 0.9, seed: 20260811}
+
+  underreporting_80:
+    models: [sse_so, ssi_so]
+    fixed_k: 0.18
+    reporting: {probability: 0.8}
+    rac: {first_day: 33}
+    run_script: scripts/run_underreporting_80.py
+    sampler: {draws: 2000, tune: 2000, chains: 4, target_accept: 0.9, seed: 20260812}
+
 # How the risk of additional cases is estimated. RAC(t) conditions on the record through day t
 # and nothing after it, so the honest estimator refits the model to counts[:t+1] for every
 # conditioning day. That is `refit_daily`, and it is what every figure and report number rests on.

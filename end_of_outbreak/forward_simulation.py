@@ -219,7 +219,7 @@ def simulate_naive(
     for day in range(seed.size, n_days):
         lags = min(day, w.size)
         force_of_infection = driving[:, day - lags : day] @ w[:lags][::-1]
-        new_counts = _draw_counts(
+        new_counts = draw_counts(
             specification,
             force_of_infection,
             R=float(R_by_day[day]),
@@ -601,7 +601,7 @@ def _validated_seed_infectivity(
     return supplied
 
 
-def _draw_counts(
+def draw_counts(
     specification: ModelSpecification,
     force_of_infection: NDArray[np.float64],
     *,
@@ -609,7 +609,12 @@ def _draw_counts(
     k: float | None,
     rng: np.random.Generator,
 ) -> NDArray[np.int64]:
-    """One day's counts for every replicate. Zero force of infection gives zero counts."""
+    """One day's counts for every replicate. Zero force of infection gives zero counts.
+
+    Public because the particle filter needs it too: under incomplete reporting the true counts
+    are latent, so the filter has to *draw* each day rather than read it, and it must draw from
+    the same law the model generates from. Reusing this is what keeps the two from drifting.
+    """
     new_counts = np.zeros(force_of_infection.size, dtype=np.int64)
     driven = force_of_infection > 0.0
     if not driven.any():

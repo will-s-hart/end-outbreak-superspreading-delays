@@ -57,6 +57,7 @@ from end_of_outbreak import (
     model_evidence,
     outbreak_data,
     refit_risk,
+    reporting,
 )
 from end_of_outbreak import posterior_comparison as pc
 from end_of_outbreak import risk_of_additional_cases as rac
@@ -118,8 +119,18 @@ class AnalysisSetting:
 
     @property
     def rac(self) -> dict[str, Any]:
-        """The ``rac:`` block: which estimator, from which day, and the filter's settings."""
-        return dict(self.config["rac"])
+        """The ``rac:`` block: which estimator, from which day, and the filter's settings.
+
+        An analysis may override individual keys with a ``rac:`` block of its own — the
+        under-reporting sweeps use it to start their curves at the ERT's arrival — but the
+        estimator and the convergence criteria stay global, because they are properties of the
+        implementation rather than of any one analysis.
+        """
+        return dict(self.config["rac"]) | dict(self.block.get("rac") or {})
+
+    def reporting_model(self) -> reporting.ReportingModel:
+        """How true cases become reported ones; complete reporting unless an analysis says so."""
+        return reporting.ReportingModel.from_config(self.block.get("reporting"))
 
     def rac_method(self, override: str | None = None) -> str:
         """The estimator to use, from the command line if given and the config otherwise."""
@@ -216,6 +227,7 @@ def command_fit(args: argparse.Namespace) -> None:
         k=setting.dispersion(),
         latent_parameterisation=setting.latent_parameterisation,
         negligible_latent_threshold=setting.negligible_latent_threshold,
+        reporting_model=setting.reporting_model(),
         sampler=fitting.SamplerSettings.from_config(setting.block["sampler"]),
         progressbar=args.progressbar,
     )
@@ -340,6 +352,7 @@ def _rac_by_refitting(
         k=setting.dispersion(),
         latent_parameterisation=setting.latent_parameterisation,
         negligible_latent_threshold=setting.negligible_latent_threshold,
+        reporting_model=setting.reporting_model(),
         days=days,
         sampler=fitting.SamplerSettings.from_config(setting.block["sampler"]),
         seed_for_day=setting.daily_fit_seed(model),
@@ -390,11 +403,12 @@ def _rac_by_filtering(
         latent_parameterisation=fitting.fitted_parameterisation(idata),
         fixed_k=fitting.fitted_dispersion(idata),
         negligible_latent_threshold=setting.negligible_latent_threshold,
+        reporting_model=fitting.fitted_reporting(idata),
     )
     filtering = setting.rac["filtering"]
     # Thinning exists only to bound the cost of running a filter per draw, so a model with no
     # latent block keeps every draw and reproduces the closed form exactly.
-    if specification_of(model).has_latents:
+    if specification_of(model).has_latents or not setting.reporting_model().is_complete:
         state = filtered_risk.thin_draws(state, int(filtering["n_draws"]))
     result = filtered_risk.risk_by_filtering(
         model,
@@ -404,6 +418,7 @@ def _rac_by_filtering(
         switch_day=data.ert_arrival_day,
         days=days,
         n_particles=int(filtering["n_particles"]),
+        reporting_model=fitting.fitted_reporting(idata),
         rng=setting.reconstruction_rng(model),
     )
     # DLO and SSE run no filter — they have no latent state — so there is nothing per-day to

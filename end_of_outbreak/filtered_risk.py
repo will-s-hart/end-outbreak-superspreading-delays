@@ -39,7 +39,7 @@ import numpy as np
 import scipy.special
 from numpy.typing import NDArray
 
-from end_of_outbreak import branching_process, particle_filter
+from end_of_outbreak import branching_process, particle_filter, reporting
 from end_of_outbreak import risk_of_additional_cases as rac
 from end_of_outbreak.delay_distributions import OnsetAnchoredDelays
 from end_of_outbreak.model_specifications import (
@@ -122,6 +122,8 @@ def risk_by_filtering(
     reset_R: float | None = None,
     n_particles: int = DEFAULT_PARTICLES,
     resample_threshold: float = 0.5,
+    reporting_model: reporting.ReportingModel | None = None,
+    as_of_day: int | None = None,
     rng: np.random.Generator | None = None,
 ) -> FilteredRiskResult:
     """RAC and RAT with the parameters from ``state`` and the latents filtered to each day.
@@ -136,14 +138,20 @@ def risk_by_filtering(
     n_particles
         Particles per parameter draw. The filter is fully adapted, so the latent proposal is
         exact and a few hundred particles suffice; the residual error is averaged over draws.
+    reporting_model, as_of_day
+        The reporting assumption the fit was run under. Under incomplete reporting the counts
+        are latent too, so even the closed-form models acquire a state to filter.
     """
     specification = specification_of(model)
     counts = np.asarray(counts, dtype=np.int64)
     selected = (
         np.arange(counts.size, dtype=np.int64) if days is None else np.asarray(days, np.int64)
     )
+    resolved_reporting = (
+        reporting.COMPLETE_REPORTING if reporting_model is None else reporting_model
+    )
 
-    if not specification.has_latents:
+    if not specification.has_latents and resolved_reporting.is_complete:
         # No latent state to filter: the retained state is the observed counts, so this is the
         # closed form at the full-record parameter draws and no particles are involved.
         if reset_R is not None:
@@ -159,13 +167,23 @@ def risk_by_filtering(
             ),
             diagnostics=None,
         )
+    if specification.name == "dlo" and not resolved_reporting.is_complete:
+        raise NotImplementedError(
+            "DLO under incomplete reporting has no filtered route: its closed form needs the "
+            "whole future force-of-infection profile of each particle's imputed counts, not "
+            "the scalar remaining weight the filter records. Use method 'refit_daily'"
+        )
 
     rng = np.random.default_rng() if rng is None else rng
-    assert state.k is not None  # every latent model in the project carries a dispersion
     n_draws = state.n_draws
     reset = state.R_pre if reset_R is None else np.full(n_draws, float(reset_R))
-    per_case_exponent = state.k * np.log1p(reset / state.k)
-    extinction = branching_process.negative_binomial_extinction_probability(reset, state.k)
+    dispersion = state.k
+    if dispersion is None:  # cori / cori_so, reachable only under incomplete reporting
+        per_case_exponent = reset
+        extinction = branching_process.poisson_extinction_probability(reset)
+    else:
+        per_case_exponent = dispersion * np.log1p(reset / dispersion)
+        extinction = branching_process.negative_binomial_extinction_probability(reset, dispersion)
 
     log_no_cases = np.empty((n_draws, selected.size), dtype=np.float64)
     log_no_transmission = np.empty((n_draws, selected.size), dtype=np.float64)
@@ -179,12 +197,14 @@ def risk_by_filtering(
             TransmissionParameters(
                 R_pre=float(state.R_pre[draw]),
                 R_post=float(state.R_post[draw]),
-                k=float(state.k[draw]),
+                k=None if dispersion is None else float(dispersion[draw]),
             ),
             delays=delays,
             switch_day=switch_day,
             n_particles=n_particles,
             resample_threshold=resample_threshold,
+            reporting_model=resolved_reporting,
+            as_of_day=as_of_day,
             rng=rng,
         )
         retained, pipeline = _retained_and_pipeline(
@@ -203,7 +223,7 @@ def risk_by_filtering(
         remaining_weight = result.filtering_remaining_weight[selected]
         sustained_scale = (
             float(-np.log(extinction[draw]))
-            if specification.name == "sse_so"
+            if _pools_through_the_mixture(specification)
             else float(reset[draw] * (1.0 - extinction[draw]))
         )
         log_no_sustained[draw] = _log_mean_exp(
@@ -249,17 +269,26 @@ def _retained_and_pipeline(
 ) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
     """``H(t)`` and ``M(t)`` per particle from a filter pass, as the closed forms define them."""
     weight = result.filtering_remaining_weight[days]
+    scale = per_case_exponent if _pools_through_the_mixture(specification) else reset
     if specification.anchoring == "infections":
-        # SSI only: given the infectivities the remaining offspring are Poisson(R Λ_Y), so the
-        # dispersion has already done its work in the latent block and does not reappear here.
-        return reset * weight, np.zeros_like(weight)
+        # No incubation pipeline: an infection is a case, so the retained weight is the whole
+        # of the reset state.
+        return scale * weight, np.zeros_like(weight)
     if result.filtering_pipeline_mean is None:
         raise ValueError("the onset filter did not record a pipeline mean")
-    pipeline = result.filtering_pipeline_mean[days]
-    # SSE-SO pools its retained cohorts' transmission through one Gamma–Poisson mixture, so its
-    # exponent carries `c`; SSI-SO's latents are already the infectivities, so its carries R.
-    scale = per_case_exponent if specification.name == "sse_so" else reset
-    return scale * weight, pipeline
+    return scale * weight, result.filtering_pipeline_mean[days]
+
+
+def _pools_through_the_mixture(specification: ModelSpecification) -> bool:
+    """Whether a model's retained cohorts transmit through one Gamma--Poisson mixture.
+
+    SSE and SSE-SO put the overdispersion on the transmission *event*, so their retained
+    exponent per unit of remaining weight is ``c = k log(1 + R/k)``. The individual-level models
+    have already spent their dispersion in the latent block — given the infectivities the
+    remaining offspring are Poisson — and the Poisson limits never had any, so for both the
+    exponent is ``R`` itself.
+    """
+    return specification.overdispersion_level == "event"
 
 
 def _log_mean_exp(log_values: NDArray[np.float64]) -> NDArray[np.float64]:

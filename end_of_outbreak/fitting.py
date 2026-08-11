@@ -139,16 +139,23 @@ def fit_model(
         reporting_model=resolved_reporting,
     )
 
+    # `target_accept` is a NUTS setting, and PyMC rejects it outright when no variable is
+    # sampled by NUTS. That happens only under incomplete reporting with every continuous
+    # parameter fixed — the latent counts are then the whole free block, and Metropolis has no
+    # acceptance target to hit.
+    nuts_settings: dict[str, Any] = (
+        {"target_accept": settings.target_accept} if _has_continuous_variables(built) else {}
+    )
     with built:
         idata = pm.sample(
             draws=settings.draws,
             tune=settings.tune,
             chains=settings.chains,
             cores=settings.chains,
-            target_accept=settings.target_accept,
             random_seed=settings.seed,
             initvals=initial_values or None,
             progressbar=progressbar,
+            **nuts_settings,
         )
 
     idata.attrs.update(
@@ -177,6 +184,13 @@ def fit_model(
         }
     )
     return idata
+
+
+def _has_continuous_variables(built: pm.Model) -> bool:
+    """Whether anything in the model is sampled by a gradient-based step."""
+    return any(
+        not np.issubdtype(np.dtype(variable.dtype), np.integer) for variable in built.value_vars
+    )
 
 
 def _initial_values(

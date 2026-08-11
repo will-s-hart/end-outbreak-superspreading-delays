@@ -213,6 +213,64 @@ def risk_metrics_panel(
     utils.panel_label(ax, letter)
 
 
+def reporting_comparison_panel(
+    ax: Axes,
+    curves: dict[float, dict[str, pd.DataFrame]],
+    data: outbreak_data.OutbreakData,
+    *,
+    title: str,
+    letter: str | None = None,
+    first_day: int | None = None,
+) -> None:
+    """RAC against conditioning day, for each model at each assumed reporting probability.
+
+    The same convention as :func:`risk_metrics_panel`, with the reporting probability in the
+    estimand's place: colour identifies the transmission mechanism, linestyle the variant. So a
+    reader who has taken in the sustained-transmission figure can read this one the same way,
+    and the vertical gap between two lines of one colour is what the assumption costs.
+
+    ``curves`` is keyed by reporting probability and then by model. The settling markers are the
+    same ones every RAC panel carries, so the crossings can be compared by eye across the sweep.
+    """
+    utils.plot_incidence(ax, data.dates, data.onsets)
+    utils.mark_thresholds(ax)
+    for order, (probability, by_model) in enumerate(sorted(curves.items(), reverse=True)):
+        for model, frame in by_model.items():
+            colour = utils.model_colour(model)
+            ax.plot(
+                frame["date"],
+                frame[utils.RISK_COLUMN],
+                color=colour,
+                linestyle=utils.reporting_linestyle(probability),
+                label=f"{utils.model_label(model)}, {probability:.0%} reported",
+                zorder=3 + order,
+            )
+            day = settling_day(frame)
+            if day is not None:
+                ax.plot(
+                    [data.date_of(day)],
+                    [float(frame.loc[frame["day"] == day, utils.RISK_COLUMN].iloc[0])],
+                    marker="o",
+                    markersize=3.5,
+                    color=colour,
+                    zorder=6,
+                )
+    utils.mark_intervention_dates(
+        ax,
+        arrival=data.date_of(data.ert_arrival_day),
+        withdrawal=data.date_of(data.ert_withdrawal_day),
+    )
+    utils.date_axis(ax)
+    ax.set_xlim(data.dates[first_day or 0], data.dates[-1])
+    ax.set_ylim(0.0, 1.0)
+    ax.set_xlabel("conditioning day $t$ (2018)")
+    ax.set_ylabel("risk of additional cases")
+    ax.set_title(title)
+    ax.legend(loc="center left", bbox_to_anchor=(0.015, 0.55), ncols=2)
+    if letter is not None:
+        utils.panel_label(ax, letter)
+
+
 def settling_day(frame: pd.DataFrame, threshold: float = SETTLING_THRESHOLD) -> int | None:
     """The first day a curve falls below ``threshold`` and stays there.
 
