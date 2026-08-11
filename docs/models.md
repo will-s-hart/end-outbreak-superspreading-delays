@@ -186,10 +186,38 @@ Three things follow, and each is load-bearing:
   `guard_zero_scale` does it; an unguarded `pm.icdf` at a zero shape returns `nan` and poisons
   the whole vector.
 
-PyMC assigns the steps itself, as everywhere else in this project, and produces
-`CompoundStep: NUTS[R_pre, R_post, <latent>_uniform] + Metropolis[true_incidence]`. The one
-thing `fitting.fit_model` has to know is that `target_accept` is a NUTS setting and PyMC rejects
-it when nothing is sampled by NUTS — which happens only if every continuous parameter is fixed.
+### The one step this project chooses for itself
 
-`initval` is not optional. `Binomial(c; n, π)` is zero for `n < c`, so a default initial point
-can start every chain at `-inf`; the layer starts the totals at `max(round(c/π), c)`.
+Step assignment is PyMC's everywhere else, and under incomplete reporting it produces
+`CompoundStep: NUTS[R_pre, R_post, <latent>_uniform] + <a Metropolis>[true_incidence]`. The
+count block is the exception: `fitting.fit_model` hands it
+`reporting.SingleSiteCountMetropolis` rather than letting PyMC pick.
+
+PyMC's `Metropolis` already implements both proposals that matter — a *joint* random walk over
+the block, and a random-scan sweep that proposes one coordinate at a time — and it refuses the
+sweep for any discrete variable with multivariate support. That guard is aimed at distributions
+like the multinomial, whose support dimensions are tied together by a constraint. It is a false
+positive here: `true_incidence` is multivariate only because the renewal recursion makes day `t`
+depend on the days before it, while its *support* is a product of independent non-negative
+integers, so any one day can move by itself.
+
+The joint proposal the guard falls back to does not mix slowly — past about twenty latent days
+it **stops dead**. Every day reporting nothing sits against the boundary `D_t ≥ c_t`, so a walk
+perturbing a hundred counts at once is rejected essentially always; PyMC's tuner shrinks the
+scale until every rounded proposal is zero; and a proposal of exactly zero is always accepted,
+which the tuner reads as success. On the 111-day Équateur series that froze all 110 counts at
+their initial values, with no divergences and `R̂ = 1.00` on every continuous parameter, because
+those are sampled by NUTS regardless. Every downstream number was then conditioned on a fixed
+inflation of the reported series rather than on a posterior over the true one. Restoring the
+sweep gives `R̂ ≤ 1.02` and bulk ESS in the hundreds across the block, at roughly five times the
+sampling cost of a completely reported fit.
+
+`tests/test_reporting.py` therefore checks that the counts **move**, on a series long enough to
+freeze, rather than only that the fit runs.
+
+`initval` is not optional either. `Binomial(c; n, π)` is zero for `n < c`, so a default initial
+point can start every chain at `-inf`; the layer starts the totals at `max(round(c/π), c)`.
+
+The other thing `fitting.fit_model` has to know is that `target_accept` is a NUTS setting and
+PyMC rejects it when nothing is sampled by NUTS — which happens only if every continuous
+parameter is fixed.

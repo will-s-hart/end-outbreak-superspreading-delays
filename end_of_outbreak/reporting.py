@@ -290,6 +290,59 @@ def build_observation(
     return totals
 
 
+class SingleSiteCountMetropolis(pm.Metropolis):
+    """``pm.Metropolis`` restored to the per-coordinate sweep it already implements.
+
+    PyMC chooses between two proposals: a **joint** random walk that perturbs the whole block at
+    once, and a random-scan sweep (``elemwise_update``) that proposes one coordinate at a time
+    and accepts or rejects each on its own. It refuses the sweep for any *discrete* variable
+    whose distribution has multivariate support, and the true-count block is such a variable.
+
+    That guard is aimed at distributions like the multinomial, whose support dimensions are tied
+    together by a constraint so that moving one coordinate alone is always impossible. Here it
+    is a false positive. The block is multivariate only because the renewal recursion makes day
+    ``t`` depend on the days before it; its *support* is a product of independent non-negative
+    integers, and any single day can be raised or lowered by itself.
+
+    The joint proposal the guard falls back to does not merely mix slowly on a series this long
+    — it stops dead. Every day with no reported cases sits against the boundary ``D_t ≥ c_t``,
+    so a walk that perturbs a hundred counts at once is rejected essentially always; PyMC's
+    tuner responds by shrinking the scale until every rounded proposal is zero; and from then on
+    the block cannot move at any scale, because a proposal of exactly zero is always accepted
+    and the tuner reads that as success. The failure is silent — no divergences, healthy ``R̂``
+    on the continuous parameters, and latent totals frozen at their initial values for the whole
+    run — which is why ``tests/test_reporting.py`` checks that the block *moves* rather than
+    only that it samples.
+    """
+
+    name = "single_site_count_metropolis"
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        if not self.all_discrete:
+            raise ValueError("this step is for the discrete true-count block only")
+        # `self.discrete` carries one entry per coordinate, which is the bookkeeping width the
+        # sweep needs; PyMC sized these for a single joint proposal when it took the guard.
+        dimensions = int(self.discrete.size)
+        self.elemwise_update = True
+        self.enum_dims = np.arange(dimensions, dtype=int)
+        self.accept_rate_iter = np.zeros(dimensions, dtype=float)
+        self.accepted_iter = np.zeros(dimensions, dtype=bool)
+        self.accepted_sum = np.zeros(dimensions, dtype=int)
+
+
+def count_block_step(model: pm.Model) -> SingleSiteCountMetropolis | None:
+    """The step method for a model's latent true counts, or ``None`` if it has none.
+
+    Returned rather than assigned so that :mod:`end_of_outbreak.fitting` keeps ownership of the
+    call to ``pm.sample``; PyMC assigns the remaining variables around whatever it is given.
+    """
+    variable = next((rv for rv in model.free_RVs if rv.name == TRUE_INCIDENCE_VARIABLE), None)
+    if variable is None:
+        return None
+    return SingleSiteCountMetropolis(vars=[variable], model=model)
+
+
 def thin(
     counts: NDArray[np.int64],
     *,

@@ -226,12 +226,29 @@ tracks the curve without anything extra. That is *not* the convention of
 `end-of-outbreak-vbd`, which conditions on the record strictly before its calculation day — so
 the as-of day is an explicit argument rather than `len(counts) - 1`, and a test pins it.
 
-`single_fit_filtered` still works, because the particle filter was extended rather than
-refused. Each particle now carries its own history of true counts: the filter *draws* `D_t` from
-the model's own count law (`forward_simulation.draw_counts`, shared with the simulators so the
-two cannot drift), then weights by `Binomial(c_t; D_t, π_t)`, then draws the day's Gamma latent
-from the conditional that `D_t` implies. The ordering still works because `μ_t` depends on the
-latents strictly before `t` while the day's latent scale depends on the counts up to and
-including it. **DLO is the one model this does not cover** and it raises rather than
-approximating: its closed form needs each particle's whole retained profile, not the scalar
-remaining weight the filter records.
+`single_fit_filtered` still works, because the particle filter was extended rather than refused.
+Each particle now carries its own history of true counts, and the filter stays **fully adapted**
+— which is the property that makes this module's filters need no tuning, and it survives because
+Poisson thinning splits the day exactly:
+
+```
+c_t | μ_t ~ Poisson(π_t μ_t)                     the weight
+D_t − c_t | c_t, μ_t ~ Poisson((1 − π_t) μ_t)    the proposal
+```
+
+So the filter draws the day's *unreported* cases and adds them to what was reported, then draws
+the day's Gamma latent from the conditional that the resulting `D_t` implies. The ordering works
+because `μ_t` depends on the latents strictly before `t` while the day's latent scale depends on
+the counts up to and including it.
+
+The obvious alternative — propose `D_t` from the model and reweight by `Binomial(c_t; D_t, π_t)`
+— targets the same law and is *unusable*: on a day carrying more than a case or two every
+particle can propose a total below what was reported, the whole cloud takes zero weight, and the
+filter dies outright. It did, on day 29 of the Équateur series. Adapting instead keeps the
+effective sample size above a quarter of the particles across the whole record at 60% reporting.
+
+**DLO and SSE are the models this does not cover.** Their dispersion is marginalised into the
+count law, so the day's counts are negative binomial and the Poisson split does not apply; the
+analogous adapted proposal exists but is not implemented, and both refuse rather than degenerate.
+DLO is refused a step earlier and for a second reason: its closed form needs each particle's
+whole retained profile, not the scalar remaining weight the filter records.

@@ -49,6 +49,13 @@ SWITCH_DAY = 4
 R_PRE, R_POST, K = 1.4, 0.6, 0.5
 MODELS = ("dlo", "sse", "ssi", "cori", "sse_so", "ssi_so", "cori_so")
 
+POISSON_COUNT_MODELS = ("ssi", "cori", "sse_so", "ssi_so", "cori_so")
+"""Models whose per-day count law is Poisson once the latents are conditioned on.
+
+The complement is ``dlo`` and ``sse``, which marginalise their dispersion into the count law and
+so are negative binomial in the counts. The distinction is invisible under complete reporting
+and decides whether the particle filter's adapted proposal applies."""
+
 DELAYS = dd.build_onset_anchored_delays(
     serial_interval=dd.GammaDelay(mean=4.0, sd=3.0),
     incubation=dd.GammaDelay(mean=2.5, sd=2.0),
@@ -472,6 +479,39 @@ def test_a_fit_with_no_reporting_assumption_reads_back_as_completely_reported():
     assert fitting.fitted_reporting(_short_fit()).is_complete
 
 
+def test_the_true_count_block_keeps_moving_on_a_series_long_enough_to_freeze_it():
+    """The failure this guards against is silent, and only appears past ~20 latent days.
+
+    PyMC's default proposal for a vector discrete variable perturbs the whole block at once.
+    On a short series that merely mixes slowly; past a couple of dozen days it stops moving
+    altogether, and nothing in the fit says so — no divergences, and ``R̂`` on the continuous
+    parameters stays at 1.00 because those are sampled by NUTS regardless. The totals simply
+    stay at their initial values, and every downstream number is then conditioned on a fixed
+    inflation of the reported series rather than on a posterior over the true one.
+
+    So this asserts the two things that failure removes: that the counts move, and that they
+    recover cases the reported series does not contain.
+    """
+    rng = np.random.default_rng(0)
+    counts = np.concatenate([[3], rng.poisson(0.7, size=45)]).astype(np.int64)
+    delays = dd.build_onset_anchored_delays(max_lag=counts.size, tolerance=None)
+    idata = fitting.fit_model(
+        "cori",
+        counts,
+        delays=delays,
+        switch_day=counts.size // 2,
+        R_pre=LogNormalPrior(median=1.0, sigma_log=0.5),
+        R_post=LogNormalPrior(median=1.0, sigma_log=0.5),
+        reporting_model=reporting.ReportingModel(probability=0.6),
+        as_of_day=counts.size - 1,
+        sampler=fitting.SamplerSettings(draws=250, tune=250, chains=1, seed=4),
+    )
+    totals = idata.posterior[reporting.TRUE_INCIDENCE_VARIABLE].values.reshape(-1, counts.size - 1)
+    assert np.all(totals >= counts[1:])
+    assert (totals.std(axis=0) > 0).mean() > 0.8
+    assert totals.mean(axis=0).sum() > counts[1:].sum()
+
+
 # --- the particle filter -------------------------------------------------------------------
 
 
@@ -505,7 +545,7 @@ def test_a_complete_reporting_model_filters_exactly_as_it_did_before(model):
     assert default.true_count_paths is None and explicit.true_count_paths is None
 
 
-@pytest.mark.parametrize("model", MODELS)
+@pytest.mark.parametrize("model", POISSON_COUNT_MODELS)
 def test_the_filter_imputes_counts_that_dominate_the_reported_ones(model):
     result = particle_filter.filter_model(
         model,
@@ -524,6 +564,50 @@ def test_the_filter_imputes_counts_that_dominate_the_reported_ones(model):
     assert np.isfinite(result.log_evidence)
     # Recovering more cases than were reported is the whole point of the layer.
     assert result.true_count_paths.sum(axis=1).mean() > COUNTS.sum()
+
+
+@pytest.mark.parametrize("model", POISSON_COUNT_MODELS)
+def test_the_filter_survives_a_day_that_a_prior_proposal_would_have_killed(model):
+    """The adapted proposal, not the imputation, is what makes the filter usable.
+
+    Drawing ``D_t`` from the model and reweighting by ``Binomial(c_t; D_t, π_t)`` targets the
+    same law but gives every particle zero weight as soon as a day carries more cases than the
+    cloud happens to propose — which is exactly what a low reporting probability makes likely,
+    and what killed the quick route on the real series. Conditioning on the reported cases and
+    drawing only the unreported ones cannot fail that way, at any ``π``, so a handful of
+    particles is enough here.
+    """
+    busy = np.array([1, 0, 0, 9, 0, 0, 0, 0])
+    result = particle_filter.filter_model(
+        model,
+        busy,
+        TransmissionParameters(
+            R_pre=R_PRE, R_post=R_POST, k=None if model.startswith("cori") else K
+        ),
+        delays=DELAYS,
+        switch_day=SWITCH_DAY,
+        n_particles=32,
+        reporting_model=reporting.ReportingModel(probability=0.2),
+        rng=np.random.default_rng(3),
+    )
+    assert np.isfinite(result.log_evidence)
+    assert result.true_count_paths is not None
+    assert np.all(result.true_count_paths >= busy[None, :])
+
+
+@pytest.mark.parametrize("model", ("dlo", "sse"))
+def test_a_negative_binomial_count_law_is_refused_rather_than_left_to_degenerate(model):
+    with pytest.raises(NotImplementedError, match="negative-binomial count law"):
+        particle_filter.filter_model(
+            model,
+            COUNTS,
+            TransmissionParameters(R_pre=R_PRE, R_post=R_POST, k=K),
+            delays=DELAYS,
+            switch_day=SWITCH_DAY,
+            n_particles=8,
+            reporting_model=reporting.ReportingModel(probability=0.6),
+            rng=np.random.default_rng(0),
+        )
 
 
 def test_the_filter_reproduces_the_reported_series_when_everything_is_reported_by_construction():

@@ -103,10 +103,11 @@ def fit_model(
         Passed through to :func:`end_of_outbreak.pymc_models.build_model`; see there for the
         conventions. ``latent_parameterisation`` is required for a model with latents.
     sampler
-        NUTS settings; the defaults of :class:`SamplerSettings` if omitted. No ``step`` is
-        passed, deliberately: PyMC's own assignment is what the sampler benchmark validated,
-        and it is also what puts the discrete true-count block on Metropolis when reporting is
-        incomplete.
+        NUTS settings; the defaults of :class:`SamplerSettings` if omitted. Step assignment is
+        left to PyMC — that is what the sampler benchmark validated — with the single exception
+        of the latent true-count block under incomplete reporting, which is handed
+        :class:`end_of_outbreak.reporting.SingleSiteCountMetropolis` because PyMC's own choice
+        for it silently stops moving on a series this long.
     progressbar
         Off by default, since fits are normally run from the pipeline.
     """
@@ -143,9 +144,14 @@ def fit_model(
     # sampled by NUTS. That happens only under incomplete reporting with every continuous
     # parameter fixed — the latent counts are then the whole free block, and Metropolis has no
     # acceptance target to hit.
-    nuts_settings: dict[str, Any] = (
+    overrides: dict[str, Any] = (
         {"target_accept": settings.target_accept} if _has_continuous_variables(built) else {}
     )
+    # The one step PyMC would get wrong; everything else it assigns around this. See
+    # `reporting.SingleSiteCountMetropolis` for what the default does to a long series.
+    count_step = reporting.count_block_step(built)
+    if count_step is not None:
+        overrides["step"] = [count_step]
     with built:
         idata = pm.sample(
             draws=settings.draws,
@@ -155,7 +161,7 @@ def fit_model(
             random_seed=settings.seed,
             initvals=initial_values or None,
             progressbar=progressbar,
-            **nuts_settings,
+            **overrides,
         )
 
     idata.attrs.update(

@@ -296,6 +296,8 @@ committed measurement.
 | **Fits are stored as NETCDF4 via xarray**, engine `h5netcdf`, read back with `xr.open_datatree`. `arviz.InferenceData` is a deprecated alias for `xr.DataTree` in arviz 1.x, so the I/O is xarray's; keep arviz for `az.summary` and the diagnostics. | `fitting.NETCDF_ENGINE` |
 | **Under-reporting carries the *totals* as the latent, not the unreported cases**, so the self-referential renewal density is that latent's own `logp` and no `pm.Potential` is needed. RAC still means at least one further **true** case. | [docs/models.md](docs/models.md) |
 | **A reporting delay's as-of day is an explicit argument, never `len(counts) - 1`.** Our windows include their conditioning day; `end-of-outbreak-vbd`'s stop strictly before it, so the same expression means different days in the two projects. | [docs/risk.md](docs/risk.md) |
+| **The latent true counts get `reporting.SingleSiteCountMetropolis`** — the only step this project chooses rather than leaving to PyMC. PyMC's default proposal for a vector discrete variable freezes the block solid past ~20 days, silently. Never "simplify" this back to automatic assignment; a test on a long series is what catches it. | [docs/models.md](docs/models.md) |
+| **The filter is adapted in the counts too**, drawing the *unreported* cases from `Poisson((1−π)μ)` and weighting by `Poisson(c; πμ)`. Proposing the totals and reweighting by the binomial kills the whole cloud on any busy day. Negative-binomial count laws (DLO, SSE) are refused, not approximated. | [docs/risk.md](docs/risk.md) |
 | **The report quotes no literal number.** | `report/README.md` |
 
 ## Open items

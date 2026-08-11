@@ -19,6 +19,15 @@ exact rather than approximate: its log-evidence is the closed-form likelihood, e
 completely different code path, which is what makes it a usable regression test on the filter
 itself before it is trusted on SSI.
 
+Under incomplete reporting the counts join the state, and adaptation survives because Poisson
+thinning splits the day exactly: ``c_t | μ_t ~ Poisson(π_t μ_t)`` independently of
+``D_t − c_t | c_t, μ_t ~ Poisson((1 − π_t) μ_t)``. The filter therefore draws the *unreported*
+cases and adds them to what was reported, rather than drawing the total and hoping it clears
+the data — see :func:`_adapted_counts`. That keeps every model whose count law is Poisson.
+DLO and SSE, whose count law is negative binomial because their dispersion is already
+marginalised into it, admit the analogous adapted proposal but do not implement it, and refuse
+rather than degenerate.
+
 Filtering versus smoothing — do not blur them
 ---------------------------------------------
 The forward pass delivers **filtering** states ``p(Y_{≤t} | I_{1:t})`` as well as, at the end,
@@ -52,7 +61,7 @@ import scipy.special
 import scipy.stats
 from numpy.typing import NDArray
 
-from end_of_outbreak import forward_simulation, renewal, reporting
+from end_of_outbreak import renewal, reporting
 from end_of_outbreak.delay_distributions import TOST_FIRST_LAG, OnsetAnchoredDelays
 from end_of_outbreak.model_specifications import (
     ModelSpecification,
@@ -167,11 +176,12 @@ def filter_naive(
         output depends on; the evidence estimate is unbiased either way.
     reporting_model, as_of_day
         The reporting assumption, and the day the series was observed on. Under incomplete
-        reporting the true counts join the particle state: each day is *drawn* from the model's
-        own count law rather than read off the data, and weighted by ``Binomial(c_t; D_t, π_t)``
-        instead of by the observation density. The filter stays fully adapted in the latent
-        Gamma, which is still drawn from its exact conditional given the day's now-imputed
-        count.
+        reporting the true counts join the particle state: the day's *unreported* cases are
+        drawn from ``Poisson((1 − π_t) μ_t)`` and added to the reported ones, and the particle
+        is weighted by ``Poisson(c_t; π_t μ_t)``. The filter stays fully adapted throughout —
+        in the counts by that thinning split, and in the latent Gamma, which is still drawn
+        from its exact conditional given the day's now-imputed count. ``dlo`` and ``sse`` are
+        refused, since their count law is negative binomial rather than Poisson.
     rng
         NumPy generator; a fresh default one is used if omitted.
     """
@@ -197,6 +207,16 @@ def filter_naive(
     probability = reporting_model.probability_by_day(
         n_days, as_of_day=n_days - 1 if as_of_day is None else as_of_day
     )
+    if not complete and specification.has_dispersion and not specification.has_latents:
+        # dlo and sse: the dispersion is marginalised into the count law, so the day's counts
+        # are negative binomial and the Poisson thinning split does not apply. An adapted
+        # proposal does exist — thinning a negative binomial leaves one — but nothing needs it,
+        # and proposing from the prior instead would degenerate on any day carrying cases.
+        raise NotImplementedError(
+            f"model {specification.name!r} has a negative-binomial count law, so the filter's "
+            "adapted Poisson proposal for the unreported cases does not apply. Use the fitted "
+            "route ('refit_daily') for it under incomplete reporting"
+        )
     k = parameters.require_k(specification) if specification.has_dispersion else None
     R_by_day = renewal.reproduction_number_by_day(
         parameters.R_pre, parameters.R_post, n_days=n_days, switch_day=switch_day
@@ -229,7 +249,8 @@ def filter_naive(
     increments = np.zeros(days.size, dtype=np.float64)
     ess = np.zeros(days.size, dtype=np.float64)
     resampled = np.zeros(days.size, dtype=bool)
-    day_counts = np.zeros(n_particles, dtype=np.int64)
+    day_counts = np.zeros(n_particles, dtype=np.float64)
+    count_mean = np.zeros(n_particles, dtype=np.float64)
 
     for position, day in enumerate(days):
         lags = min(int(day), w.size)
@@ -243,15 +264,12 @@ def filter_naive(
                 k=k,
             )
         else:
-            day_counts = forward_simulation.draw_counts(
-                specification,
-                force_of_infection,
-                R=float(R_by_day[day]),
-                k=k,
-                rng=rng,
-            )
-            log_density = _reporting_log_density(
-                int(counts[day]), day_counts, float(probability[day])
+            # Every model that reaches here is Poisson in the counts, so the weight is the
+            # thinned Poisson at the reported count and the day's totals are drawn afterwards,
+            # from whichever particles survive the resampling.
+            count_mean = float(R_by_day[day]) * force_of_infection
+            log_density = _poisson_log_density(
+                int(counts[day]), count_mean * float(probability[day])
             )
 
         increment = float(scipy.special.logsumexp(log_weights + log_density))
@@ -271,11 +289,12 @@ def filter_naive(
             lineage = lineage[indices]
             if true_counts is not None:
                 true_counts = true_counts[indices]
-                day_counts = day_counts[indices]
+                count_mean = count_mean[indices]
             log_weights = np.full(n_particles, -np.log(n_particles))
             resampled[position] = True
 
         if true_counts is not None:
+            day_counts = _adapted_counts(int(counts[day]), count_mean, float(probability[day]), rng)
             true_counts[:, day] = day_counts
         # Y_t is conditionally independent of everything else given I_t, so it is drawn after
         # the weighting rather than proposed before it: the filter is fully adapted. Under
@@ -351,11 +370,12 @@ def filter_onset_anchored(
     but it belongs to the reset state's incubation pipeline and is essential for RAC at the
     boundary of the observation window.
 
-    Under incomplete reporting the onsets themselves join the state: ``D_t`` is drawn from that
-    Poisson rather than read, the particle is weighted by ``Binomial(c_t; D_t, π_t)``, and the
-    day's latent is then drawn from the Gamma law that ``D_t`` implies. The ordering still
-    works, because ``μ_t`` depends on the latents strictly before ``t`` while the day's latent
-    scale depends on the counts up to and including it.
+    Under incomplete reporting the onsets themselves join the state: the particle is weighted
+    by ``Poisson(c_t; π_t μ_t)``, the day's unreported cases are drawn from
+    ``Poisson((1 − π_t) μ_t)`` and added to the reported ones, and the day's latent is then
+    drawn from the Gamma law that the resulting ``D_t`` implies. The ordering still works,
+    because ``μ_t`` depends on the latents strictly before ``t`` while the day's latent scale
+    depends on the counts up to and including it.
     """
     specification = specification_of(model)
     if specification.anchoring != "onsets":
@@ -426,8 +446,6 @@ def filter_onset_anchored(
     increments = np.zeros(days.size, dtype=np.float64)
     ess = np.zeros(days.size, dtype=np.float64)
     resampled = np.zeros(days.size, dtype=bool)
-    day_counts = np.zeros(n_particles, dtype=np.float64)
-
     for position, day_value in enumerate(days):
         day = int(day_value)
         lags = min(day, delays.incubation.size)
@@ -435,9 +453,10 @@ def filter_onset_anchored(
         if complete:
             log_density = _poisson_log_density(int(counts[day]), mean_onsets)
         else:
-            day_counts = rng.poisson(mean_onsets).astype(np.float64)
-            log_density = _reporting_log_density(
-                int(counts[day]), day_counts, float(probability[day])
+            # The onsets are Poisson in every onset-anchored model, so thinning splits the day
+            # exactly: weight by the reported part, draw the unreported part after resampling.
+            log_density = _poisson_log_density(
+                int(counts[day]), mean_onsets * float(probability[day])
             )
         increment = float(scipy.special.logsumexp(log_weights + log_density))
         if not np.isfinite(increment):
@@ -457,14 +476,16 @@ def filter_onset_anchored(
             lineage = lineage[indices]
             if not complete:
                 onsets = onsets[indices]
-                day_counts = day_counts[indices]
+                mean_onsets = mean_onsets[indices]
             log_weights = np.full(n_particles, -np.log(n_particles))
             resampled[position] = True
 
         if complete:
             day_tost_sum = np.full(n_particles, float(observed_tost_sum[day]))
         else:
-            onsets[:, day] = day_counts
+            onsets[:, day] = _adapted_counts(
+                int(counts[day]), mean_onsets, float(probability[day]), rng
+            )
             lags_tost = min(day + 1, delays.tost.size)
             day_tost_sum = onsets[:, day + 1 - lags_tost : day + 1] @ delays.tost[:lags_tost][::-1]
         _draw_onset_filter_state(
@@ -617,21 +638,31 @@ def _gamma_by_particle(
     return drawn
 
 
-def _reporting_log_density(
-    reported: int, true_counts: NDArray[np.floating[Any]] | NDArray[np.int64], probability: float
+def _adapted_counts(
+    reported: int,
+    mean: NDArray[np.float64],
+    probability: float,
+    rng: np.random.Generator,
 ) -> NDArray[np.float64]:
-    """``log Binomial(c_t; D_t, π_t)`` for every particle's imputed true count.
+    """Draw a day's true counts from their exact conditional given the reported count.
 
-    This replaces the observation density when reporting is incomplete: the particle has
-    already drawn the day's true count from the model, so what the data say about it is only
-    how many of those cases were reported.
+    Poisson thinning splits the day into two independent pieces,
+
+    ``c_t | μ_t ~ Poisson(π_t μ_t)``  and  ``D_t − c_t | c_t, μ_t ~ Poisson((1 − π_t) μ_t)``,
+
+    so the reported cases can be *conditioned on* rather than reproduced by luck. Proposing
+    ``D_t`` from the model and reweighting by ``Binomial(c_t; D_t, π_t)`` targets the same law,
+    but degenerates the moment a day carries more than a case or two: every particle can draw a
+    total below what was reported, and then the whole cloud takes zero weight and there is no
+    filter left. Drawing the *unreported* cases instead keeps the filter fully adapted in the
+    counts, as it already is in the Gamma block.
+
+    The matching importance weight is the first factor, ``Poisson(c_t; π_t μ_t)``. The caller
+    evaluates it before resampling and calls this afterwards, so that surviving particles draw
+    fresh counts rather than carrying duplicated ones.
     """
-    counts = np.asarray(true_counts, dtype=np.int64)
-    density = np.full(counts.shape, -np.inf, dtype=np.float64)
-    feasible = counts >= reported
-    if feasible.any():
-        density[feasible] = scipy.stats.binom.logpmf(reported, counts[feasible], probability)
-    return density
+    unreported = rng.poisson(np.maximum(mean, 0.0) * (1.0 - probability))
+    return reported + unreported.astype(np.float64)
 
 
 def _resolve_reporting(
