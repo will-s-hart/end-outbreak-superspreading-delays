@@ -68,9 +68,10 @@ import pymc as pm
 import pytensor
 import pytensor.tensor as pt
 from numpy.typing import NDArray
+from pytensor.graph.basic import Variable
 
 from end_of_outbreak import latent_parameterisations as lp
-from end_of_outbreak import renewal
+from end_of_outbreak import renewal, reporting
 from end_of_outbreak.delay_distributions import (
     INCUBATION_FIRST_LAG,
     SERIAL_INTERVAL_FIRST_LAG,
@@ -125,6 +126,51 @@ def _reproduction_number(
     """``R_t`` on each of ``days``, under the §5.7 switch convention."""
     period = renewal.switch_index(n_days, switch_day)[days]
     return pt.stack([R_pre, R_post])[period]
+
+
+def _resolve_reporting(
+    reporting_model: reporting.ReportingModel | None,
+) -> reporting.ReportingModel:
+    """Complete reporting is the default, so callers need not pass one."""
+    return reporting.COMPLETE_REPORTING if reporting_model is None else reporting_model
+
+
+def _layout_counts(
+    counts: NDArray[np.int64], reporting_model: reporting.ReportingModel
+) -> NDArray[np.int64]:
+    """The series the *structure* of a model is derived from, as opposed to its data.
+
+    Which days carry a latent, which days the likelihood runs over and which latents can be
+    marginalised are all read off the counts — legitimately, when the counts are known. Under
+    incomplete reporting they are not: a day reporting nothing may still have had a case, so no
+    day can be excluded and no latent is provably uncoupled. Substituting an all-ones series
+    expresses exactly that, and lets :func:`_latent_block_structure`,
+    :func:`~end_of_outbreak.latent_parameterisations.classify_latents` and
+    :func:`renewal.likelihood_days` stay as they are: with every day carrying a case, they
+    place a latent on every day, keep every day in the likelihood, and marginalise nothing.
+    """
+    if reporting_model.is_complete:
+        return counts
+    return np.ones_like(counts)
+
+
+def _delay_weighted(
+    driving: Any, weights: NDArray[np.float64], *, first_lag: int, n_days: int
+) -> Any:
+    """``Σ_s weights_s · driving_{t-s}`` for a numeric *or* symbolic driving series.
+
+    The two forms agree exactly (``tests/test_renewal.py``), but they are not the same
+    floating-point operation, so the numeric branch is kept for the completely reported models:
+    their graphs, and hence every committed result, are then bit-for-bit what they were.
+    """
+    if isinstance(driving, np.ndarray):
+        return renewal.delay_weighted_sum(
+            driving.astype(np.float64), weights, first_lag=first_lag, n_days=n_days
+        )
+    operator = renewal.delay_design_matrix(
+        n_days, weights, first_lag=first_lag, source_days=np.arange(n_days, dtype=np.int64)
+    )
+    return pt.dot(operator, driving)
 
 
 def _validate_counts(counts: NDArray[np.int64]) -> None:
@@ -186,6 +232,30 @@ def _couples_to_observations(
     if positive_days.size == 0:
         return np.zeros(influence.shape[1], dtype=bool)
     return np.asarray((influence[positive_days] > 0.0).any(axis=0), dtype=bool)
+
+
+def _couples_for(
+    influence: NDArray[np.float64],
+    layout: NDArray[np.int64],
+    days: NDArray[np.int64],
+    *,
+    reporting_model: reporting.ReportingModel,
+) -> NDArray[np.bool_]:
+    """:func:`_couples_to_observations`, or "all of them" when reporting is incomplete.
+
+    Marginalisation replaces a latent with a ``pm.Potential`` carrying the exact conjugate
+    factor ``(1 + c_u/k)^(−k·scale_u)``. Under incomplete reporting ``scale_u`` is a function
+    of the latent true counts, so that factor belongs inside the counts' own density — which is
+    not somewhere a ``Potential`` can be declared. Every latent is therefore sampled instead.
+
+    This costs nothing. The all-ones layout of :func:`_layout_counts` already makes every
+    latent that reaches an observation day couple to it, so the only latents this changes are
+    the boundary ones that reach no day inside the window at all — for which ``c_u = 0``, the
+    conjugate factor is exactly 1, and sampling adds a flat uniform and no density.
+    """
+    if reporting_model.is_complete:
+        return _couples_to_observations(influence, layout, days)
+    return np.ones(influence.shape[1], dtype=bool)
 
 
 def _observed_days(
@@ -407,6 +477,124 @@ def _coupling(structure: LatentBlockStructure, R_pre: Any, R_post: Any) -> Any:
     return R_pre * structure.pre_coupling + R_post * structure.post_coupling
 
 
+class _Rebind:
+    """Carries a builder's parameters into the ``moments`` closure PyMC re-invokes.
+
+    :class:`pm.CustomDist` refuses a ``logp`` graph that reaches a random variable it was not
+    given, and hands the closure its *own copies* of the ones it was. So a moments closure
+    cannot simply capture the model's variables: it has to be told which of them are random,
+    pass those through as distribution parameters, and read them back by position. This does
+    that bookkeeping once, by name, and leaves fixed floats (and Cori's absent ``k``) alone,
+    since a constant is safe to capture.
+    """
+
+    def __init__(self, **named: Any) -> None:
+        self._random = [name for name, value in named.items() if isinstance(value, Variable)]
+        self._fixed = {
+            name: value for name, value in named.items() if not isinstance(value, Variable)
+        }
+        self.parameters: list[Any] = [named[name] for name in self._random]
+
+    def __call__(self, args: tuple[Any, ...]) -> dict[str, Any]:
+        """The builder's parameters, with the random ones replaced by ``args``."""
+        return {**self._fixed, **dict(zip(self._random, args, strict=True))}
+
+
+class _LatentBlock:
+    """A model's Gamma block, built either from data or from the latent true counts.
+
+    Under complete reporting this is a thin pass-through to
+    :func:`~end_of_outbreak.latent_parameterisations.build_gamma_latent_block`, called once,
+    producing exactly the graph it always produced — padding, marginalisation potential and
+    all.
+
+    Under incomplete reporting the Gamma *scale* is a function of the latent counts, so the
+    block cannot be declared before them. The free ``Uniform`` is declared here instead
+    (its law does not mention the scale), the latent's value is recomputed from it wherever the
+    scale is known, and :meth:`record` writes the resulting vector back as a
+    ``pm.Deterministic`` so the risk path finds the block where it expects it.
+    """
+
+    def __init__(
+        self,
+        name: str,
+        *,
+        structure: LatentBlockStructure,
+        classification: lp.LatentClassification,
+        parameterisation: lp.LatentParameterisation,
+        dims: str,
+        reporting_model: reporting.ReportingModel,
+        k: Any,
+        R_pre: Any,
+        R_post: Any,
+        scale_from_driving: Callable[[Any], Any] | None = None,
+    ) -> None:
+        self._name = name
+        self._structure = structure
+        self._classification = classification
+        self._parameterisation = parameterisation
+        self._dims = dims
+        self._complete = reporting_model.is_complete
+        self._coupling = _coupling(structure, R_pre, R_post)
+        self._scale_from_driving = scale_from_driving or (lambda driving: driving[structure.days])
+        self.free_variable: Any = None
+        if not self._complete:
+            # Every latent is sampled: with random counts none is provably uncoupled, which is
+            # what the all-ones layout of `_layout_counts` already told `classify_latents`.
+            assert classification.marginalised.size == 0
+            assert classification.dropped.size == 0
+            self.free_variable = lp.declare_inverse_cdf_uniform(name, dims=dims)
+
+    def values(self, driving: Any, *, k: Any, free: Any) -> Any:
+        """The latent vector, padded to the block's full length."""
+        if self._complete:
+            return lp.build_gamma_latent_block(
+                self._name,
+                k=k,
+                scale=self._structure.scale,
+                coupling=self._coupling,
+                classification=self._classification,
+                parameterisation=self._parameterisation,
+                dims=self._dims,
+            )
+        return lp.gamma_from_uniform(
+            free, k=k, scale=self._scale_from_driving(driving), guard_zero_scale=True
+        )
+
+    def record(self, driving: Any, *, k: Any) -> None:
+        """Store the latent block as a ``pm.Deterministic``, when nothing else has.
+
+        A no-op under complete reporting, where ``build_gamma_latent_block`` already did it.
+        """
+        if self._complete:
+            return
+        pm.Deterministic(
+            self._name, self.values(driving, k=k, free=self.free_variable), dims=self._dims
+        )
+
+
+def _validate_reporting(
+    specification: ModelSpecification,
+    parameterisation: lp.LatentParameterisation | None,
+    reporting_model: reporting.ReportingModel,
+) -> None:
+    """Incomplete reporting needs a latent parameterisation whose free variable is scale-free.
+
+    The Gamma scale then depends on the latent true counts, so the free variable has to be
+    declarable before them. Only the inverse-CDF map has that property: its ``Uniform(0, 1)``
+    does not mention the scale at all. A centred or mean-1-rescaled block puts the scale in the
+    free variable's own prior, and no ordering of the graph exists.
+    """
+    if reporting_model.is_complete or parameterisation is None:
+        return
+    if parameterisation.reparameterisation != "inverse_cdf":
+        raise ValueError(
+            f"model {specification.name!r} under incomplete reporting needs an inverse-CDF "
+            f"latent parameterisation, got {parameterisation.name!r}: the Gamma scale is a "
+            "function of the latent true counts, so the free variable must not depend on it"
+        )
+
+
 def marginalised_latent_conditional(
     model: str | ModelSpecification,
     counts: NDArray[np.int64],
@@ -483,6 +671,8 @@ def build_naive_model(
     k: float | LogNormalPrior | None = None,
     latent_parameterisation: str | lp.LatentParameterisation | None = None,
     negligible_latent_threshold: float = 0.0,
+    reporting_model: reporting.ReportingModel | None = None,
+    as_of_day: int | None = None,
 ) -> pm.Model:
     """Build the PyMC model for one of ``dlo``, ``sse``, ``ssi`` or ``cori``.
 
@@ -492,7 +682,8 @@ def build_naive_model(
         Model name or :class:`~end_of_outbreak.model_specifications.ModelSpecification`. Must
         be infection-anchored; see :func:`build_onset_anchored_model` for the others.
     counts
-        Observed daily counts ``C_0, ..., C_T``, read as infections. ``C_0 >= 1``.
+        Observed daily counts ``C_0, ..., C_T``, read as infections. ``C_0 >= 1``. Under
+        incomplete reporting these are the *reported* counts and the true ones become latent.
     serial_interval
         Discrete serial interval ``w``, stored from lag 1.
     switch_day
@@ -506,6 +697,16 @@ def build_naive_model(
     negligible_latent_threshold
         Latents whose cohort size falls below this are dropped. Meaningless for SSI, whose
         scales are case counts, and kept only for signature symmetry.
+    reporting_model
+        How true cases become reported ones (:mod:`end_of_outbreak.reporting`). ``None`` and
+        :data:`~end_of_outbreak.reporting.COMPLETE_REPORTING` both build exactly the model this
+        function built before reporting existed.
+    as_of_day
+        Day the series was observed on, for a reporting delay's right-truncation. Defaults to
+        ``counts.size - 1``, which is correct **because this project's windows include their
+        conditioning day** (``counts[:t+1]``). Do not read that default as agreeing with
+        ``end-of-outbreak-vbd``'s: its windows stop strictly before the calculation day, so the
+        same expression there means one day earlier.
     """
     specification = specification_of(model)
     if specification.anchoring != "infections":
@@ -518,70 +719,98 @@ def build_naive_model(
     _validate_weights(serial_interval, "serial_interval")
     _validate_dispersion(specification, k)
     parameterisation = _require_parameterisation(specification, latent_parameterisation)
+    reporting_model = _resolve_reporting(reporting_model)
+    _validate_reporting(specification, parameterisation, reporting_model)
 
     n_days = counts.size
-    cohort_days = np.flatnonzero(counts > 0).astype(np.int64)
+    as_of_day = n_days - 1 if as_of_day is None else as_of_day
+    layout = _layout_counts(counts, reporting_model)
+    cohort_days = np.flatnonzero(layout > 0).astype(np.int64)
 
     if parameterisation is None:
-        # The force of infection is a known constant: the driving series is the data itself.
-        force_of_infection = renewal.delay_weighted_sum(
-            counts.astype(np.float64), serial_interval, first_lag=SERIAL_INTERVAL_FIRST_LAG
+        # The force of infection is driven by the counts themselves, known or latent.
+        layout_force = renewal.delay_weighted_sum(
+            layout.astype(np.float64), serial_interval, first_lag=SERIAL_INTERVAL_FIRST_LAG
         )
-        days = renewal.likelihood_days(force_of_infection, counts)
+        days = renewal.likelihood_days(layout_force, layout)
         return _build_closed_form_naive_model(
             specification,
             counts,
-            force_of_infection=force_of_infection,
+            serial_interval=serial_interval,
             days=days,
             n_days=n_days,
             switch_day=switch_day,
             R_pre=R_pre,
             R_post=R_post,
             k=k,
+            reporting_model=reporting_model,
+            as_of_day=as_of_day,
         )
 
     # SSI: the driving series is latent, so the renewal operator stays symbolic. Its row sums
     # say which days can be driven at all, which is what selects the likelihood days.
     structure = _latent_block_structure(
-        specification, counts, switch_day=switch_day, serial_interval=serial_interval
+        specification, layout, switch_day=switch_day, serial_interval=serial_interval
     )
     design = structure.influence
     days = structure.likelihood_days
     classification = lp.classify_latents(
         scale=structure.scale,
-        couples_to_observations=_couples_to_observations(design, counts, days),
+        couples_to_observations=_couples_for(design, layout, days, reporting_model=reporting_model),
         parameterisation=parameterisation,
         negligible_threshold=negligible_latent_threshold,
     )
-    _check_positive_days_stay_reachable(counts, days, design, classification)
+    _check_positive_days_stay_reachable(layout, days, design, classification)
     observed_days = _observed_days(design, days, classification)
 
     coords = {
         LIKELIHOOD_DAY_DIMENSION: observed_days,
         COHORT_DAY_DIMENSION: cohort_days[classification.sampled],
     }
+    coords |= reporting.latent_coords(counts, reporting_model)
     with pm.Model(coords=coords) as built:
         R_pre_value = _parameter("R_pre", R_pre)
         R_post_value = _parameter("R_post", R_post)
         assert k is not None  # guaranteed by _validate_dispersion for a latent model
         k_value = _parameter("k", k)
-        Y = lp.build_gamma_latent_block(
+        latent = _LatentBlock(
             INFECTIVITY_VARIABLE,
-            k=k_value,
-            scale=structure.scale,
-            coupling=_coupling(structure, R_pre_value, R_post_value),
+            structure=structure,
             classification=classification,
             parameterisation=parameterisation,
             dims=COHORT_DAY_DIMENSION,
+            reporting_model=reporting_model,
+            k=k_value,
+            R_pre=R_pre_value,
+            R_post=R_post_value,
         )
-        R_by_observed_day = _reproduction_number(
-            R_pre_value, R_post_value, days=observed_days, n_days=n_days, switch_day=switch_day
+        rebind = _Rebind(
+            R_pre=R_pre_value, R_post=R_post_value, k=k_value, free=latent.free_variable
         )
-        _poisson_observation(
+
+        def moments(driving: Any, *args: Any) -> reporting.CountMoments:
+            bound = rebind(args)
+            R_by_observed_day = _reproduction_number(
+                bound["R_pre"],
+                bound["R_post"],
+                days=observed_days,
+                n_days=n_days,
+                switch_day=switch_day,
+            )
+            Y = latent.values(driving, k=bound["k"], free=bound["free"])
+            return R_by_observed_day * pt.dot(design[observed_days], Y), None
+
+        driving = reporting.build_observation(
             counts,
+            reporting=reporting_model,
             days=observed_days,
-            mean_incidence=R_by_observed_day * pt.dot(design[observed_days], Y),
+            as_of_day=as_of_day,
+            name=OBSERVED_VARIABLE,
+            dims=LIKELIHOOD_DAY_DIMENSION,
+            moments=moments,
+            parameters=rebind.parameters,
         )
+        latent.record(driving, k=k_value)
     return built
 
 
@@ -589,40 +818,57 @@ def _build_closed_form_naive_model(
     specification: ModelSpecification,
     counts: NDArray[np.int64],
     *,
-    force_of_infection: NDArray[np.float64],
+    serial_interval: NDArray[np.float64],
     days: NDArray[np.int64],
     n_days: int,
     switch_day: int,
     R_pre: float | LogNormalPrior,
     R_post: float | LogNormalPrior,
     k: float | LogNormalPrior | None,
+    reporting_model: reporting.ReportingModel,
+    as_of_day: int,
 ) -> pm.Model:
     """DLO, SSE and Cori: no latents, so the whole likelihood is available in closed form."""
     coords = {LIKELIHOOD_DAY_DIMENSION: days}
+    coords |= reporting.latent_coords(counts, reporting_model)
     with pm.Model(coords=coords) as built:
         R_pre_value = _parameter("R_pre", R_pre)
         R_post_value = _parameter("R_post", R_post)
         k_value = None if k is None else _parameter("k", k)
-        R_by_day = _reproduction_number(
-            R_pre_value, R_post_value, days=days, n_days=n_days, switch_day=switch_day
-        )
-        mean_incidence = R_by_day * force_of_infection[days]
+        rebind = _Rebind(R_pre=R_pre_value, R_post=R_post_value, k=k_value)
 
-        if k_value is None:  # cori, the k → ∞ limit
-            _poisson_observation(counts, days=days, mean_incidence=mean_incidence)
-        else:
+        def moments(driving: Any, *args: Any) -> reporting.CountMoments:
+            bound = rebind(args)
+            R_by_day = _reproduction_number(
+                bound["R_pre"],
+                bound["R_post"],
+                days=days,
+                n_days=n_days,
+                switch_day=switch_day,
+            )
+            force_of_infection = _delay_weighted(
+                driving, serial_interval, first_lag=SERIAL_INTERVAL_FIRST_LAG, n_days=n_days
+            )
+            mean_incidence = R_by_day * force_of_infection[days]
+            if bound["k"] is None:  # cori, the k → ∞ limit
+                return mean_incidence, None
             # DLO holds the dispersion constant across days; SSE scales it with the force of
             # infection. That one difference is the whole of §5.4.
             dispersion = (
-                k_value if specification.name == "dlo" else k_value * force_of_infection[days]
+                bound["k"] if specification.name == "dlo" else bound["k"] * force_of_infection[days]
             )
-            pm.NegativeBinomial(
-                OBSERVED_VARIABLE,
-                mu=mean_incidence,
-                alpha=dispersion,
-                observed=counts[days],
-                dims=LIKELIHOOD_DAY_DIMENSION,
-            )
+            return mean_incidence, dispersion
+
+        reporting.build_observation(
+            counts,
+            reporting=reporting_model,
+            days=days,
+            as_of_day=as_of_day,
+            name=OBSERVED_VARIABLE,
+            dims=LIKELIHOOD_DAY_DIMENSION,
+            moments=moments,
+            parameters=rebind.parameters,
+        )
     return built
 
 
@@ -642,6 +888,8 @@ def build_onset_anchored_model(
     k: float | LogNormalPrior | None = None,
     latent_parameterisation: str | lp.LatentParameterisation | None = None,
     negligible_latent_threshold: float = 0.0,
+    reporting_model: reporting.ReportingModel | None = None,
+    as_of_day: int | None = None,
 ) -> pm.Model:
     """Build the PyMC model for one of ``sse_so``, ``ssi_so`` or ``cori_so``.
 
@@ -668,6 +916,8 @@ def build_onset_anchored_model(
         Threshold on the SSE-SO latent scale ``λ_t`` below which the latent is dropped and
         ``E_t`` set to 0, at a cost bounded by ``max(R) · Σ_dropped λ_t`` (§6.3). ``0.0``
         drops nothing.
+    reporting_model, as_of_day
+        As in :func:`build_naive_model`.
     """
     specification = specification_of(model)
     if specification.anchoring != "onsets":
@@ -680,37 +930,35 @@ def build_onset_anchored_model(
     _validate_weights(delays.incubation, "f_inc")
     _validate_dispersion(specification, k)
     parameterisation = _require_parameterisation(specification, latent_parameterisation)
+    reporting_model = _resolve_reporting(reporting_model)
+    _validate_reporting(specification, parameterisation, reporting_model)
+    as_of_day = counts.size - 1 if as_of_day is None else as_of_day
+    layout = _layout_counts(counts, reporting_model)
 
     # Cori-SO has no latent block, so it borrows SSE-SO's structure: the same TOST-weighted
     # onset sums and the same incubation design, with lambda_t entering deterministically.
     structure = latent_block_structure(
         SSE_SO if specification.name == "cori_so" else specification,
-        counts,
+        layout,
         delays=delays,
         switch_day=switch_day,
     )
+    common: dict[str, Any] = {
+        "structure": structure,
+        "layout": layout,
+        "delays": delays,
+        "switch_day": switch_day,
+        "R_pre": R_pre,
+        "R_post": R_post,
+        "k": k,
+        "parameterisation": parameterisation,
+        "negligible_latent_threshold": negligible_latent_threshold,
+        "reporting_model": reporting_model,
+        "as_of_day": as_of_day,
+    }
     if specification.name == "ssi_so":
-        return _build_ssi_so(
-            counts,
-            structure=structure,
-            switch_day=switch_day,
-            R_pre=R_pre,
-            R_post=R_post,
-            k=k,
-            parameterisation=parameterisation,
-            negligible_latent_threshold=negligible_latent_threshold,
-        )
-    return _build_sse_so_or_cori_so(
-        specification,
-        counts,
-        structure=structure,
-        switch_day=switch_day,
-        R_pre=R_pre,
-        R_post=R_post,
-        k=k,
-        parameterisation=parameterisation,
-        negligible_latent_threshold=negligible_latent_threshold,
-    )
+        return _build_ssi_so(counts, **common)
+    return _build_sse_so_or_cori_so(specification, counts, **common)
 
 
 def _build_sse_so_or_cori_so(
@@ -718,78 +966,122 @@ def _build_sse_so_or_cori_so(
     counts: NDArray[np.int64],
     *,
     structure: LatentBlockStructure,
+    layout: NDArray[np.int64],
+    delays: OnsetAnchoredDelays,
     switch_day: int,
     R_pre: float | LogNormalPrior,
     R_post: float | LogNormalPrior,
     k: float | LogNormalPrior | None,
     parameterisation: lp.LatentParameterisation | None,
     negligible_latent_threshold: float,
+    reporting_model: reporting.ReportingModel,
+    as_of_day: int,
 ) -> pm.Model:
     """``E_t = R_t λ̃_t`` (SSE-SO) or ``E_t = R_t λ_t`` (Cori-SO), then onsets by ``f_inc``."""
     n_days = counts.size
     transmission_days = structure.days
     incubation_design = structure.influence
-    tost_sum = structure.scale
     days = structure.likelihood_days
+
+    # SSE-SO's Gamma scale is the TOST-weighted onset sum, so it moves with the driving series.
+    def tost_sum_of(driving: Any) -> Any:
+        return _delay_weighted(driving, delays.tost, first_lag=TOST_FIRST_LAG, n_days=n_days)[
+            transmission_days
+        ]
 
     if parameterisation is None:
         coords = {LIKELIHOOD_DAY_DIMENSION: days}
+        coords |= reporting.latent_coords(counts, reporting_model)
         with pm.Model(coords=coords) as built:
-            R_by_transmission_day = _reproduction_number(
-                _parameter("R_pre", R_pre),
-                _parameter("R_post", R_post),
-                days=transmission_days,
-                n_days=n_days,
-                switch_day=switch_day,
-            )
-            expected_infections = R_by_transmission_day * tost_sum
-            _poisson_observation(
+            R_pre_value = _parameter("R_pre", R_pre)
+            R_post_value = _parameter("R_post", R_post)
+            rebind = _Rebind(R_pre=R_pre_value, R_post=R_post_value)
+
+            def cori_so_moments(driving: Any, *args: Any) -> reporting.CountMoments:
+                bound = rebind(args)
+                R_by_transmission_day = _reproduction_number(
+                    bound["R_pre"],
+                    bound["R_post"],
+                    days=transmission_days,
+                    n_days=n_days,
+                    switch_day=switch_day,
+                )
+                expected_infections = R_by_transmission_day * tost_sum_of(driving)
+                return pt.dot(incubation_design[days], expected_infections), None
+
+            reporting.build_observation(
                 counts,
+                reporting=reporting_model,
                 days=days,
-                mean_incidence=pt.dot(incubation_design[days], expected_infections),
+                as_of_day=as_of_day,
+                name=OBSERVED_VARIABLE,
+                dims=LIKELIHOOD_DAY_DIMENSION,
+                moments=cori_so_moments,
+                parameters=rebind.parameters,
             )
         return built
 
     classification = lp.classify_latents(
         scale=structure.scale,
-        couples_to_observations=_couples_to_observations(incubation_design, counts, days),
+        couples_to_observations=_couples_for(
+            incubation_design, layout, days, reporting_model=reporting_model
+        ),
         parameterisation=parameterisation,
         negligible_threshold=negligible_latent_threshold,
     )
-    _check_positive_days_stay_reachable(counts, days, incubation_design, classification)
+    _check_positive_days_stay_reachable(layout, days, incubation_design, classification)
     observed_days = _observed_days(incubation_design, days, classification)
 
     coords = {
         LIKELIHOOD_DAY_DIMENSION: observed_days,
         TRANSMISSION_DAY_DIMENSION: transmission_days[classification.sampled],
     }
+    coords |= reporting.latent_coords(counts, reporting_model)
     with pm.Model(coords=coords) as built:
         assert k is not None  # guaranteed by _validate_dispersion for a latent model
         k_value = _parameter("k", k)
         R_pre_value = _parameter("R_pre", R_pre)
         R_post_value = _parameter("R_post", R_post)
-        R_by_transmission_day = _reproduction_number(
-            R_pre_value,
-            R_post_value,
-            days=transmission_days,
-            n_days=n_days,
-            switch_day=switch_day,
-        )
-        lambda_tilde = lp.build_gamma_latent_block(
+        latent = _LatentBlock(
             TRANSMISSIBILITY_VARIABLE,
-            k=k_value,
-            scale=structure.scale,
-            coupling=_coupling(structure, R_pre_value, R_post_value),
+            structure=structure,
             classification=classification,
             parameterisation=parameterisation,
             dims=TRANSMISSION_DAY_DIMENSION,
+            reporting_model=reporting_model,
+            k=k_value,
+            R_pre=R_pre_value,
+            R_post=R_post_value,
+            scale_from_driving=tost_sum_of,
         )
-        expected_infections = R_by_transmission_day * lambda_tilde
-        _poisson_observation(
+        rebind = _Rebind(
+            R_pre=R_pre_value, R_post=R_post_value, k=k_value, free=latent.free_variable
+        )
+
+        def moments(driving: Any, *args: Any) -> reporting.CountMoments:
+            bound = rebind(args)
+            R_by_transmission_day = _reproduction_number(
+                bound["R_pre"],
+                bound["R_post"],
+                days=transmission_days,
+                n_days=n_days,
+                switch_day=switch_day,
+            )
+            lambda_tilde = latent.values(driving, k=bound["k"], free=bound["free"])
+            expected_infections = R_by_transmission_day * lambda_tilde
+            return pt.dot(incubation_design[observed_days], expected_infections), None
+
+        driving = reporting.build_observation(
             counts,
+            reporting=reporting_model,
             days=observed_days,
-            mean_incidence=pt.dot(incubation_design[observed_days], expected_infections),
+            as_of_day=as_of_day,
+            name=OBSERVED_VARIABLE,
+            dims=LIKELIHOOD_DAY_DIMENSION,
+            moments=moments,
+            parameters=rebind.parameters,
         )
+        latent.record(driving, k=k_value)
     return built
 
 
@@ -797,16 +1089,21 @@ def _build_ssi_so(
     counts: NDArray[np.int64],
     *,
     structure: LatentBlockStructure,
+    layout: NDArray[np.int64],
+    delays: OnsetAnchoredDelays,
     switch_day: int,
     R_pre: float | LogNormalPrior,
     R_post: float | LogNormalPrior,
     k: float | LogNormalPrior | None,
     parameterisation: lp.LatentParameterisation | None,
     negligible_latent_threshold: float,
+    reporting_model: reporting.ReportingModel,
+    as_of_day: int,
 ) -> pm.Model:
     """``Y_t | D_t ~ Gamma(k D_t, k)``, spread forward by ``f_tost`` and then by ``f_inc``."""
     assert parameterisation is not None  # ssi_so always has latents
     assert structure.incubation_design is not None and structure.tost_design is not None
+    del delays  # the designs the model needs are already on `structure`
     n_days = counts.size
     cohort_days = structure.days
     incubation_design = structure.incubation_design
@@ -816,44 +1113,64 @@ def _build_ssi_so(
     days = structure.likelihood_days
     classification = lp.classify_latents(
         scale=structure.scale,
-        couples_to_observations=_couples_to_observations(influence, counts, days),
+        couples_to_observations=_couples_for(
+            influence, layout, days, reporting_model=reporting_model
+        ),
         parameterisation=parameterisation,
         negligible_threshold=negligible_latent_threshold,
     )
-    _check_positive_days_stay_reachable(counts, days, influence, classification)
+    _check_positive_days_stay_reachable(layout, days, influence, classification)
     observed_days = _observed_days(influence, days, classification)
 
     coords = {
         LIKELIHOOD_DAY_DIMENSION: observed_days,
         COHORT_DAY_DIMENSION: cohort_days[classification.sampled],
     }
+    coords |= reporting.latent_coords(counts, reporting_model)
     with pm.Model(coords=coords) as built:
         assert k is not None
         k_value = _parameter("k", k)
         R_pre_value = _parameter("R_pre", R_pre)
         R_post_value = _parameter("R_post", R_post)
-        R_by_transmission_day = _reproduction_number(
-            R_pre_value,
-            R_post_value,
-            days=np.arange(n_days - 1, dtype=np.int64),
-            n_days=n_days,
-            switch_day=switch_day,
-        )
-        Y = lp.build_gamma_latent_block(
+        latent = _LatentBlock(
             INFECTIVITY_VARIABLE,
-            k=k_value,
-            scale=structure.scale,
-            coupling=_coupling(structure, R_pre_value, R_post_value),
+            structure=structure,
             classification=classification,
             parameterisation=parameterisation,
             dims=COHORT_DAY_DIMENSION,
+            reporting_model=reporting_model,
+            k=k_value,
+            R_pre=R_pre_value,
+            R_post=R_post_value,
         )
-        expected_infections = R_by_transmission_day * pt.dot(tost_design, Y)
-        _poisson_observation(
+        rebind = _Rebind(
+            R_pre=R_pre_value, R_post=R_post_value, k=k_value, free=latent.free_variable
+        )
+
+        def moments(driving: Any, *args: Any) -> reporting.CountMoments:
+            bound = rebind(args)
+            R_by_transmission_day = _reproduction_number(
+                bound["R_pre"],
+                bound["R_post"],
+                days=np.arange(n_days - 1, dtype=np.int64),
+                n_days=n_days,
+                switch_day=switch_day,
+            )
+            Y = latent.values(driving, k=bound["k"], free=bound["free"])
+            expected_infections = R_by_transmission_day * pt.dot(tost_design, Y)
+            return pt.dot(incubation_design[observed_days], expected_infections), None
+
+        driving = reporting.build_observation(
             counts,
+            reporting=reporting_model,
             days=observed_days,
-            mean_incidence=pt.dot(incubation_design[observed_days], expected_infections),
+            as_of_day=as_of_day,
+            name=OBSERVED_VARIABLE,
+            dims=LIKELIHOOD_DAY_DIMENSION,
+            moments=moments,
+            parameters=rebind.parameters,
         )
+        latent.record(driving, k=k_value)
     return built
 
 
@@ -876,18 +1193,6 @@ def _check_positive_days_stay_reachable(
         )
 
 
-def _poisson_observation(
-    counts: NDArray[np.int64], *, days: NDArray[np.int64], mean_incidence: Any
-) -> None:
-    """The observation node shared by every Poisson-observed model."""
-    pm.Poisson(
-        OBSERVED_VARIABLE,
-        mu=mean_incidence,
-        observed=counts[days],
-        dims=LIKELIHOOD_DAY_DIMENSION,
-    )
-
-
 # ---------------------------------------------------------------------------------------
 # Dispatcher
 # ---------------------------------------------------------------------------------------
@@ -904,6 +1209,8 @@ def build_model(
     k: float | LogNormalPrior | None = None,
     latent_parameterisation: str | lp.LatentParameterisation | None = None,
     negligible_latent_threshold: float = 0.0,
+    reporting_model: reporting.ReportingModel | None = None,
+    as_of_day: int | None = None,
 ) -> pm.Model:
     """Build any model from the delay triple, dispatching on its anchoring.
 
@@ -920,6 +1227,8 @@ def build_model(
         "k": k,
         "latent_parameterisation": latent_parameterisation,
         "negligible_latent_threshold": negligible_latent_threshold,
+        "reporting_model": reporting_model,
+        "as_of_day": as_of_day,
     }
     if specification.anchoring == "infections":
         return build_naive_model(

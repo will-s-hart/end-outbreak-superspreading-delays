@@ -350,6 +350,39 @@ def build_gamma_latent_block(
     return values
 
 
+def declare_inverse_cdf_uniform(name: str, *, dims: str) -> Any:
+    """The free ``Uniform(0, 1)`` behind an inverse-CDF block.
+
+    Split out from :func:`_sampled_gamma` because its law does not mention the Gamma scale, so
+    it can be declared **before** anything the scale depends on. That is what lets the
+    under-reporting models — whose scale is a function of the latent true counts — order their
+    graph at all; see :mod:`end_of_outbreak.reporting`. It is also why under-reporting requires
+    an inverse-CDF strategy: under ``centred`` or ``rescale_to_unit_mean`` the free variable's
+    own prior involves the scale, and no ordering exists.
+    """
+    uniform: Any = pm.Uniform(f"{name}_uniform", lower=0.0, upper=1.0, dims=dims)
+    return uniform
+
+
+def gamma_from_uniform(uniform: Any, *, k: Any, scale: Any, guard_zero_scale: bool = False) -> Any:
+    """``Gamma(k · scale, k)`` evaluated at its quantile ``uniform``.
+
+    ``scale`` may be symbolic, which is what the under-reporting path needs.
+
+    ``guard_zero_scale`` is for that path alone. A latent whose scale is a *random* count can
+    have ``scale_u = 0`` on a day with no true case, where the block degenerates to a point
+    mass at zero and the Gamma quantile is undefined. Flooring the shape keeps the gradient
+    finite and the switch pins the value at the correct 0. The complete-reporting builders pass
+    ``False``, so their graph is exactly what it was before this argument existed — the scales
+    there are data, and :func:`classify_latents` has already dropped every zero.
+    """
+    alpha = k * scale
+    if not guard_zero_scale:
+        return pm.icdf(pm.Gamma.dist(alpha=alpha, beta=k), uniform)
+    floored = pt.maximum(alpha, np.finfo(np.float64).tiny)
+    return pt.switch(pt.gt(alpha, 0.0), pm.icdf(pm.Gamma.dist(alpha=floored, beta=k), uniform), 0.0)
+
+
 def _sampled_gamma(
     name: str,
     *,
@@ -361,10 +394,8 @@ def _sampled_gamma(
     """The sampled part of a block: ``Gamma(k · scale, k)`` under one parameterisation."""
     alpha = k * scale
     if parameterisation.reparameterisation == "inverse_cdf":
-        uniform: Any = pm.Uniform(f"{name}_uniform", lower=0.0, upper=1.0, dims=dims)
-        return pm.Deterministic(
-            name, pm.icdf(pm.Gamma.dist(alpha=alpha, beta=k), uniform), dims=dims
-        )
+        uniform = declare_inverse_cdf_uniform(name, dims=dims)
+        return pm.Deterministic(name, gamma_from_uniform(uniform, k=k, scale=scale), dims=dims)
     if parameterisation.rescale_to_unit_mean:
         # Gamma(alpha, alpha) has mean 1; multiplying by the known constant `scale` recovers
         # the original law exactly. An affine change of variables by a constant, so no
