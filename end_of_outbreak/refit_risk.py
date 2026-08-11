@@ -46,7 +46,7 @@ import numpy as np
 import xarray as xr
 from numpy.typing import NDArray
 
-from end_of_outbreak import fitting
+from end_of_outbreak import fitting, reporting
 from end_of_outbreak import risk_of_additional_cases as rac
 from end_of_outbreak.delay_distributions import OnsetAnchoredDelays
 from end_of_outbreak.latent_parameterisations import LatentParameterisation
@@ -125,6 +125,7 @@ def risk_by_refitting(
     k: float | LogNormalPrior | None = None,
     latent_parameterisation: str | LatentParameterisation | None = None,
     negligible_latent_threshold: float = 0.0,
+    reporting_model: reporting.ReportingModel | None = None,
     days: Sequence[int] | NDArray[np.int64] | None = None,
     sampler: fitting.SamplerSettings | None = None,
     seed_for_day: Callable[[int], int | None] | None = None,
@@ -136,8 +137,11 @@ def risk_by_refitting(
     Parameters
     ----------
     model, counts, delays, switch_day, R_pre, R_post, k, latent_parameterisation,
-    negligible_latent_threshold
+    negligible_latent_threshold, reporting_model
         As for :func:`end_of_outbreak.fitting.fit_model`, which each day's fit is handed.
+        Conditioning day ``t`` is the as-of day of its own window, so a reporting delay's
+        right-truncation tracks the curve automatically: an onset three days before ``t`` has
+        had three days in which to be reported, whatever ``t`` is.
     days
         Conditioning days; :func:`conditioning_days` over the whole window by default.
     sampler
@@ -186,6 +190,11 @@ def risk_by_refitting(
                 k=k,
                 latent_parameterisation=latent_parameterisation,
                 negligible_latent_threshold=negligible_latent_threshold,
+                reporting_model=reporting_model,
+                # The window includes its conditioning day, so day t is the day it was
+                # observed on. Stated here rather than left to fit_model's default, because
+                # this is the one place that knows the two coincide.
+                as_of_day=t,
                 sampler=(
                     settings if seed_for_day is None else replace_seed(settings, seed_for_day(t))
                 ),
@@ -201,6 +210,7 @@ def risk_by_refitting(
             latent_parameterisation=fitting.fitted_parameterisation(idata),
             fixed_k=fitting.fitted_dispersion(idata),
             negligible_latent_threshold=negligible_latent_threshold,
+            reporting_model=fitting.fitted_reporting(idata),
         )
         parts.append(
             rac.risk_log_probabilities(

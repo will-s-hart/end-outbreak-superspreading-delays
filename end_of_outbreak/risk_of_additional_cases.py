@@ -101,7 +101,13 @@ from typing import Any
 import numpy as np
 from numpy.typing import NDArray
 
-from end_of_outbreak import branching_process, forward_simulation, pymc_models, renewal
+from end_of_outbreak import (
+    branching_process,
+    forward_simulation,
+    pymc_models,
+    renewal,
+    reporting,
+)
 from end_of_outbreak.delay_distributions import (
     SERIAL_INTERVAL_FIRST_LAG,
     TOST_FIRST_LAG,
@@ -119,6 +125,14 @@ from end_of_outbreak.risk_curves import RiskCurve
 
 _DRAW_CHUNK_ELEMENTS = 2_000_000
 """Rough size of the temporary the DLO profile calculation is allowed to build, in floats."""
+
+CountSeries = NDArray[np.int64] | NDArray[np.float64]
+"""A count series the closed forms are driven by.
+
+One-dimensional and integral when the counts are data. Two-dimensional and floating when
+reporting is incomplete: the true counts are then a posterior quantity, so the driving series
+carries a leading draw axis. :func:`_count_series` normalises either into the latter's form.
+"""
 
 
 # ---------------------------------------------------------------------------------------
@@ -242,7 +256,7 @@ class DailyRiskEstimate:
 
 
 def pooled_remaining_weight(
-    driving: NDArray[np.float64],
+    driving: CountSeries,
     serial_interval: NDArray[np.float64],
     *,
     n_days: int | None = None,
@@ -278,7 +292,7 @@ def pooled_remaining_weight(
 
 
 def future_force_of_infection(
-    counts: NDArray[np.int64],
+    counts: CountSeries,
     serial_interval: NDArray[np.float64],
     *,
     days: NDArray[np.int64],
@@ -291,19 +305,36 @@ def future_force_of_infection(
     exactly the event whose probability the DLO product evaluates. Beyond ``t + len(w)`` the
     serial interval can no longer reach the retained cases and ``μ_j`` is identically zero, so
     the infinite product of §5.3 is finite.
+
+    A leading draw axis on ``counts`` is carried through, which is what incomplete reporting
+    needs: the driving series is then one latent true-count series per draw.
     """
-    counts_float = np.asarray(counts, dtype=np.float64)
+    driving = np.asarray(counts, dtype=np.float64)
+    operator = future_force_of_infection_operator(
+        driving.shape[-1], np.asarray(serial_interval, dtype=np.float64), days=days
+    )
+    return np.tensordot(driving, operator, axes=([-1], [2]))
+
+
+def future_force_of_infection_operator(
+    n_days: int, serial_interval: NDArray[np.float64], *, days: NDArray[np.int64]
+) -> NDArray[np.float64]:
+    """``O[t, j, u]``: the weight day ``u`` carries in ``μ_{t+1+j}``, zero once ``u > t``.
+
+    Factored out of :func:`future_force_of_infection` because it depends only on the delay and
+    the day grid, never on the counts. That lets the DLO calculator hold the operator — a few
+    megabytes — and contract it against a chunk of posterior draws at a time, instead of
+    materialising a ``(draws, days, lags)`` profile that is hundreds of megabytes.
+    """
     w = np.asarray(serial_interval, dtype=np.float64)
     days = np.asarray(days, dtype=np.int64)
-    profile = np.zeros((days.size, w.size), dtype=np.float64)
-    day_index = np.arange(counts_float.size, dtype=np.int64)
-    for row, t in enumerate(days):
-        retained = np.where(day_index <= t, counts_float, 0.0)
-        reachable = renewal.delay_weighted_sum(
-            retained, w, first_lag=SERIAL_INTERVAL_FIRST_LAG, n_days=int(t) + 1 + w.size
-        )
-        profile[row] = reachable[int(t) + 1 :]
-    return profile
+    lag = np.arange(w.size, dtype=np.int64)
+    # mu_{t+1+j} = sum_u w_{t+1+j-u} I_u, and w is stored densely from lag 1.
+    source = np.arange(n_days, dtype=np.int64)
+    index = days[:, None, None] + lag[None, :, None] - source[None, None, :]
+    retained = source[None, None, :] <= days[:, None, None]
+    reachable = retained & (index >= 0) & (index < w.size)
+    return np.where(reachable, w[np.clip(index, 0, w.size - 1)], 0.0)
 
 
 # ---------------------------------------------------------------------------------------
@@ -314,7 +345,7 @@ def future_force_of_infection(
 def log_probability_of_no_further_cases(
     model: str | ModelSpecification,
     *,
-    counts: NDArray[np.int64],
+    counts: CountSeries,
     serial_interval: NDArray[np.float64],
     R_pre: float | NDArray[np.float64],
     k: float | NDArray[np.float64] | None = None,
@@ -365,9 +396,10 @@ def log_probability_of_no_further_cases(
             "which takes the incubation/TOST delays and R_post needed to rebuild the reset "
             "pipeline"
         )
-    counts = np.asarray(counts, dtype=np.int64)
+    counts = _count_series(counts)
+    n_days = counts.shape[-1]
     w = np.asarray(serial_interval, dtype=np.float64)
-    days = np.arange(counts.size, dtype=np.int64) if days is None else np.asarray(days, np.int64)
+    days = np.arange(n_days, dtype=np.int64) if days is None else np.asarray(days, np.int64)
     R = np.atleast_1d(np.asarray(R_pre, dtype=np.float64))
     if R.ndim != 1:
         raise ValueError("R_pre must be a scalar or a one-dimensional array of draws")
@@ -379,7 +411,7 @@ def log_probability_of_no_further_cases(
                 f"model {specification.name!r} has no latent block, so its remaining-"
                 "transmission weight is built from the observed counts; drop `infectivity`"
             )
-        driving = counts.astype(np.float64)
+        driving = counts
     else:
         if infectivity is None:
             raise ValueError(
@@ -387,32 +419,33 @@ def log_probability_of_no_further_cases(
                 "complete by-day paths from reconstruct_latent_paths"
             )
         driving = np.asarray(infectivity, dtype=np.float64)
-        if driving.shape != (R.size, counts.size):
-            raise ValueError(
-                f"infectivity must have shape {(R.size, counts.size)}, got {driving.shape}"
-            )
+        if driving.shape != (R.size, n_days):
+            raise ValueError(f"infectivity must have shape {(R.size, n_days)}, got {driving.shape}")
 
     if specification.name == "dlo":
         assert dispersion is not None  # DLO always carries a dispersion parameter
         return _dlo_log_probability(
-            future_force_of_infection(counts, w, days=days), R=R, k=dispersion
+            driving,
+            future_force_of_infection_operator(n_days, w, days=days),
+            R=R,
+            k=dispersion,
         )
 
-    Lambda = pooled_remaining_weight(driving, w)[..., days]
+    Lambda = _by_draw(pooled_remaining_weight(driving, w)[..., days], n_draws=R.size)
     if specification.name == "ssi":
         # Given the infectivities the remaining offspring are Poisson(R Λ_Y), so the dispersion
         # has already done its work in the latent block and does not reappear here.
         return -R[:, None] * Lambda
     if dispersion is None:  # cori, the k → ∞ limit
-        return -R[:, None] * Lambda[None, :]
+        return -R[:, None] * Lambda
     # sse: the remaining offspring pool into NB(mean = R Λ, disp = k Λ) by NB closure.
-    return -(dispersion * np.log1p(R / dispersion))[:, None] * Lambda[None, :]
+    return -(dispersion * np.log1p(R / dispersion))[:, None] * Lambda
 
 
 def log_probability_of_no_sustained_transmission(
     model: str | ModelSpecification,
     *,
-    counts: NDArray[np.int64],
+    counts: CountSeries,
     serial_interval: NDArray[np.float64],
     R_pre: float | NDArray[np.float64],
     k: float | NDArray[np.float64] | None = None,
@@ -434,10 +467,9 @@ def log_probability_of_no_sustained_transmission(
     if specification.name == "dlo":
         raise ValueError("DLO has no branching-process formula for sustained transmission")
 
-    counts = np.asarray(counts, dtype=np.int64)
-    selected = (
-        np.arange(counts.size, dtype=np.int64) if days is None else np.asarray(days, np.int64)
-    )
+    counts = _count_series(counts)
+    n_days = counts.shape[-1]
+    selected = np.arange(n_days, dtype=np.int64) if days is None else np.asarray(days, np.int64)
     R = _one_draw_axis(R_pre, "R_pre")
     dispersion = _dispersion_draws(specification, k, n_draws=R.size)
 
@@ -446,27 +478,51 @@ def log_probability_of_no_sustained_transmission(
             raise ValueError(
                 f"model {specification.name!r} has no latent block; drop `infectivity`"
             )
-        driving = counts.astype(np.float64)
+        driving = counts
     else:
         if infectivity is None:
             raise ValueError(
                 f"model {specification.name!r} needs the complete retained infectivity path"
             )
         driving = np.asarray(infectivity, dtype=np.float64)
-        if driving.shape != (R.size, counts.size):
-            raise ValueError(
-                f"infectivity must have shape {(R.size, counts.size)}, got {driving.shape}"
-            )
+        if driving.shape != (R.size, n_days):
+            raise ValueError(f"infectivity must have shape {(R.size, n_days)}, got {driving.shape}")
 
-    Lambda = pooled_remaining_weight(driving, serial_interval)[..., selected]
+    Lambda = _by_draw(
+        pooled_remaining_weight(driving, serial_interval)[..., selected], n_draws=R.size
+    )
     if dispersion is None:
         q = branching_process.poisson_extinction_probability(R)
-        return -(R * (1.0 - q))[:, None] * Lambda[None, :]
+        return -(R * (1.0 - q))[:, None] * Lambda
 
     q = branching_process.negative_binomial_extinction_probability(R, dispersion)
     if specification.name == "ssi":
         return -(R * (1.0 - q))[:, None] * Lambda
-    return np.log(q)[:, None] * Lambda[None, :]
+    return np.log(q)[:, None] * Lambda
+
+
+def _count_series(counts: CountSeries) -> NDArray[np.float64]:
+    """A count series the closed forms can be driven by: the data, or one series per draw.
+
+    Under complete reporting the counts are data — a single one-dimensional series. Under
+    incomplete reporting the true counts are a posterior quantity, so the driving series gains
+    a leading draw axis, and every reduction downstream already carries one.
+    """
+    series = np.asarray(counts, dtype=np.float64)
+    if series.ndim not in (1, 2) or series.shape[-1] == 0:
+        raise ValueError(
+            "counts must be a non-empty series of days, optionally with a leading draw axis"
+        )
+    return series
+
+
+def _by_draw(values: NDArray[np.float64], *, n_draws: int) -> NDArray[np.float64]:
+    """A per-day reduction as ``(n_draws, n_days)``, broadcasting a shared one across draws."""
+    if values.ndim == 1:
+        return np.broadcast_to(values, (n_draws, values.shape[0]))
+    if values.shape[0] != n_draws:
+        raise ValueError(f"expected {n_draws} draws, got {values.shape[0]}")
+    return values
 
 
 def _dispersion_draws(
@@ -491,23 +547,37 @@ def _dispersion_draws(
 
 
 def _dlo_log_probability(
-    profile: NDArray[np.float64], *, R: NDArray[np.float64], k: NDArray[np.float64]
+    driving: CountSeries,
+    operator: NDArray[np.float64],
+    *,
+    R: NDArray[np.float64],
+    k: NDArray[np.float64],
 ) -> NDArray[np.float64]:
     """``−k Σ_{j > t} log(1 + R μ_j / k)`` over the future force-of-infection profile.
 
     Chunked over draws: the natural expression builds a
     ``(draws, conditioning days, lags)`` temporary, which is a gigabyte on the real series at
-    4000 draws and a few megabytes once the draws are taken a slice at a time.
+    4000 draws and a few megabytes once the draws are taken a slice at a time. The profile is
+    contracted from ``operator`` inside the loop rather than passed in, so that a *per-draw*
+    driving series — which is what incomplete reporting produces — never materialises one
+    either.
     """
     n_draws = R.size
-    n_days, n_lags = profile.shape
+    n_days, n_lags, _ = operator.shape
+    shared = driving.ndim == 1
+    shared_profile = np.tensordot(driving, operator, axes=([-1], [2]))[None] if shared else None
     chunk = max(1, _DRAW_CHUNK_ELEMENTS // max(1, n_days * n_lags))
     result = np.empty((n_draws, n_days), dtype=np.float64)
     for start in range(0, n_draws, chunk):
         stop = min(start + chunk, n_draws)
+        profile = (
+            shared_profile
+            if shared_profile is not None
+            else np.tensordot(driving[start:stop], operator, axes=([-1], [2]))
+        )
         R_chunk = R[start:stop, None, None]
         k_chunk = k[start:stop, None, None]
-        result[start:stop] = -(k_chunk * np.log1p(R_chunk * profile[None] / k_chunk)).sum(axis=2)
+        result[start:stop] = -(k_chunk * np.log1p(R_chunk * profile / k_chunk)).sum(axis=2)
     return result
 
 
@@ -531,9 +601,7 @@ def incubation_pipeline_mean(
     return pooled_remaining_weight(expected_infections, incubation)
 
 
-def remaining_tost_weight(
-    driving: NDArray[np.float64], tost: NDArray[np.float64]
-) -> NDArray[np.float64]:
+def remaining_tost_weight(driving: CountSeries, tost: NDArray[np.float64]) -> NDArray[np.float64]:
     """Driving weight assigned to transmission days strictly after ``t``.
 
     ``driving`` is the observed onset series for SSE-SO/Cori-SO and the complete latent ``Y``
@@ -555,7 +623,7 @@ def remaining_tost_weight(
 def onset_event_probabilities(
     model: str | ModelSpecification,
     *,
-    counts: NDArray[np.int64],
+    counts: CountSeries,
     delays: OnsetAnchoredDelays,
     switch_day: int,
     R_pre: float | NDArray[np.float64],
@@ -600,13 +668,12 @@ def onset_event_probabilities(
             f"model {specification.name!r} is infection-anchored; use risk_curve for RAC, "
             "under which RAC and RAT coincide"
         )
-    counts = np.asarray(counts, dtype=np.int64)
+    counts = _count_series(counts)
+    n_days = counts.shape[-1]
     selected_days = (
-        np.arange(counts.size, dtype=np.int64) if days is None else np.asarray(days, dtype=np.int64)
+        np.arange(n_days, dtype=np.int64) if days is None else np.asarray(days, dtype=np.int64)
     )
-    if counts.ndim != 1 or counts.size == 0:
-        raise ValueError("counts must be a non-empty one-dimensional onset series")
-    if (selected_days < 0).any() or (selected_days >= counts.size).any():
+    if (selected_days < 0).any() or (selected_days >= n_days).any():
         raise ValueError("days must index the observed onset series")
 
     R_pre_draws = _one_draw_axis(R_pre, "R_pre")
@@ -622,29 +689,28 @@ def onset_event_probabilities(
         else branching_process.negative_binomial_extinction_probability(reset_draws, dispersion)
     )
     R_history = np.where(
-        renewal.switch_index(counts.size, switch_day)[None, :] == 0,
+        renewal.switch_index(n_days, switch_day)[None, :] == 0,
         R_pre_draws[:, None],
         R_post_draws[:, None],
     )
 
     tost_operator = renewal.delay_design_matrix(
-        counts.size,
+        n_days,
         delays.tost,
         first_lag=TOST_FIRST_LAG,
-        source_days=np.arange(counts.size, dtype=np.int64),
+        source_days=np.arange(n_days, dtype=np.int64),
     )
     if specification.name == "cori_so":
         if latent is not None:
             raise ValueError("Cori-SO has no latent block; drop `latent`")
-        force = counts.astype(np.float64) @ tost_operator.T
-        expected_infections = R_history * force[None, :]
-        retained_exponent = (
-            reset_draws[:, None]
-            * remaining_tost_weight(counts.astype(np.float64), delays.tost)[None, :]
+        expected_infections = R_history * _by_draw(counts @ tost_operator.T, n_draws=n_draws)
+        onset_remaining_weight = _by_draw(
+            remaining_tost_weight(counts, delays.tost), n_draws=n_draws
         )
+        retained_exponent = reset_draws[:, None] * onset_remaining_weight
         retained_sustained_exponent = (reset_draws * (1.0 - extinction))[
             :, None
-        ] * remaining_tost_weight(counts.astype(np.float64), delays.tost)[None, :]
+        ] * onset_remaining_weight
         per_case_exponent = reset_draws
     else:
         if latent is None:
@@ -653,17 +719,17 @@ def onset_event_probabilities(
                 "posterior_state"
             )
         latent_paths = np.asarray(latent, dtype=np.float64)
-        if latent_paths.shape != (n_draws, counts.size):
+        if latent_paths.shape != (n_draws, n_days):
             raise ValueError(
-                f"latent must have shape {(n_draws, counts.size)}, got {latent_paths.shape}"
+                f"latent must have shape {(n_draws, n_days)}, got {latent_paths.shape}"
             )
         assert dispersion is not None
         per_case_exponent = dispersion * np.log1p(reset_draws / dispersion)
         if specification.name == "sse_so":
             expected_infections = R_history * latent_paths
-            remaining_weight = remaining_tost_weight(counts.astype(np.float64), delays.tost)[
-                None, :
-            ]
+            # SSE-SO's retained cohorts are the onsets themselves, which incomplete reporting
+            # makes a per-draw quantity rather than data.
+            remaining_weight = _by_draw(remaining_tost_weight(counts, delays.tost), n_draws=n_draws)
             retained_exponent = per_case_exponent[:, None] * remaining_weight
             retained_sustained_exponent = -np.log(extinction)[:, None] * remaining_weight
         else:
@@ -809,6 +875,16 @@ class PosteriorState:
     """``(n_draws, n_days)`` latent path, zero on every day the fit did not sample."""
 
     unsampled: UnsampledLatents | None = None
+
+    true_counts: NDArray[np.float64] | None = None
+    """``(n_draws, n_days)`` true counts, when reporting was incomplete; ``None`` otherwise.
+
+    The risk closed forms are driven by the counts, so under incomplete reporting their driving
+    series stops being data and becomes a posterior quantity — one series per draw. RAC still
+    means "at least one further **true** case", which is why it is these and not the reported
+    counts that the calculators read.
+    """
+
     n_chains: int = 1
     """Chains the draws came from. They are stacked chain-major, which is what lets
     :func:`monte_carlo_standard_error` recover the between-chain spread."""
@@ -853,6 +929,7 @@ def posterior_state(
     fixed_R_post: float | None = None,
     fixed_k: float | None = None,
     negligible_latent_threshold: float = 0.0,
+    reporting_model: reporting.ReportingModel | None = None,
 ) -> PosteriorState:
     """Flatten a fit into draw-indexed arrays, with the law of the latents it did not sample.
 
@@ -870,9 +947,18 @@ def posterior_state(
         fixed-``k`` analyses need ``fixed_k``; the fixed-``θ`` cross-checks of §6.4, which
         sample the latents alone, need all three. Each is ignored when the posterior carries
         the variable itself.
+    reporting_model
+        The reporting assumption the fit was run under
+        (:func:`end_of_outbreak.fitting.fitted_reporting`). It decides which latents the block
+        layout expects, and whether the driving series has to be read out of the posterior as
+        the latent true counts rather than taken from the data.
     """
     specification = specification_of(model)
     counts = np.asarray(counts, dtype=np.int64)
+    resolved_reporting = (
+        reporting.COMPLETE_REPORTING if reporting_model is None else reporting_model
+    )
+    layout = pymc_models.layout_counts(counts, resolved_reporting)
     posterior = idata.posterior
     n_draws = int(posterior.sizes["chain"] * posterior.sizes["draw"])
     R_pre = _parameter_draws(posterior, "R_pre", fixed=fixed_R_pre, n_draws=n_draws)
@@ -882,6 +968,7 @@ def posterior_state(
         if specification.has_dispersion
         else None
     )
+    true_counts = _true_count_draws(posterior, counts, reporting_model=resolved_reporting)
 
     sampled_infectivity = None
     unsampled = None
@@ -905,10 +992,12 @@ def posterior_state(
             R_post=R_post,
             k=k,
             negligible_latent_threshold=negligible_latent_threshold,
+            reporting_model=resolved_reporting,
+            true_counts=true_counts,
         )
         _check_block_accounted_for(
             specification,
-            counts,
+            layout,
             delays=delays,
             switch_day=switch_day,
             sampled_days=sampled_days,
@@ -920,8 +1009,35 @@ def posterior_state(
         k=k,
         sampled_infectivity=sampled_infectivity,
         unsampled=unsampled,
+        true_counts=true_counts,
         n_chains=int(posterior.sizes["chain"]),
     )
+
+
+def _true_count_draws(
+    posterior: Any,
+    counts: NDArray[np.int64],
+    *,
+    reporting_model: reporting.ReportingModel,
+) -> NDArray[np.float64] | None:
+    """Posterior draws of the true counts, or ``None`` when reporting was complete.
+
+    The latent block covers days ``1 ... T``; day 0 is the fixed index case, so it is prepended
+    from the data. Every draw must dominate the reported series, which the binomial guarantees
+    — checking it here catches a fit read back against the wrong data.
+    """
+    if reporting_model.is_complete:
+        return None
+    latent = _flatten_draws(posterior, reporting.TRUE_INCIDENCE_VARIABLE)
+    index_case = np.full((latent.shape[0], 1), float(counts[0]))
+    totals = np.concatenate((index_case, latent.astype(np.float64)), axis=1)
+    if totals.shape[1] != counts.size:
+        raise ValueError(
+            f"the fit's true counts span {totals.shape[1]} days but the series has {counts.size}"
+        )
+    if np.any(totals < counts[None, :]):
+        raise ValueError("a draw of the true counts falls below the reported counts")
+    return totals
 
 
 def risk_log_probabilities(
@@ -947,11 +1063,15 @@ def risk_log_probabilities(
     selected = (
         np.arange(counts.size, dtype=np.int64) if days is None else np.asarray(days, np.int64)
     )
+    # Under incomplete reporting the driving series is a posterior quantity, one per draw: the
+    # estimand is still "at least one further *true* case", so it is the true counts the closed
+    # forms have to be evaluated at.
+    driving_counts = counts if state.true_counts is None else state.true_counts
 
     if specification.anchoring == "onsets":
         estimate = onset_event_probabilities(
             specification,
-            counts=counts,
+            counts=driving_counts,
             delays=delays,
             switch_day=switch_day,
             R_pre=state.R_pre,
@@ -970,7 +1090,7 @@ def risk_log_probabilities(
             )
         log_probability = log_probability_of_no_further_cases(
             specification,
-            counts=counts,
+            counts=driving_counts,
             serial_interval=delays.serial_interval,
             R_pre=state.R_pre,
             k=state.k,
@@ -982,7 +1102,7 @@ def risk_log_probabilities(
             if specification.name == "dlo"
             else log_probability_of_no_sustained_transmission(
                 specification,
-                counts=counts,
+                counts=driving_counts,
                 serial_interval=delays.serial_interval,
                 R_pre=state.R_pre,
                 k=state.k,
@@ -1134,6 +1254,8 @@ def unsampled_latent_conditional(
     R_post: NDArray[np.float64],
     k: NDArray[np.float64],
     negligible_latent_threshold: float = 0.0,
+    reporting_model: reporting.ReportingModel | None = None,
+    true_counts: NDArray[np.float64] | None = None,
 ) -> UnsampledLatents:
     """Every latent the fit left out of the posterior, with its exact conditional law.
 
@@ -1149,11 +1271,17 @@ def unsampled_latent_conditional(
     Given the parameters these are independent of the sampled block and of each other, which is
     what makes both the exact correction of :func:`marginalised_risk_correction` and the draws
     of :func:`reconstruct_latent_paths` valid.
+
+    Under incomplete reporting the first source is empty — nothing is marginalised — and the
+    second survives, with ``λ_T`` computed per draw from the latent true counts.
     """
     specification = specification_of(model)
     if specification.latent_variable is None:
         raise ValueError(f"model {specification.name!r} has no latent block")
     counts = np.asarray(counts, dtype=np.int64)
+    resolved_reporting = (
+        reporting.COMPLETE_REPORTING if reporting_model is None else reporting_model
+    )
     days, shape, rate = pymc_models.marginalised_latent_conditional(
         specification,
         counts,
@@ -1164,22 +1292,42 @@ def unsampled_latent_conditional(
         k=k,
         latent_parameterisation=latent_parameterisation,
         negligible_latent_threshold=negligible_latent_threshold,
+        reporting_model=resolved_reporting,
     )
     shape = np.atleast_2d(np.asarray(shape, dtype=np.float64))
     rate = np.atleast_2d(np.asarray(rate, dtype=np.float64))
 
     if specification.name == "sse_so":
         final_day = counts.size - 1
-        tost_sum = float(
-            renewal.delay_weighted_sum(
-                counts.astype(np.float64), delays.tost, first_lag=TOST_FIRST_LAG
-            )[final_day]
-        )
-        if tost_sum > 0.0:
+        driving = counts.astype(np.float64) if true_counts is None else true_counts
+        tost_sum = pooled_delay_weighted_sum(driving, delays.tost)[..., final_day]
+        boundary_shape = np.broadcast_to(k * tost_sum, np.shape(k))
+        if np.any(boundary_shape > 0.0):
             days = np.concatenate((days, [final_day]))
-            shape = np.concatenate((shape, (k * tost_sum)[:, None]), axis=1)
+            shape = np.concatenate((shape, boundary_shape[:, None]), axis=1)
             rate = np.concatenate((rate, np.asarray(k, dtype=np.float64)[:, None]), axis=1)
     return UnsampledLatents(days=np.asarray(days, dtype=np.int64), shape=shape, rate=rate)
+
+
+def pooled_delay_weighted_sum(
+    driving: CountSeries, weights: NDArray[np.float64]
+) -> NDArray[np.float64]:
+    """``Σ_s weights_s · driving_{t−s}`` for a lag-0 delay, carrying a leading draw axis.
+
+    :func:`renewal.delay_weighted_sum` convolves one series; the driving series here can be a
+    whole posterior block of true-count draws, so the operator is applied as a matrix instead.
+    """
+    driving = np.asarray(driving, dtype=np.float64)
+    if driving.ndim == 0:
+        raise ValueError("driving must have at least one axis, indexed by day")
+    n_days = driving.shape[-1]
+    operator = renewal.delay_design_matrix(
+        n_days,
+        np.asarray(weights, dtype=np.float64),
+        first_lag=TOST_FIRST_LAG,
+        source_days=np.arange(n_days, dtype=np.int64),
+    )
+    return driving @ operator.T
 
 
 @dataclass(frozen=True)

@@ -135,7 +135,7 @@ def _resolve_reporting(
     return reporting.COMPLETE_REPORTING if reporting_model is None else reporting_model
 
 
-def _layout_counts(
+def layout_counts(
     counts: NDArray[np.int64], reporting_model: reporting.ReportingModel
 ) -> NDArray[np.int64]:
     """The series the *structure* of a model is derived from, as opposed to its data.
@@ -248,7 +248,7 @@ def _couples_for(
     of the latent true counts, so that factor belongs inside the counts' own density — which is
     not somewhere a ``Potential`` can be declared. Every latent is therefore sampled instead.
 
-    This costs nothing. The all-ones layout of :func:`_layout_counts` already makes every
+    This costs nothing. The all-ones layout of :func:`layout_counts` already makes every
     latent that reaches an observation day couple to it, so the only latents this changes are
     the boundary ones that reach no day inside the window at all — for which ``c_u = 0``, the
     conjugate factor is exactly 1, and sampling adds a flat uniform and no density.
@@ -540,7 +540,7 @@ class _LatentBlock:
         self.free_variable: Any = None
         if not self._complete:
             # Every latent is sampled: with random counts none is provably uncoupled, which is
-            # what the all-ones layout of `_layout_counts` already told `classify_latents`.
+            # what the all-ones layout of `layout_counts` already told `classify_latents`.
             assert classification.marginalised.size == 0
             assert classification.dropped.size == 0
             self.free_variable = lp.declare_inverse_cdf_uniform(name, dims=dims)
@@ -606,6 +606,7 @@ def marginalised_latent_conditional(
     k: float | NDArray[np.float64],
     latent_parameterisation: str | lp.LatentParameterisation,
     negligible_latent_threshold: float = 0.0,
+    reporting_model: reporting.ReportingModel | None = None,
 ) -> tuple[NDArray[np.int64], NDArray[np.float64], NDArray[np.float64]]:
     """``(days, shape, rate)`` of the latents a built model integrated out.
 
@@ -628,14 +629,20 @@ def marginalised_latent_conditional(
     ``(n_draws, n_removed)``, which is directly what ``rng.gamma`` wants.
 
     Returns empty arrays when the parameterisation integrates nothing out, so callers can use
-    it unconditionally.
+    it unconditionally — including under incomplete reporting, where nothing is integrated out
+    at all and the array is always empty.
     """
     parameterisation = lp.parameterisation_of(latent_parameterisation)
-    structure = latent_block_structure(model, counts, delays=delays, switch_day=switch_day)
+    resolved_reporting = _resolve_reporting(reporting_model)
+    layout = layout_counts(np.asarray(counts, dtype=np.int64), resolved_reporting)
+    structure = latent_block_structure(model, layout, delays=delays, switch_day=switch_day)
     classification = lp.classify_latents(
         scale=structure.scale,
-        couples_to_observations=_couples_to_observations(
-            structure.influence, np.asarray(counts, dtype=np.int64), structure.likelihood_days
+        couples_to_observations=_couples_for(
+            structure.influence,
+            layout,
+            structure.likelihood_days,
+            reporting_model=resolved_reporting,
         ),
         parameterisation=parameterisation,
         negligible_threshold=negligible_latent_threshold,
@@ -724,7 +731,7 @@ def build_naive_model(
 
     n_days = counts.size
     as_of_day = n_days - 1 if as_of_day is None else as_of_day
-    layout = _layout_counts(counts, reporting_model)
+    layout = layout_counts(counts, reporting_model)
     cohort_days = np.flatnonzero(layout > 0).astype(np.int64)
 
     if parameterisation is None:
@@ -933,7 +940,7 @@ def build_onset_anchored_model(
     reporting_model = _resolve_reporting(reporting_model)
     _validate_reporting(specification, parameterisation, reporting_model)
     as_of_day = counts.size - 1 if as_of_day is None else as_of_day
-    layout = _layout_counts(counts, reporting_model)
+    layout = layout_counts(counts, reporting_model)
 
     # Cori-SO has no latent block, so it borrows SSE-SO's structure: the same TOST-weighted
     # onset sums and the same incubation design, with lambda_t entering deterministically.
