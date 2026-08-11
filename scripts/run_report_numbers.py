@@ -53,6 +53,7 @@ from numpy.typing import NDArray
 from end_of_outbreak import (
     configuration,
     delay_distributions,
+    fitting,
     outbreak_data,
     pymc_models,
     risk_curves,
@@ -369,12 +370,21 @@ def add_latent_block(
     The total comes from the block layout the builders use; the sampled count is the width of
     the block in the draws. The difference is what the conjugate marginalisation removed, which
     is the methods claim this pins.
+
+    The layout has to be derived the way the builder derived it, which under incomplete
+    reporting is from ``layout_counts`` rather than from the data: a day reporting nothing may
+    still have had a case, so every day carries a latent. Reading it off the reported counts
+    instead gives a total *smaller* than the block actually sampled, and a negative number of
+    marginalised latents.
     """
     specification = specification_of(model)
     if specification.latent_variable is None:
         return
     structure = pymc_models.latent_block_structure(
-        model, data.onsets, delays=delays, switch_day=data.ert_arrival_day
+        model,
+        pymc_models.layout_counts(data.onsets, fitting.fitted_reporting(posterior)),
+        delays=delays,
+        switch_day=data.ert_arrival_day,
     )
     sampled = int(posterior.posterior.sizes[structure.dimension])
     numbers.set(f"{prefix}.latents.total", str(int(structure.days.size)))

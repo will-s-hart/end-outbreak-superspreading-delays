@@ -122,6 +122,10 @@ REPORT_NUMBERS_CORE = ["scripts/run_report_numbers.py"] + code(
     "posterior_comparison",
     "risk_curves",
     "pymc_models",
+    # The latent-block counts have to be laid out the way the fit laid them out, which under
+    # incomplete reporting means reading the reporting assumption back off the fit.
+    "fitting",
+    "reporting",
 )
 # The figure tier is deliberately the narrowest list. A plotting script reads what tier 2 wrote
 # and decides what it looks like; the one piece of *method* it borrows is
