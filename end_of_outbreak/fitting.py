@@ -187,9 +187,13 @@ def fit_model(
 
 
 def _has_continuous_variables(built: pm.Model) -> bool:
-    """Whether anything in the model is sampled by a gradient-based step."""
+    """Whether anything in the model is sampled by a gradient-based step.
+
+    Read off ``free_RVs`` rather than ``value_vars``: it is a plain list, it carries the same
+    dtypes, and it does not materialise anything the sampler has not asked for yet.
+    """
     return any(
-        not np.issubdtype(np.dtype(variable.dtype), np.integer) for variable in built.value_vars
+        not np.issubdtype(np.dtype(variable.dtype), np.integer) for variable in built.free_RVs
     )
 
 
