@@ -408,12 +408,12 @@ rule report_numbers:
     input:
         posteriors=[
             f"results/{analysis}/{model}_posterior.nc"
-            for analysis in IMPLEMENTED_ANALYSES
+            for analysis in SAMPLED_ANALYSES
             for model in models_of(analysis)
         ],
         racs=[
             f"results/{analysis}/{model}_rac.csv"
-            for analysis in IMPLEMENTED_ANALYSES
+            for analysis in SAMPLED_ANALYSES
             for model in models_of(analysis)
         ],
         evidence=[f"results/{analysis}/model_evidence.json" for analysis in IMPLEMENTED_ANALYSES],
@@ -429,11 +429,13 @@ rule report_numbers:
         REPORT_NUMBERS,
     params:
         analyses=IMPLEMENTED_ANALYSES,
-        per_analysis={analysis: analysis_params(analysis) for analysis in IMPLEMENTED_ANALYSES},
+        rac_only=RAC_ONLY_ANALYSES,
+        per_analysis={analysis: analysis_params(analysis) for analysis in SAMPLED_ANALYSES},
         shared=SHARED_PARAMS,
     shell:
         "python scripts/run_report_numbers.py"
         " --analyses {params.analyses}"
+        " --rac-only-analyses {params.rac_only}"
         " --data {input.data}"
         " --config {input.config}"
         " --results-root results"

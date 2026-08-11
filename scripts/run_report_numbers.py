@@ -614,9 +614,20 @@ def add_evidence_gains(
 
 
 def collect(
-    *, analyses: list[str], config: dict[str, Any], data_path: Path, results_root: Path
+    *,
+    analyses: list[str],
+    config: dict[str, Any],
+    data_path: Path,
+    results_root: Path,
+    rac_only_analyses: list[str] | None = None,
 ) -> tuple[NumberFile, list[str]]:
-    """Every macro the report can use, and the files they came from."""
+    """Every macro the report can use, and the files they came from.
+
+    ``rac_only_analyses`` are analyses that produce risk curves but none of the tier-2
+    summaries — the under-reporting sweeps have no model evidence and no dispersion posterior,
+    because they compare a model with itself under a different assumption. They contribute
+    their crossings and their convergence, and are asked for nothing else.
+    """
     numbers = NumberFile()
     data = outbreak_data.load_onset_data(data_path)
     delays = configuration.onset_anchored_delays_from_config(config)
@@ -627,7 +638,8 @@ def collect(
     add_priors(numbers, config, analyses)
     overall: Diagnostics | None = None
 
-    for analysis in analyses:
+    for analysis in [*analyses, *(rac_only_analyses or [])]:
+        rac_only = analysis in (rac_only_analyses or [])
         block = configuration.analysis_config(config, analysis)
         models = list(block["models"])
         directory = results_root / analysis
@@ -652,14 +664,20 @@ def collect(
         overall = diagnostics if overall is None else overall.merged_with(diagnostics)
         add_onset_shifts(numbers, analysis, curves)
 
-        add_evidence(numbers, read_json(directory / "model_evidence.json"), analysis)
-        if block.get("fixed_k") is None:
-            add_dispersion(
-                numbers,
-                read_json(directory / "dispersion_posteriors.json"),
-                analysis,
+        if not rac_only:
+            add_evidence(numbers, read_json(directory / "model_evidence.json"), analysis)
+            if block.get("fixed_k") is None:
+                add_dispersion(
+                    numbers,
+                    read_json(directory / "dispersion_posteriors.json"),
+                    analysis,
+                )
+        sources.extend(
+            sorted(
+                repository_path(path)
+                for path in _analysis_files(directory, models, rac_only=rac_only)
             )
-        sources.extend(sorted(repository_path(path) for path in _analysis_files(directory, models)))
+        )
 
     # The report makes one claim about every fit in the study ("no divergences anywhere"), so it
     # gets a number aggregated the same way, rather than quoting one analysis's and hoping.
@@ -669,11 +687,15 @@ def collect(
     return numbers, sources
 
 
-def _analysis_files(directory: Path, models: list[str]) -> Iterator[Path]:
+def _analysis_files(
+    directory: Path, models: list[str], *, rac_only: bool = False
+) -> Iterator[Path]:
     for model in models:
         yield directory / f"{model}_posterior.nc"
         yield directory / f"{model}_rac.csv"
         yield directory / f"{model}_rac_diagnostics.csv"
+    if rac_only:
+        return
     yield directory / "model_evidence.json"
     dispersion = directory / "dispersion_posteriors.json"
     if dispersion.exists():
@@ -684,6 +706,7 @@ def main(argv: list[str] | None = None) -> None:
     args = parse_arguments(argv)
     numbers, sources = collect(
         analyses=args.analyses,
+        rac_only_analyses=args.rac_only_analyses,
         config=configuration.load_config(args.config),
         data_path=args.data,
         results_root=args.results_root,
@@ -703,6 +726,15 @@ def parse_arguments(argv: list[str] | None = None) -> argparse.Namespace:
         nargs="+",
         required=True,
         help="the analyses to collect, in report order; the Snakefile passes IMPLEMENTED_ANALYSES",
+    )
+    parser.add_argument(
+        "--rac-only-analyses",
+        nargs="*",
+        default=[],
+        help=(
+            "analyses that produce risk curves but no model evidence or dispersion summary; "
+            "the Snakefile passes RAC_ONLY_ANALYSES"
+        ),
     )
     parser.add_argument("--output", type=Path, required=True)
     return parser.parse_args(argv)

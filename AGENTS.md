@@ -294,6 +294,8 @@ committed measurement.
 | **Latent parameterisation:** `marginalised_inverse_cdf`, with `negligible_latent_threshold = 0.0`. Gamma `icdf` is differentiable in its probability coordinate but not its shape: fixed-`k` fits use NUTS throughout, while estimated-`k` fits deliberately use `Slice: [k]` plus NUTS for the `R` parameters and latent uniforms. That compound sampler is what the benchmark validated. | [docs/models.md](docs/models.md), `validation/results/sampler_benchmark.md` |
 | **Model evidence by bridge sampling**, with the other estimators as agreement checks. | [docs/models.md](docs/models.md), `validation/results/evidence_validation.md` |
 | **Fits are stored as NETCDF4 via xarray**, engine `h5netcdf`, read back with `xr.open_datatree`. `arviz.InferenceData` is a deprecated alias for `xr.DataTree` in arviz 1.x, so the I/O is xarray's; keep arviz for `az.summary` and the diagnostics. | `fitting.NETCDF_ENGINE` |
+| **Under-reporting carries the *totals* as the latent, not the unreported cases**, so the self-referential renewal density is that latent's own `logp` and no `pm.Potential` is needed. RAC still means at least one further **true** case. | [docs/models.md](docs/models.md) |
+| **A reporting delay's as-of day is an explicit argument, never `len(counts) - 1`.** Our windows include their conditioning day; `end-of-outbreak-vbd`'s stop strictly before it, so the same expression means different days in the two projects. | [docs/risk.md](docs/risk.md) |
 | **The report quotes no literal number.** | `report/README.md` |
 
 ## Open items
@@ -302,6 +304,7 @@ committed measurement.
   mean 11.4 d and SD 8.1 d, leaving a residual TOST of mean 3.9 d and SD 4.57 d. Configurable in
   `config/config.yaml`; `check_delay_budget` rejects any estimate whose variance exceeds the
   serial interval's.
+- **Under-reporting is implemented for every model but run only for SSE-SO/SSI-SO at 60% and 80%.** Reporting *delays* are implemented and tested but used by no analysis: there are no reporting dates for Équateur. The reporting probability is a fixed input, not a parameter — it is not identified from these data without an external prior.
 - **Six sensitivity analyses, listed in the report and none of them run.** In order of value: the
   outbreak-specific serial interval (naive models only — it is structurally inadmissible for the
   onset-anchored ones, and saying so is itself a result); the incubation/TOST decomposition;

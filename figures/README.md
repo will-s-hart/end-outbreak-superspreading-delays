@@ -5,6 +5,7 @@ what the earlier tiers wrote to `results/`.
 | --- | --- |
 | `<analysis>/<analysis>.pdf`, `.png` | The analysis's main figure. |
 | `sustained_transmission_fixed_k/sustained_transmission_fixed_k.pdf`, `.png` | Main Fig. 5: RAC/RAT/RST for infection- and onset-anchored branching models at fixed `k`. |
+| `underreporting/underreporting.pdf`, `.png` | Main Fig. 6: RAC for the onset-anchored models at 100%, 80% and 60% assumed reporting. The 100% curves are `onset_models_fixed_k`'s — at a reporting probability of one the model *is* that analysis's — so this figure's inputs span three results directories. |
 | `delay_distributions/delay_distributions.pdf`, `.png` | Supplementary Fig. S1: incubation, TOST and target/implied serial intervals. |
 | `sustained_transmission_estimated_k/sustained_transmission_estimated_k.pdf`, `.png` | Supplementary Fig. S2: the Main Fig. 5 layout with `k` estimated. |
 

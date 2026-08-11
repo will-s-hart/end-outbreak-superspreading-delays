@@ -145,3 +145,51 @@ counts — `p(I) = E_{Y ~ Π Gamma(k I_u, k)}[Π_t Poisson(...)]` — so a naive
 marginalisation is unbiased and cheap. The fast vectorised integrand used for it is pinned
 against the built model's joint density at random points first; **don't skip that step**, or the
 test degenerates into checking a reimplementation against itself.
+
+## Incomplete reporting
+
+`reporting.py` is the whole of it. Every model already specifies one per-day count density for
+the **true** onsets; reporting sits on top of that and is the same for all seven:
+
+```
+D_t ~ CountDist_t(θ, D_{<t}, latents)      the model's own likelihood, at the true counts
+c_t | D_t ~ Binomial(D_t, π_t)             the reporting layer
+```
+
+so a builder supplies a `moments(totals) -> (mean, dispersion)` callable — the expression it
+already needed for its own observation node — and `reporting.build_observation` does the rest.
+`COMPLETE_REPORTING` returns exactly the graph each builder produced before this existed, which
+is what `tests/test_reporting.py` pins first.
+
+**The latent is the totals, not the unreported cases.** Both work, and they are the same model
+by the Poisson-thinning identity `Poisson(D; μ)·Binom(c; D, π) == Poisson(c; πμ)·Poisson(U; (1−π)μ)`.
+Carrying `D` makes the self-referential renewal density a function of the latent *itself*, so it
+is expressible as that latent's own `logp` and needs no `pm.Potential` anywhere. It is also the
+only form that covers the negative-binomial models, whose thinned parts are not independent.
+`end-of-outbreak-vbd` has both: `_inference_models._build_underreporting_model` carries `U`, and
+its `underreporting_sandbox/models.py` offers this one behind `likelihood="binomial"`.
+
+Three things follow, and each is load-bearing:
+
+- **An inverse-CDF latent parameterisation becomes a requirement.** The Gamma scale is now a
+  function of the latent counts, so the free variable has to be declarable *before* them — and
+  only `Uniform(0, 1)` is. A centred or mean-1-rescaled block puts the scale in the free
+  variable's own prior and no ordering of the graph exists. `_validate_reporting` refuses those.
+- **The block layout comes from `layout_counts`, an all-ones series.** Which days carry a latent
+  and which days the likelihood runs over cannot be read off counts that are themselves latent:
+  a day reporting nothing may still have had a case. All-ones says exactly that, and lets
+  `_latent_block_structure`, `classify_latents` and `likelihood_days` stay as they are. Nothing
+  is marginalised, because the conjugate factor's exponent would be a function of the latent
+  counts and so would have to live inside their density rather than in a `Potential`. That costs
+  nothing: the only latents it changes are the boundary ones with `c_u = 0`, whose factor is 1.
+- **A latent whose imputed cohort is empty must stay pinned at zero.** `gamma_from_uniform`'s
+  `guard_zero_scale` does it; an unguarded `pm.icdf` at a zero shape returns `nan` and poisons
+  the whole vector.
+
+PyMC assigns the steps itself, as everywhere else in this project, and produces
+`CompoundStep: NUTS[R_pre, R_post, <latent>_uniform] + Metropolis[true_incidence]`. The one
+thing `fitting.fit_model` has to know is that `target_accept` is a NUTS setting and PyMC rejects
+it when nothing is sampled by NUTS — which happens only if every continuous parameter is fixed.
+
+`initval` is not optional. `Binomial(c; n, π)` is zero for `n < c`, so a default initial point
+can start every chain at `-inf`; the layer starts the totals at `max(round(c/π), c)`.

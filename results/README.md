@@ -8,6 +8,7 @@ Snakemake rule from a script in `scripts/`, and everything here feeds a figure o
 | `<analysis>/<model>_rac_diagnostics.csv` | Tier-1 sampler diagnostics for those fits, one row per conditioning day. The per-day posteriors themselves are not kept. |
 | `<analysis>/model_evidence.json` | Tier-2 marginal likelihoods and posterior model probabilities. |
 | `<analysis>/dispersion_posteriors.json` | Tier-2 `k` posterior summaries and their pairwise divergences — only for the analyses that estimate `k`. |
+| `underreporting_60/`, `underreporting_80/` | The reporting sweep. Tier-1 files only: comparing a model with itself under a different reporting assumption needs no model evidence and no dispersion summary, so those two are absent by design rather than missing. Their posteriors additionally carry `true_incidence`, the imputed true onsets. |
 | `delay_distributions.csv` | Tier-2 discrete incubation, TOST, target serial-interval and implied serial-interval distributions for Supplementary Fig. S1. |
 | `report_numbers.tex` | Tier-2 LaTeX macros: every number `report/report.tex` quotes, collected from the files above. Spans the analyses rather than sitting inside one, which is why it is not in a subdirectory. |
 

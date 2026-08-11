@@ -18,6 +18,8 @@ in this tree — see `validation/` for benchmarks and cross-checks.
 | `plot_naive_models_estimated_k.py` | 3 | the same for `naive_models_estimated_k` |
 | `plot_onset_models_fixed_k.py` | 3 | `figures/onset_models_fixed_k/*.pdf`, `*.png` |
 | `plot_onset_models_estimated_k.py` | 3 | the same for `onset_models_estimated_k` |
+| `run_underreporting_60.py`, `run_underreporting_80.py` | 1 | the same tier-1 outputs, with the onsets read as *reported* counts |
+| `plot_underreporting.py` | 3 | `figures/underreporting/*` — the reporting sweep |
 | `plot_delay_distributions.py` | 3 | Supplementary Fig. S1: incubation, TOST and serial-interval distributions |
 | `plot_sustained_transmission.py` | 3 | Main Fig. 5 (fixed `k`) and Supplementary Fig. S2 (estimated `k`): RAC/RAT/RST by anchoring |
 | `figure_panels.py` | 3 | the panels the analysis figures are assembled from |

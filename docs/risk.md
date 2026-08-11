@@ -196,3 +196,42 @@ The tier-1 `rac` step then **fails outright** if any day's fit shows `R̂ > 1.01
 above 1% of draws — but writes `<model>_rac_diagnostics.csv` first, so a failed run leaves the
 evidence of how it failed behind it. A curve built from 110 fits nobody has looked at is not a
 result.
+
+## Incomplete reporting
+
+RAC still means **at least one further *true* case**. That is the quantity an end-of-outbreak
+declaration is about, and it is what `end-of-outbreak-vbd` computes too — its
+`additional_case_prob` takes incidence "with trailing sample dimensions, e.g. posterior draws of
+the inferred true incidence".
+
+The consequence is that the driving series of every closed form stops being data and becomes a
+posterior quantity, one series per draw. `PosteriorState.true_counts` carries it, and
+`risk_log_probabilities` prefers it to `counts` whenever it is there. The arithmetic is
+unchanged: `pooled_remaining_weight` and `remaining_tost_weight` already carried a leading draw
+axis for the latent paths, and the remaining broadcasts are normalised through `_by_draw`. Only
+DLO needed real work — its exponent needs the whole future force-of-infection *profile* rather
+than a scalar `Λ(t)`, so the profile is now contracted from
+`future_force_of_infection_operator` inside the existing draw-chunk loop, and a per-draw profile
+never materialises.
+
+Lower reporting can only raise RAC: the tail of zeros that ends an outbreak may be hiding cases.
+A crossing between two reporting levels is a bug, and the quick route checks for one.
+
+### The two estimators under incomplete reporting
+
+`refit_daily` is unchanged in structure. What is worth stating is that **conditioning day `t` is
+its window's as-of day**: `counts[:t+1]` includes day `t`, so an onset three days before `t` has
+had three days in which to be reported, and a reporting delay's right-truncation therefore
+tracks the curve without anything extra. That is *not* the convention of
+`end-of-outbreak-vbd`, which conditions on the record strictly before its calculation day — so
+the as-of day is an explicit argument rather than `len(counts) - 1`, and a test pins it.
+
+`single_fit_filtered` still works, because the particle filter was extended rather than
+refused. Each particle now carries its own history of true counts: the filter *draws* `D_t` from
+the model's own count law (`forward_simulation.draw_counts`, shared with the simulators so the
+two cannot drift), then weights by `Binomial(c_t; D_t, π_t)`, then draws the day's Gamma latent
+from the conditional that `D_t` implies. The ordering still works because `μ_t` depends on the
+latents strictly before `t` while the day's latent scale depends on the counts up to and
+including it. **DLO is the one model this does not cover** and it raises rather than
+approximating: its closed form needs each particle's whole retained profile, not the scalar
+remaining weight the filter records.
