@@ -4,29 +4,27 @@ Every model in this project specifies one per-day count density for the **true**
 ``Poisson(μ_t)`` for SSI/SSE-SO/SSI-SO/Cori/Cori-SO, ``NegativeBinomial(μ_t, α_t)`` for
 DLO/SSE. Reporting sits on top of that, and is the same for all seven:
 
-``D_t ~ CountDist_t(θ, D_{<t}, latents)``  — the model's own likelihood, at the true counts
+``c_t ~ thinned CountDist_t(θ, D_{<t}, latents)``  — the reported marginal
 
-``c_t | D_t ~ Binomial(D_t, π_t)``  — this module
+``U_t | c_t, θ ~ hidden CountDist_t``  — the unreported cases, with ``D_t = c_t + U_t``
 
 so the whole of the reported/unreported logic lives here and no builder repeats it. What a
 builder supplies is a ``moments`` callable mapping a true-count series to that model's
 ``(mean, dispersion)`` — the expression it already needs for its own observation node.
 
-Why the latent is the totals
-----------------------------
-The self-referential part is that ``μ_t`` depends on the true counts, which are latent. Writing
-the latent as the **totals** ``D`` rather than as the unreported cases ``U = D − c`` makes that
-density a function of the latent itself, so it is expressible as that latent's own ``logp`` and
-needs no ``pm.Potential``. This is the ``likelihood="binomial"`` formulation of
-``end-of-outbreak-vbd``'s ``underreporting_sandbox/models.py``; the ``"poisson"`` formulation
-there, and ``endoutbreakvbd._inference_models._build_underreporting_model``, carry ``U``
-instead and split the Poisson by thinning. The two are the same model:
+Why the latent is the unreported count
+--------------------------------------
+The self-referential part is that ``μ_t`` depends on the true counts, which are latent. Carrying
+the **unreported** cases ``U = D − c`` leaves their support as the unconstrained non-negative
+integers and writes the renewal density as that variable's own ``logp``; no ``pm.Potential`` is
+needed. For a Poisson count law the split is the familiar identity
 
 ``Poisson(D; μ)·Binom(c; D, π) == Poisson(c; πμ)·Poisson(U; (1−π)μ)``
 
-and ``tests/test_reporting.py`` pins that identity. The totals form is the one taken here
-because it is also the only one that covers the negative-binomial models, whose thinned parts
-are not independent.
+For ``D ~ NB(μ, α)``, thinning gives ``c ~ NB(πμ, α)`` and
+``U | c ~ NB((1−π)μ(α+c)/(α+πμ), α+c)``. Thus one layer covers all seven models exactly; the
+negative-binomial pieces are conditionally rather than marginally independent. Both identities
+are pinned in ``tests/test_reporting.py``.
 
 The "as of" day
 ---------------
@@ -61,22 +59,14 @@ from end_of_outbreak.delay_distributions import (
     discretise_gamma,
 )
 
+UNREPORTED_INCIDENCE_VARIABLE = "unreported_incidence"
+"""Name of the free latent count block, present only when reporting is incomplete."""
+
 TRUE_INCIDENCE_VARIABLE = "true_incidence"
-"""Name of the latent true-count block, present only when reporting is incomplete."""
+"""Name of the deterministic true-count block, present only when reporting is incomplete."""
 
 LATENT_DAY_DIMENSION = "latent_day"
 """Coordinate for the latent true counts: days ``1 ... T``, day 0 being the fixed index."""
-
-MEAN_FLOOR = 1e-12
-"""Added to every count mean so that a structurally zero ``mu`` stays strictly positive.
-
-Small enough to leave the likelihood otherwise untouched, and needed because the latent
-totals can drive a day's mean to exactly zero, which ``Poisson``/``NegativeBinomial`` reject.
-Mirrors ``_POISSON_MU_FLOOR`` in ``endoutbreakvbd._inference_models``.
-"""
-
-PROBABILITY_FLOOR = 1e-6
-"""Lower clip on ``π_t``. Keeps the binomial well posed on days truncated to (almost) zero."""
 
 
 @dataclass(frozen=True)
@@ -86,7 +76,7 @@ class ReportingModel:
     Parameters
     ----------
     probability
-        Probability that a case is *ever* reported, in ``(0, 1]``. ``1.0`` with no delay means
+        Probability that a case is *ever* reported, in ``[0, 1]``. ``1.0`` with no delay means
         complete reporting, and every builder then produces exactly the model it produced
         before this module existed.
     delay
@@ -103,9 +93,9 @@ class ReportingModel:
 
     def __post_init__(self) -> None:
         probability = float(self.probability)
-        if not np.isfinite(probability) or not 0.0 < probability <= 1.0:
+        if not np.isfinite(probability) or not 0.0 <= probability <= 1.0:
             raise ValueError(
-                f"reporting probability must be finite and in (0, 1], got {self.probability}"
+                f"reporting probability must be finite and in [0, 1], got {self.probability}"
             )
         if self.max_lag < 0:
             raise ValueError(f"max_lag must be non-negative, got {self.max_lag}")
@@ -199,9 +189,9 @@ def build_observation(
 
     This is the single place any observed node is created. Under complete reporting it is
     ``moments`` evaluated at the data and the resulting ``pm.Poisson``/``pm.NegativeBinomial``
-    — exactly what the builders did inline before. Under incomplete reporting the true counts
-    become a latent ``pm.CustomDist`` whose ``logp`` *is* ``moments`` evaluated at itself, and
-    the observed node becomes the reporting binomial.
+    — exactly what the builders did inline before. Under incomplete reporting the unreported
+    cases become a scalar-support ``pm.CustomDist`` and the observed node is the corresponding
+    thinned marginal. Both use ``moments`` evaluated at ``reported + unreported``.
 
     Parameters
     ----------
@@ -237,110 +227,71 @@ def build_observation(
         _observe(name, mean=mean, dispersion=dispersion, observed=reported[days], dims=dims)
         return reported
 
-    probability = np.clip(
-        reporting.probability_by_day(reported.size, as_of_day=as_of_day),
-        PROBABILITY_FLOOR,
-        1.0,
-    )
-    unreportable = (probability <= PROBABILITY_FLOOR) & (reported > 0)
-    if unreportable.any():
+    probability = reporting.probability_by_day(reported.size, as_of_day=as_of_day)
+    impossible_days = days[(probability[days] == 0.0) & (reported[days] > 0)]
+    if impossible_days.size:
         raise ValueError(
-            f"days {np.flatnonzero(unreportable).tolist()} carry reported cases but have an "
+            f"days {impossible_days.tolist()} carry reported cases but have an "
             "effective reporting probability of zero; check the delay and the as-of day"
         )
 
+    expected_days = np.arange(1, reported.size, dtype=np.int64)
+    if not np.array_equal(days, expected_days):
+        raise ValueError(
+            "incomplete reporting must evaluate every day after the fixed index case; "
+            f"got days {days.tolist()}"
+        )
+
     index_case = pt.as_tensor_variable(reported[:1].astype(np.float64))
+    reported_after_index = pt.as_tensor_variable(reported[1:].astype(np.float64))
+
+    def _totals(unreported: Any) -> Any:
+        return pt.concatenate([index_case, reported_after_index + unreported])
 
     def _logp(value: Any, *args: Any) -> Any:
-        totals = pt.concatenate([index_case, value])
+        totals = _totals(value)
         mean, dispersion = moments(totals, *args)
-        distribution = (
-            pm.Poisson.dist(mu=mean + MEAN_FLOOR)
-            if dispersion is None
-            else pm.NegativeBinomial.dist(mu=mean + MEAN_FLOOR, alpha=dispersion)
+        hidden_mean, hidden_dispersion = _hidden_moments(
+            reported[days], mean=mean, dispersion=dispersion, probability=probability[days]
         )
-        return pm.logp(distribution, totals[days])
+        return _count_logp(value, mean=hidden_mean, dispersion=hidden_dispersion)
 
     def _dist(*args: Any) -> Any:
         # Initial values and prior-predictive draws only: `_logp` defines the density, so this
-        # cannot move the posterior. The mean is the reported count scaled up by the reporting
-        # probability, which is finite and of the right order.
-        return pm.Poisson.dist(mu=_initial_totals(reported, probability), shape=reported.size - 1)
+        # cannot move the posterior. The final positional argument is PyMC's symbolic `size`.
+        del args
+        return pm.Poisson.dist(
+            mu=_initial_unreported(reported, probability), shape=reported.size - 1
+        )
 
-    totals_rv = pm.CustomDist(
-        TRUE_INCIDENCE_VARIABLE,
+    unreported_rv = pm.CustomDist(
+        UNREPORTED_INCIDENCE_VARIABLE,
         *parameters,
         logp=_logp,
         dist=_dist,
         dtype="int64",
         dims=LATENT_DAY_DIMENSION,
-        signature=_signature(parameters),
-        # A binomial with n < observed has zero density, so a default initial point can start
-        # every chain at -inf. Start at the scaled-up reported counts, which cannot.
-        initval=_initial_totals(reported, probability),
+        # Scalar support with a vector batch is load-bearing: PyMC can then use its ordinary
+        # coordinate-wise Metropolis sweep instead of treating the block like a multinomial.
+        signature=_scalar_signature(parameters),
+        initval=_initial_unreported(reported, probability),
     )
-    totals = pt.concatenate([index_case, totals_rv])
-    pm.Binomial(
+    totals = _totals(unreported_rv)
+    pm.Deterministic(
+        TRUE_INCIDENCE_VARIABLE,
+        totals[1:],
+        dims=LATENT_DAY_DIMENSION,
+    )
+    mean, dispersion = moments(totals, *parameters)
+    _observe_thinned(
         name,
-        n=totals[days],
-        p=probability[days],
+        mean=mean,
+        dispersion=dispersion,
+        probability=probability[days],
         observed=reported[days],
         dims=dims,
     )
     return totals
-
-
-class SingleSiteCountMetropolis(pm.Metropolis):
-    """``pm.Metropolis`` restored to the per-coordinate sweep it already implements.
-
-    PyMC chooses between two proposals: a **joint** random walk that perturbs the whole block at
-    once, and a random-scan sweep (``elemwise_update``) that proposes one coordinate at a time
-    and accepts or rejects each on its own. It refuses the sweep for any *discrete* variable
-    whose distribution has multivariate support, and the true-count block is such a variable.
-
-    That guard is aimed at distributions like the multinomial, whose support dimensions are tied
-    together by a constraint so that moving one coordinate alone is always impossible. Here it
-    is a false positive. The block is multivariate only because the renewal recursion makes day
-    ``t`` depend on the days before it; its *support* is a product of independent non-negative
-    integers, and any single day can be raised or lowered by itself.
-
-    The joint proposal the guard falls back to does not merely mix slowly on a series this long
-    — it stops dead. Every day with no reported cases sits against the boundary ``D_t ≥ c_t``,
-    so a walk that perturbs a hundred counts at once is rejected essentially always; PyMC's
-    tuner responds by shrinking the scale until every rounded proposal is zero; and from then on
-    the block cannot move at any scale, because a proposal of exactly zero is always accepted
-    and the tuner reads that as success. The failure is silent — no divergences, healthy ``R̂``
-    on the continuous parameters, and latent totals frozen at their initial values for the whole
-    run — which is why ``tests/test_reporting.py`` checks that the block *moves* rather than
-    only that it samples.
-    """
-
-    name = "single_site_count_metropolis"
-
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        super().__init__(*args, **kwargs)
-        if not self.all_discrete:
-            raise ValueError("this step is for the discrete true-count block only")
-        # `self.discrete` carries one entry per coordinate, which is the bookkeeping width the
-        # sweep needs; PyMC sized these for a single joint proposal when it took the guard.
-        dimensions = int(self.discrete.size)
-        self.elemwise_update = True
-        self.enum_dims = np.arange(dimensions, dtype=int)
-        self.accept_rate_iter = np.zeros(dimensions, dtype=float)
-        self.accepted_iter = np.zeros(dimensions, dtype=bool)
-        self.accepted_sum = np.zeros(dimensions, dtype=int)
-
-
-def count_block_step(model: pm.Model) -> SingleSiteCountMetropolis | None:
-    """The step method for a model's latent true counts, or ``None`` if it has none.
-
-    Returned rather than assigned so that :mod:`end_of_outbreak.fitting` keeps ownership of the
-    call to ``pm.sample``; PyMC assigns the remaining variables around whatever it is given.
-    """
-    variable = next((rv for rv in model.free_RVs if rv.name == TRUE_INCIDENCE_VARIABLE), None)
-    if variable is None:
-        return None
-    return SingleSiteCountMetropolis(vars=[variable], model=model)
 
 
 def thin(
@@ -370,8 +321,8 @@ def thin(
     return np.asarray(reported, dtype=np.int64)
 
 
-def _signature(parameters: Sequence[Any]) -> str:
-    """A ``CustomDist`` signature for parameters that do not share the output's shape.
+def _scalar_signature(parameters: Sequence[Any]) -> str:
+    """A scalar-support ``CustomDist`` signature for unrelated model parameters.
 
     Without one, PyMC tries to broadcast every distribution parameter against the variable's
     own shape, and a latent block indexed by cohort day is not the same length as the counts
@@ -381,7 +332,62 @@ def _signature(parameters: Sequence[Any]) -> str:
         "()" if getattr(parameter, "ndim", 0) == 0 else f"(p{index})"
         for index, parameter in enumerate(parameters)
     )
-    return f"{inputs}->(t)"
+    return f"{inputs}->()"
+
+
+def _safe_positive(value: Any) -> Any:
+    """A positive stand-in used only in an inactive branch of an exact zero-mean logp."""
+    return pt.switch(pt.gt(value, 0.0), value, 1.0)
+
+
+def _count_logp(value: Any, *, mean: Any, dispersion: Any | None) -> Any:
+    """Exact Poisson/NB logp, including the point mass obtained when ``mean == 0``."""
+    distribution = (
+        pm.Poisson.dist(mu=_safe_positive(mean))
+        if dispersion is None
+        else pm.NegativeBinomial.dist(mu=_safe_positive(mean), alpha=_safe_positive(dispersion))
+    )
+    ordinary = pm.logp(distribution, value)
+    zero_mean = pt.switch(pt.eq(value, 0), 0.0, -np.inf)
+    return pt.switch(pt.eq(mean, 0.0), zero_mean, ordinary)
+
+
+def _hidden_moments(
+    reported: Any, *, mean: Any, dispersion: Any | None, probability: Any
+) -> CountMoments:
+    """Moments of unreported counts conditional on the reported count."""
+    hidden_fraction = 1.0 - probability
+    if dispersion is None:
+        return hidden_fraction * mean, None
+    hidden_dispersion = dispersion + reported
+    denominator = dispersion + probability * mean
+    hidden_mean = hidden_fraction * mean * hidden_dispersion / _safe_positive(denominator)
+    return hidden_mean, hidden_dispersion
+
+
+def _observe_thinned(
+    name: str,
+    *,
+    mean: Any,
+    dispersion: Any | None,
+    probability: Any,
+    observed: NDArray[np.int64],
+    dims: str,
+) -> None:
+    """Observed marginal after thinning, with an exact structurally-zero mean."""
+    thinned_mean = probability * mean
+    if dispersion is None:
+
+        def logp(value: Any, distribution_mean: Any) -> Any:
+            return _count_logp(value, mean=distribution_mean, dispersion=None)
+
+        pm.CustomDist(name, thinned_mean, logp=logp, observed=observed, dims=dims)
+        return
+
+    def logp(value: Any, distribution_mean: Any, alpha: Any) -> Any:
+        return _count_logp(value, mean=distribution_mean, dispersion=alpha)
+
+    pm.CustomDist(name, thinned_mean, dispersion, logp=logp, observed=observed, dims=dims)
 
 
 def _observe(
@@ -394,9 +400,14 @@ def _observe(
     pm.NegativeBinomial(name, mu=mean, alpha=dispersion, observed=observed, dims=dims)
 
 
-def _initial_totals(
+def _initial_unreported(
     reported: NDArray[np.int64], probability: NDArray[np.float64]
 ) -> NDArray[np.int64]:
-    """Starting value for the latent totals over days ``1 ... T``: at least what was reported."""
-    scaled = np.round(reported[1:] / probability[1:])
-    return np.maximum(scaled, reported[1:]).astype(np.int64)
+    """Finite starting value for the unreported counts over days ``1 ... T``."""
+    ratio = np.divide(
+        1.0 - probability[1:],
+        probability[1:],
+        out=np.zeros(reported.size - 1, dtype=np.float64),
+        where=probability[1:] > 0.0,
+    )
+    return np.round(reported[1:] * ratio).astype(np.int64)

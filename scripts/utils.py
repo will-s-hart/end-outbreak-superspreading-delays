@@ -26,7 +26,7 @@ from __future__ import annotations
 import datetime
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import matplotlib
 import matplotlib.dates as mdates
@@ -59,7 +59,9 @@ MODEL_COLOURS: dict[str, str] = {
 DECISION_THRESHOLDS: tuple[float, ...] = (0.05, 0.01)
 """The two RAC levels the end-of-outbreak literature declares on; drawn on every RAC panel."""
 
-REPORTING_LINESTYLES: dict[float, str] = {1.0: "-", 0.8: "--", 0.6: ":"}
+type ReportingLinestyle = Literal["-", "--", ":"]
+
+REPORTING_LINESTYLES: dict[float, ReportingLinestyle] = {1.0: "-", 0.8: "--", 0.6: ":"}
 """Linestyle per assumed reporting probability, solid for complete reporting.
 
 The same solid/dashed/dotted ladder ``risk_metrics_panel`` uses for the three risk estimands,
@@ -103,7 +105,7 @@ def model_colour(model: str) -> str:
     return MODEL_COLOURS[model]
 
 
-def reporting_linestyle(probability: float) -> str:
+def reporting_linestyle(probability: float) -> ReportingLinestyle:
     """Linestyle for an assumed reporting probability, raising on one with no style.
 
     No fallback, for the reason the readers of ``model_evidence`` get none: a sweep silently

@@ -23,7 +23,7 @@ import numpy as np
 import pytest
 
 from end_of_outbreak import delay_distributions as dd
-from end_of_outbreak import fitting, outbreak_data, pymc_models, refit_risk
+from end_of_outbreak import fitting, outbreak_data, pymc_models, refit_risk, reporting
 from end_of_outbreak import risk_of_additional_cases as rac
 from end_of_outbreak.model_specifications import LogNormalPrior, specification_of
 
@@ -61,6 +61,62 @@ def test_a_first_day_outside_the_window_is_refused():
         refit_risk.conditioning_days(COUNTS.size, first_day=0)
     with pytest.raises(ValueError, match="first_day"):
         refit_risk.conditioning_days(COUNTS.size, first_day=COUNTS.size)
+
+
+def test_sparse_historical_snapshots_infer_days_and_allow_corrections():
+    early = COUNTS[:5].copy()
+    late = COUNTS[:9].copy()
+    late[2] -= 1  # a corrected history need not dominate the earlier snapshot
+    resolved = refit_risk._resolve_snapshots(
+        (early, late), days=None, reporting_model=reporting.ReportingModel(probability=0.8)
+    )
+    assert [day for day, _ in resolved] == [4, 8]
+    np.testing.assert_array_equal(resolved[0][1], early)
+    np.testing.assert_array_equal(resolved[1][1], late)
+
+
+def test_snapshot_lengths_must_increase_and_replace_the_days_argument():
+    snapshots = (COUNTS[:5], COUNTS[:9])
+    with pytest.raises(ValueError, match="days cannot be supplied"):
+        refit_risk._resolve_snapshots(
+            snapshots,
+            days=np.array([4, 8]),
+            reporting_model=reporting.COMPLETE_REPORTING,
+        )
+    with pytest.raises(ValueError, match="increase strictly"):
+        refit_risk._resolve_snapshots(
+            (COUNTS[:5], COUNTS[:5]),
+            days=None,
+            reporting_model=reporting.COMPLETE_REPORTING,
+        )
+
+
+def test_a_delayed_reporting_curve_requires_historical_snapshots():
+    delayed = reporting.ReportingModel(probability=0.8, delay=dd.GammaDelay(mean=2.0, sd=1.0))
+    with pytest.raises(ValueError, match="requires a tuple"):
+        refit_risk._resolve_snapshots(COUNTS, days=None, reporting_model=delayed)
+    resolved = refit_risk._resolve_snapshots(
+        (COUNTS[:5], COUNTS[:9]), days=None, reporting_model=delayed
+    )
+    assert [day for day, _ in resolved] == [4, 8]
+
+
+def test_snapshot_tuple_drives_the_output_days():
+    early = COUNTS[:4].copy()
+    late = COUNTS[:7].copy()
+    late[2] -= 1
+    result = refit_risk.risk_by_refitting(
+        "cori",
+        (early, late),
+        delays=SHORT_DELAYS,
+        switch_day=SWITCH_DAY,
+        R_pre=PRIOR,
+        R_post=PRIOR,
+        reporting_model=reporting.ReportingModel(probability=0.8),
+        sampler=fitting.SamplerSettings(draws=30, tune=30, chains=2, seed=8),
+        seed_for_day=lambda day: day,
+    )
+    np.testing.assert_array_equal(result.estimate.days, np.array([3, 6]))
 
 
 # --- 1. the driver is the closed form on a truncated series ---------------------------------
@@ -175,6 +231,55 @@ def test_the_final_day_reuses_the_fit_it_is_handed():
         days=np.array([last]),
     )
     np.testing.assert_allclose(result.estimate.log_no_further_cases, expected.log_no_further_cases)
+
+    corrected = COUNTS.copy()
+    corrected[-1] += 1
+    with pytest.raises(ValueError, match="reported counts"):
+        refit_risk.risk_by_refitting(
+            "sse",
+            corrected,
+            delays=SHORT_DELAYS,
+            switch_day=SWITCH_DAY,
+            R_pre=PRIOR,
+            R_post=PRIOR,
+            k=K,
+            days=np.array([last]),
+            sampler=FAST,
+            final_day_fit=idata,
+        )
+
+    wrong_model = idata.copy(deep=True)
+    wrong_model.attrs[fitting.MODEL_ATTRIBUTE] = "dlo"
+    with pytest.raises(ValueError, match="records model"):
+        refit_risk._validate_reused_fit(
+            wrong_model,
+            specification=specification_of("sse"),
+            snapshot=COUNTS,
+            day=last,
+            reporting_model=reporting.COMPLETE_REPORTING,
+        )
+
+    wrong_reporting = idata.copy(deep=True)
+    wrong_reporting.attrs[fitting.REPORTING_PROBABILITY_ATTRIBUTE] = 0.8
+    with pytest.raises(ValueError, match="reporting assumption"):
+        refit_risk._validate_reused_fit(
+            wrong_reporting,
+            specification=specification_of("sse"),
+            snapshot=COUNTS,
+            day=last,
+            reporting_model=reporting.COMPLETE_REPORTING,
+        )
+
+    wrong_day = idata.copy(deep=True)
+    wrong_day.attrs[fitting.AS_OF_DAY_ATTRIBUTE] = last - 1
+    with pytest.raises(ValueError, match="as-of day"):
+        refit_risk._validate_reused_fit(
+            wrong_day,
+            specification=specification_of("sse"),
+            snapshot=COUNTS,
+            day=last,
+            reporting_model=reporting.COMPLETE_REPORTING,
+        )
 
 
 # --- 2 and 3. every window builds, and every latent is accounted for -------------------------

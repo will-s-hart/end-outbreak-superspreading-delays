@@ -20,7 +20,7 @@ import numpy as np
 import pytest
 
 from end_of_outbreak import delay_distributions as dd
-from end_of_outbreak import filtered_risk, fitting
+from end_of_outbreak import filtered_risk, fitting, reporting
 from end_of_outbreak import risk_of_additional_cases as rac
 
 COUNTS = np.array([1, 0, 2, 1, 0, 3, 0, 1, 0, 0, 1, 0])
@@ -195,6 +195,7 @@ def test_thinning_keeps_the_chains_intact_and_in_order():
         R_post=np.arange(total, dtype=float),
         k=np.full(total, K),
         sampled_infectivity=np.tile(np.arange(total, dtype=float)[:, None], (1, COUNTS.size)),
+        true_counts=np.tile(np.arange(total, dtype=float)[:, None], (1, COUNTS.size)),
         n_chains=n_chains,
     )
     thinned = filtered_risk.thin_draws(state, 20)
@@ -204,6 +205,8 @@ def test_thinning_keeps_the_chains_intact_and_in_order():
     for chain in range(n_chains):
         assert np.all(kept[chain] // per_chain == chain)  # each block stays in its own chain
     assert np.all(np.diff(thinned.R_pre) > 0)  # and in order
+    assert thinned.true_counts is not None
+    np.testing.assert_array_equal(thinned.true_counts[:, 0], thinned.R_pre)
 
 
 def test_thinning_upwards_is_a_no_op():
@@ -214,3 +217,45 @@ def test_thinning_upwards_is_a_no_op():
 def test_thinning_below_the_chain_count_is_refused():
     with pytest.raises(ValueError, match="cannot thin"):
         filtered_risk.thin_draws(_fixed_state(8, n_chains=4), 2)
+
+
+def test_delayed_reporting_is_refused_by_the_single_fit_route():
+    with pytest.raises(NotImplementedError, match="historical reported-count snapshot"):
+        filtered_risk.risk_by_filtering(
+            "cori",
+            _fixed_state(),
+            counts=COUNTS,
+            delays=SHORT_DELAYS,
+            switch_day=SWITCH_DAY,
+            reporting_model=reporting.ReportingModel(
+                probability=0.8, delay=dd.GammaDelay(mean=2.0, sd=1.0)
+            ),
+        )
+
+
+def test_dlo_filtered_rac_remains_explicitly_unsupported_under_under_reporting():
+    with pytest.raises(NotImplementedError, match="future force-of-infection profile"):
+        filtered_risk.risk_by_filtering(
+            "dlo",
+            _fixed_state(),
+            counts=COUNTS,
+            delays=SHORT_DELAYS,
+            switch_day=SWITCH_DAY,
+            reporting_model=reporting.ReportingModel(probability=0.8),
+        )
+
+
+def test_sse_filtered_rac_uses_the_negative_binomial_count_adaptation():
+    result = filtered_risk.risk_by_filtering(
+        "sse",
+        _fixed_state(2),
+        counts=COUNTS,
+        delays=SHORT_DELAYS,
+        switch_day=SWITCH_DAY,
+        days=np.array([COUNTS.size - 1]),
+        n_particles=256,
+        reporting_model=reporting.ReportingModel(probability=0.8),
+        rng=np.random.default_rng(18),
+    )
+    assert np.isfinite(result.estimate.log_no_further_cases).all()
+    assert result.diagnostics is not None

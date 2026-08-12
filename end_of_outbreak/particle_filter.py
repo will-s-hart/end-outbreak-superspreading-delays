@@ -20,13 +20,10 @@ completely different code path, which is what makes it a usable regression test 
 itself before it is trusted on SSI.
 
 Under incomplete reporting the counts join the state, and adaptation survives because Poisson
-thinning splits the day exactly: ``c_t | μ_t ~ Poisson(π_t μ_t)`` independently of
-``D_t − c_t | c_t, μ_t ~ Poisson((1 − π_t) μ_t)``. The filter therefore draws the *unreported*
-cases and adds them to what was reported, rather than drawing the total and hoping it clears
-the data — see :func:`_adapted_counts`. That keeps every model whose count law is Poisson.
-DLO and SSE, whose count law is negative binomial because their dispersion is already
-marginalised into it, admit the analogous adapted proposal but do not implement it, and refuse
-rather than degenerate.
+and negative-binomial thinning both give a closed-form reported marginal and an exact conditional
+law for the unreported cases. The filter therefore draws only the *unreported* cases and adds
+them to what was reported, rather than drawing the total and hoping it clears the data — see
+:func:`_adapted_counts`.
 
 Filtering versus smoothing — do not blur them
 ---------------------------------------------
@@ -180,8 +177,7 @@ def filter_naive(
         drawn from ``Poisson((1 − π_t) μ_t)`` and added to the reported ones, and the particle
         is weighted by ``Poisson(c_t; π_t μ_t)``. The filter stays fully adapted throughout —
         in the counts by that thinning split, and in the latent Gamma, which is still drawn
-        from its exact conditional given the day's now-imputed count. ``dlo`` and ``sse`` are
-        refused, since their count law is negative binomial rather than Poisson.
+        from its exact conditional given the day's now-imputed count.
     rng
         NumPy generator; a fresh default one is used if omitted.
     """
@@ -207,16 +203,6 @@ def filter_naive(
     probability = reporting_model.probability_by_day(
         n_days, as_of_day=n_days - 1 if as_of_day is None else as_of_day
     )
-    if not complete and specification.has_dispersion and not specification.has_latents:
-        # dlo and sse: the dispersion is marginalised into the count law, so the day's counts
-        # are negative binomial and the Poisson thinning split does not apply. An adapted
-        # proposal does exist — thinning a negative binomial leaves one — but nothing needs it,
-        # and proposing from the prior instead would degenerate on any day carrying cases.
-        raise NotImplementedError(
-            f"model {specification.name!r} has a negative-binomial count law, so the filter's "
-            "adapted Poisson proposal for the unreported cases does not apply. Use the fitted "
-            "route ('refit_daily') for it under incomplete reporting"
-        )
     k = parameters.require_k(specification) if specification.has_dispersion else None
     R_by_day = renewal.reproduction_number_by_day(
         parameters.R_pre, parameters.R_post, n_days=n_days, switch_day=switch_day
@@ -251,6 +237,7 @@ def filter_naive(
     resampled = np.zeros(days.size, dtype=bool)
     day_counts = np.zeros(n_particles, dtype=np.float64)
     count_mean = np.zeros(n_particles, dtype=np.float64)
+    count_dispersion: NDArray[np.float64] | None = None
 
     for position, day in enumerate(days):
         lags = min(int(day), w.size)
@@ -264,12 +251,14 @@ def filter_naive(
                 k=k,
             )
         else:
-            # Every model that reaches here is Poisson in the counts, so the weight is the
-            # thinned Poisson at the reported count and the day's totals are drawn afterwards,
-            # from whichever particles survive the resampling.
             count_mean = float(R_by_day[day]) * force_of_infection
-            log_density = _poisson_log_density(
-                int(counts[day]), count_mean * float(probability[day])
+            count_dispersion = _count_dispersion(
+                specification, force_of_infection=force_of_infection, k=k
+            )
+            log_density = _count_log_density(
+                int(counts[day]),
+                mean=count_mean * float(probability[day]),
+                dispersion=count_dispersion,
             )
 
         increment = float(scipy.special.logsumexp(log_weights + log_density))
@@ -290,11 +279,19 @@ def filter_naive(
             if true_counts is not None:
                 true_counts = true_counts[indices]
                 count_mean = count_mean[indices]
+                if count_dispersion is not None:
+                    count_dispersion = count_dispersion[indices]
             log_weights = np.full(n_particles, -np.log(n_particles))
             resampled[position] = True
 
         if true_counts is not None:
-            day_counts = _adapted_counts(int(counts[day]), count_mean, float(probability[day]), rng)
+            day_counts = _adapted_counts(
+                int(counts[day]),
+                count_mean,
+                float(probability[day]),
+                rng,
+                dispersion=count_dispersion,
+            )
             true_counts[:, day] = day_counts
         # Y_t is conditionally independent of everything else given I_t, so it is drawn after
         # the weighting rather than proposed before it: the filter is fully adapted. Under
@@ -453,10 +450,10 @@ def filter_onset_anchored(
         if complete:
             log_density = _poisson_log_density(int(counts[day]), mean_onsets)
         else:
-            # The onsets are Poisson in every onset-anchored model, so thinning splits the day
-            # exactly: weight by the reported part, draw the unreported part after resampling.
-            log_density = _poisson_log_density(
-                int(counts[day]), mean_onsets * float(probability[day])
+            log_density = _count_log_density(
+                int(counts[day]),
+                mean=mean_onsets * float(probability[day]),
+                dispersion=None,
             )
         increment = float(scipy.special.logsumexp(log_weights + log_density))
         if not np.isfinite(increment):
@@ -643,6 +640,8 @@ def _adapted_counts(
     mean: NDArray[np.float64],
     probability: float,
     rng: np.random.Generator,
+    *,
+    dispersion: NDArray[np.float64] | None = None,
 ) -> NDArray[np.float64]:
     """Draw a day's true counts from their exact conditional given the reported count.
 
@@ -657,11 +656,30 @@ def _adapted_counts(
     filter left. Drawing the *unreported* cases instead keeps the filter fully adapted in the
     counts, as it already is in the Gamma block.
 
-    The matching importance weight is the first factor, ``Poisson(c_t; π_t μ_t)``. The caller
-    evaluates it before resampling and calls this afterwards, so that surviving particles draw
-    fresh counts rather than carrying duplicated ones.
+    For ``D ~ NB(μ, α)``, the reported marginal is ``NB(πμ, α)`` and the conditional hidden
+    count is ``NB((1−π)μ(α+c)/(α+πμ), α+c)``. The caller evaluates the matching reported
+    marginal before resampling and calls this afterwards, so surviving particles draw fresh
+    counts rather than carrying duplicated ones.
     """
-    unreported = rng.poisson(np.maximum(mean, 0.0) * (1.0 - probability))
+    mean = np.maximum(mean, 0.0)
+    if dispersion is None:
+        unreported = rng.poisson(mean * (1.0 - probability))
+        return reported + unreported.astype(np.float64)
+
+    hidden_dispersion = dispersion + reported
+    denominator = dispersion + probability * mean
+    hidden_mean = np.divide(
+        (1.0 - probability) * mean * hidden_dispersion,
+        denominator,
+        out=np.zeros_like(mean),
+        where=denominator > 0.0,
+    )
+    unreported = np.zeros(mean.shape, dtype=np.int64)
+    stochastic = hidden_mean > 0.0
+    if stochastic.any():
+        alpha = hidden_dispersion[stochastic]
+        success = alpha / (alpha + hidden_mean[stochastic])
+        unreported[stochastic] = rng.negative_binomial(alpha, success)
     return reported + unreported.astype(np.float64)
 
 
@@ -680,6 +698,42 @@ def _poisson_log_density(count: int, mean: NDArray[np.float64]) -> NDArray[np.fl
     if count > 0:
         density[~driven] = -np.inf
     return density
+
+
+def _count_log_density(
+    count: int,
+    *,
+    mean: NDArray[np.float64],
+    dispersion: NDArray[np.float64] | None,
+) -> NDArray[np.float64]:
+    """Poisson/NB log density with a point mass at zero when the mean is zero."""
+    if dispersion is None:
+        return _poisson_log_density(count, mean)
+    density = np.zeros(mean.size, dtype=np.float64)
+    driven = mean > 0.0
+    if driven.any():
+        alpha = dispersion[driven]
+        density[driven] = scipy.stats.nbinom.logpmf(count, alpha, alpha / (alpha + mean[driven]))
+    if count > 0:
+        density[~driven] = -np.inf
+    return density
+
+
+def _count_dispersion(
+    specification: ModelSpecification,
+    *,
+    force_of_infection: NDArray[np.float64],
+    k: float | None,
+) -> NDArray[np.float64] | None:
+    """Dispersion of the conditional daily count law, or ``None`` for Poisson."""
+    if specification.name not in ("dlo", "sse"):
+        return None
+    assert k is not None
+    return (
+        np.full(force_of_infection.shape, k)
+        if specification.name == "dlo"
+        else k * force_of_infection
+    )
 
 
 def _observation_log_density(
@@ -703,18 +757,9 @@ def _observation_log_density(
         return np.full(density.shape, -np.inf if count > 0 else 0.0)
     mean_incidence = R * force_of_infection[driven]
 
-    if specification.name in ("cori", "ssi"):
-        density[driven] = scipy.stats.poisson.logpmf(count, mean_incidence)
-    else:
-        assert k is not None  # dlo and sse both carry a dispersion parameter
-        dispersion = (
-            np.full(mean_incidence.shape, k)
-            if specification.name == "dlo"
-            else k * force_of_infection[driven]
-        )
-        density[driven] = scipy.stats.nbinom.logpmf(
-            count, dispersion, dispersion / (dispersion + mean_incidence)
-        )
+    dispersion = _count_dispersion(specification, force_of_infection=force_of_infection, k=k)
+    driven_dispersion = None if dispersion is None else dispersion[driven]
+    density[driven] = _count_log_density(count, mean=mean_incidence, dispersion=driven_dispersion)
     if count > 0:
         density[~driven] = -np.inf
     return density

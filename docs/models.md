@@ -178,11 +178,13 @@ test degenerates into checking a reimplementation against itself.
 ## Incomplete reporting
 
 `reporting.py` is the whole of it. Every model already specifies one per-day count density for
-the **true** onsets; reporting sits on top of that and is the same for all seven:
+the **true** onsets. Write `C_t` for reported cases, `U_t` for unreported cases and
+`D_t = C_t + U_t`. Reporting uses the exact thinning factorisation of that density:
 
 ```
-D_t ~ CountDist_t(θ, D_{<t}, latents)      the model's own likelihood, at the true counts
-c_t | D_t ~ Binomial(D_t, π_t)             the reporting layer
+Poisson: C_t ~ Pois(π_t μ_t), U_t ~ Pois((1−π_t) μ_t)
+NB:      C_t ~ NB(π_t μ_t, α_t)
+         U_t | C_t ~ NB((1−π_t) μ_t (α_t+C_t)/(α_t+π_t μ_t), α_t+C_t)
 ```
 
 so a builder supplies a `moments(totals) -> (mean, dispersion)` callable — the expression it
@@ -190,13 +192,13 @@ already needed for its own observation node — and `reporting.build_observation
 `COMPLETE_REPORTING` returns exactly the graph each builder produced before this existed, which
 is what `tests/test_reporting.py` pins first.
 
-**The latent is the totals, not the unreported cases.** Both work, and they are the same model
-by the Poisson-thinning identity `Poisson(D; μ)·Binom(c; D, π) == Poisson(c; πμ)·Poisson(U; (1−π)μ)`.
-Carrying `D` makes the self-referential renewal density a function of the latent *itself*, so it
-is expressible as that latent's own `logp` and needs no `pm.Potential` anywhere. It is also the
-only form that covers the negative-binomial models, whose thinned parts are not independent.
-`end-of-outbreak-vbd` has both: `_inference_models._build_underreporting_model` carries `U`, and
-its `underreporting_sandbox/models.py` offers this one behind `likelihood="binomial"`.
+**The latent is `U`, not the totals.** `unreported_incidence` is a scalar-support,
+vector-batched `CustomDist`; `true_incidence` is the deterministic `C + U` retained for
+downstream compatibility. Its `logp` evaluates the model's moments at those totals and applies
+the relevant conditional density above. The reported marginal is an ordinary observed node.
+This is algebraically identical to `CountDist(D) Binomial(C | D, π)` for every model, including
+DLO and SSE, and needs no `pm.Potential`. The identities are pinned numerically and against all
+seven builders in `tests/test_reporting.py`.
 
 Three things follow, and each is load-bearing:
 
@@ -215,37 +217,18 @@ Three things follow, and each is load-bearing:
   `guard_zero_scale` does it; an unguarded `pm.icdf` at a zero shape returns `nan` and poisons
   the whole vector.
 
-### The one step this project chooses for itself
+### Count-block sampling
 
-Step assignment is PyMC's everywhere else, and under incomplete reporting it produces
-`CompoundStep: NUTS[R_pre, R_post, <latent>_uniform] + <a Metropolis>[true_incidence]`. The
-count block is the exception: `fitting.fit_model` hands it
-`reporting.SingleSiteCountMetropolis` rather than letting PyMC pick.
+Declaring scalar support is load-bearing. PyMC then recognises that the vector is a batch of
+unconstrained non-negative integer coordinates and assigns ordinary Metropolis with
+`elemwise_update=True`. No custom step method or special assignment remains in `fit_model`.
+This avoids the frozen joint-vector proposal that motivated the older custom sampler while
+leaving sampler selection entirely to PyMC. Tests inspect the automatic assignment and verify
+movement on a long block.
 
-PyMC's `Metropolis` already implements both proposals that matter — a *joint* random walk over
-the block, and a random-scan sweep that proposes one coordinate at a time — and it refuses the
-sweep for any discrete variable with multivariate support. That guard is aimed at distributions
-like the multinomial, whose support dimensions are tied together by a constraint. It is a false
-positive here: `true_incidence` is multivariate only because the renewal recursion makes day `t`
-depend on the days before it, while its *support* is a product of independent non-negative
-integers, so any one day can move by itself.
-
-The joint proposal the guard falls back to does not mix slowly — past about twenty latent days
-it **stops dead**. Every day reporting nothing sits against the boundary `D_t ≥ c_t`, so a walk
-perturbing a hundred counts at once is rejected essentially always; PyMC's tuner shrinks the
-scale until every rounded proposal is zero; and a proposal of exactly zero is always accepted,
-which the tuner reads as success. On the 111-day Équateur series that froze all 110 counts at
-their initial values, with no divergences and `R̂ = 1.00` on every continuous parameter, because
-those are sampled by NUTS regardless. Every downstream number was then conditioned on a fixed
-inflation of the reported series rather than on a posterior over the true one. Restoring the
-sweep gives `R̂ ≤ 1.02` and bulk ESS in the hundreds across the block, at roughly five times the
-sampling cost of a completely reported fit.
-
-`tests/test_reporting.py` therefore checks that the counts **move**, on a series long enough to
-freeze, rather than only that the fit runs.
-
-`initval` is not optional either. `Binomial(c; n, π)` is zero for `n < c`, so a default initial
-point can start every chain at `-inf`; the layer starts the totals at `max(round(c/π), c)`.
+The target has no floors. Zero means are exact point masses, `π=0` and `π=1` are handled by the
+same identities, and a reported case is rejected only when its effective reporting probability
+is exactly zero. The initial `U` is a finite non-negative approximation to `C(1−π)/π`.
 
 The other thing `fitting.fit_model` has to know is that `target_accept` is a NUTS setting and
 PyMC rejects it when nothing is sampled by NUTS — which happens only if every continuous

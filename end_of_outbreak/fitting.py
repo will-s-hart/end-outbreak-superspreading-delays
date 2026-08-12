@@ -44,7 +44,9 @@ THRESHOLD_ATTRIBUTE = "negligible_latent_threshold"
 REPORTING_PROBABILITY_ATTRIBUTE = "reporting_probability"
 REPORTING_DELAY_MEAN_ATTRIBUTE = "reporting_delay_mean"
 REPORTING_DELAY_SD_ATTRIBUTE = "reporting_delay_sd"
+REPORTING_MAX_LAG_ATTRIBUTE = "reporting_max_lag"
 AS_OF_DAY_ATTRIBUTE = "as_of_day"
+REPORTED_COUNTS_ATTRIBUTE = "reported_counts"
 
 NETCDF_ENGINE = "h5netcdf"
 """A fit has groups, so it is written as NETCDF4, which needs an HDF5 backend.
@@ -104,10 +106,9 @@ def fit_model(
         conventions. ``latent_parameterisation`` is required for a model with latents.
     sampler
         NUTS settings; the defaults of :class:`SamplerSettings` if omitted. Step assignment is
-        left to PyMC — that is what the sampler benchmark validated — with the single exception
-        of the latent true-count block under incomplete reporting, which is handed
-        :class:`end_of_outbreak.reporting.SingleSiteCountMetropolis` because PyMC's own choice
-        for it silently stops moving on a series this long.
+        left to PyMC — that is what the sampler benchmark validated. The latent unreported-count
+        block declares scalar support, so PyMC's ordinary Metropolis assignment updates its
+        coordinates one at a time.
 
         The chains are run **in this process**, one after another. Parallelism belongs a level
         up, over the conditioning days of a refit curve, where there are a hundred independent
@@ -153,11 +154,6 @@ def fit_model(
     overrides: dict[str, Any] = (
         {"target_accept": settings.target_accept} if _has_continuous_variables(built) else {}
     )
-    # The one step PyMC would get wrong; everything else it assigns around this. See
-    # `reporting.SingleSiteCountMetropolis` for what the default does to a long series.
-    count_step = reporting.count_block_step(built)
-    if count_step is not None:
-        overrides["step"] = [count_step]
     with built:
         idata = pm.sample(
             draws=settings.draws,
@@ -194,7 +190,9 @@ def fit_model(
             REPORTING_DELAY_SD_ATTRIBUTE: (
                 np.nan if resolved_reporting.delay is None else resolved_reporting.delay.sd
             ),
+            REPORTING_MAX_LAG_ATTRIBUTE: int(resolved_reporting.max_lag),
             AS_OF_DAY_ATTRIBUTE: resolved_as_of_day,
+            REPORTED_COUNTS_ATTRIBUTE: ",".join(str(int(count)) for count in counts),
         }
     )
     return idata
@@ -294,10 +292,22 @@ def fitted_reporting(idata: xr.DataTree) -> reporting.ReportingModel:
     mean = float(idata.attrs.get(REPORTING_DELAY_MEAN_ATTRIBUTE, np.nan))
     sd = float(idata.attrs.get(REPORTING_DELAY_SD_ATTRIBUTE, np.nan))
     delay = None if np.isnan(mean) or np.isnan(sd) else GammaDelay(mean=mean, sd=sd)
-    return reporting.ReportingModel(probability=probability, delay=delay)
+    max_lag = int(idata.attrs.get(REPORTING_MAX_LAG_ATTRIBUTE, reporting.DEFAULT_MAX_LAG))
+    return reporting.ReportingModel(probability=probability, delay=delay, max_lag=max_lag)
 
 
 def fitted_as_of_day(idata: xr.DataTree, counts: NDArray[np.int64]) -> int:
     """The day a fit's window was observed on, defaulting to its last day."""
     value = idata.attrs.get(AS_OF_DAY_ATTRIBUTE)
     return len(counts) - 1 if value is None else int(value)
+
+
+def fitted_reported_counts(idata: xr.DataTree) -> NDArray[np.int64] | None:
+    """The complete reported snapshot fitted, when recorded by this code version."""
+    value = idata.attrs.get(REPORTED_COUNTS_ATTRIBUTE)
+    if value is None:
+        return None
+    text = str(value)
+    if not text:
+        return np.empty(0, dtype=np.int64)
+    return np.fromstring(text, dtype=np.int64, sep=",")

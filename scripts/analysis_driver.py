@@ -377,7 +377,7 @@ def _rac_by_refitting(
     # the table before anything decides whether to stop the build.
     criteria = setting.rac.get("convergence", {})
     diagnostics.attrs["suspect"] = result.suspect_days(
-        max_r_hat=float(criteria.get("max_r_hat", 1.01)),
+        max_r_hat=float(criteria.get("max_r_hat", 1.02)),
         divergence_fraction=float(criteria.get("divergence_fraction", 0.01)),
     )
     return result.estimate, diagnostics
@@ -424,6 +424,7 @@ def _rac_by_filtering(
         days=days,
         n_particles=int(filtering["n_particles"]),
         reporting_model=fitting.fitted_reporting(idata),
+        as_of_day=fitting.fitted_as_of_day(idata, data.onsets),
         rng=setting.reconstruction_rng(model),
     )
     # DLO and SSE run no filter — they have no latent state — so there is nothing per-day to

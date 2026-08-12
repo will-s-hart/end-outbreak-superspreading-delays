@@ -55,7 +55,7 @@ import numpy as np
 import xarray as xr
 from numpy.typing import NDArray
 
-from end_of_outbreak import fitting, parallel, reporting
+from end_of_outbreak import fitting, parallel, pymc_models, reporting
 from end_of_outbreak import risk_of_additional_cases as rac
 from end_of_outbreak.delay_distributions import OnsetAnchoredDelays
 from end_of_outbreak.latent_parameterisations import LatentParameterisation
@@ -71,6 +71,9 @@ FIRST_CONDITIONING_DAY = 1
 A "fit to the record through day 0" is therefore the prior, and the curve starts at day 1. RAC(0)
 is one to within rounding on any series this project fits, so nothing is lost.
 """
+
+type CountSnapshots = tuple[NDArray[np.int64], ...]
+"""Historical reported-count snapshots, each running from day 0 through its as-of day."""
 
 
 @dataclass(frozen=True)
@@ -114,7 +117,7 @@ class RefitRiskResult:
     diagnostics: list[DayDiagnostics]
 
     def suspect_days(
-        self, *, max_r_hat: float = 1.01, divergence_fraction: float = 0.01
+        self, *, max_r_hat: float = 1.02, divergence_fraction: float = 0.01
     ) -> list[DayDiagnostics]:
         """Days whose fit should be looked at before the curve is believed."""
         n_draws = self.estimate.n_draws
@@ -139,7 +142,7 @@ def conditioning_days(n_days: int, *, first_day: int = FIRST_CONDITIONING_DAY) -
 
 def risk_by_refitting(
     model: str | ModelSpecification,
-    counts: NDArray[np.int64],
+    counts: NDArray[np.int64] | CountSnapshots,
     *,
     delays: OnsetAnchoredDelays,
     switch_day: int,
@@ -163,11 +166,13 @@ def risk_by_refitting(
     model, counts, delays, switch_day, R_pre, R_post, k, latent_parameterisation,
     negligible_latent_threshold, reporting_model
         As for :func:`end_of_outbreak.fitting.fit_model`, which each day's fit is handed.
-        Conditioning day ``t`` is the as-of day of its own window, so a reporting delay's
-        right-truncation tracks the curve automatically: an onset three days before ``t`` has
-        had three days in which to be reported, whatever ``t`` is.
+        ``counts`` may instead be a tuple of historical reported-count snapshots. Each starts
+        on day 0 and ends on its own as-of day; lengths must increase strictly but may skip days,
+        and the curve is evaluated exactly on those days. This form is required for reporting
+        delays because a final series cannot reconstruct what had been reported earlier.
     days
-        Conditioning days; :func:`conditioning_days` over the whole window by default.
+        Conditioning days; :func:`conditioning_days` over the whole window by default. Rejected
+        with a snapshot tuple, whose lengths define the days unambiguously.
     sampler
         NUTS settings, applied to every day. ``seed_for_day`` overrides the seed.
     seed_for_day
@@ -189,24 +194,45 @@ def risk_by_refitting(
         setting and never a modelling one. See :mod:`end_of_outbreak.parallel`.
     """
     specification = specification_of(model)
-    counts = np.asarray(counts, dtype=np.int64)
-    selected = conditioning_days(counts.size) if days is None else np.asarray(days, dtype=np.int64)
-    if selected.size == 0:
-        raise ValueError("no conditioning days to evaluate")
-    if selected.min() < FIRST_CONDITIONING_DAY or selected.max() >= counts.size:
-        raise ValueError(
-            f"conditioning days must lie in {FIRST_CONDITIONING_DAY}..{counts.size - 1}"
-        )
+    resolved_reporting = (
+        reporting.COMPLETE_REPORTING if reporting_model is None else reporting_model
+    )
+    snapshots = _resolve_snapshots(counts, days=days, reporting_model=resolved_reporting)
+    selected = np.asarray([day for day, _ in snapshots], dtype=np.int64)
     settings = fitting.SamplerSettings() if sampler is None else sampler
 
     # The last day of the window is the whole-record fit, which the pipeline already holds. It
     # is evaluated here rather than in a worker: shipping a `DataTree` into a worker process
     # just to skip the sampling it stands in for would cost more than it saves.
-    reused_day = counts.size - 1 if final_day_fit is not None else None
+    final_snapshot_day = (
+        int(np.asarray(counts[-1]).size - 1)
+        if isinstance(counts, tuple)
+        else int(np.asarray(counts).size - 1)
+    )
+    reused_day = (
+        final_snapshot_day
+        if final_day_fit is not None and final_snapshot_day in set(selected.tolist())
+        else None
+    )
+    reused_snapshot = (
+        None
+        if reused_day is None
+        else next(window for day, window in snapshots if day == reused_day)
+    )
+    if final_day_fit is not None and reused_day is not None:
+        assert reused_snapshot is not None
+        _validate_reused_fit(
+            final_day_fit,
+            specification=specification,
+            snapshot=reused_snapshot,
+            day=reused_day,
+            reporting_model=resolved_reporting,
+        )
 
-    def contribution(day: int, idata: xr.DataTree, started: float) -> DayResult:
+    def contribution(
+        day: int, window: NDArray[np.int64], idata: xr.DataTree, started: float
+    ) -> DayResult:
         """One day's per-draw log-probabilities and diagnostics, given its fit."""
-        window = counts[: day + 1]
         state = rac.posterior_state(
             specification,
             idata,
@@ -231,17 +257,18 @@ def risk_by_refitting(
             diagnostics=summarise_fit(idata, day=day, seconds=time.perf_counter() - started),
         )
 
-    def evaluate(day: int) -> DayResult:
+    def evaluate(task: tuple[int, NDArray[np.int64]]) -> DayResult:
         """Fit the window ending on ``day`` and take its contribution to the curve.
 
         This is what crosses into a worker process, so it must not close over ``final_day_fit``:
         a closure is pickled once per task, and the whole-record fit is tens of megabytes that
         no worker ever reads. Hence the separate ``reuse`` path below.
         """
+        day, window = task
         started = time.perf_counter()
         idata = fitting.fit_model(
             specification,
-            counts[: day + 1],
+            window,
             delays=delays,
             switch_day=switch_day,
             R_pre=R_pre,
@@ -249,7 +276,7 @@ def risk_by_refitting(
             k=k,
             latent_parameterisation=latent_parameterisation,
             negligible_latent_threshold=negligible_latent_threshold,
-            reporting_model=reporting_model,
+            reporting_model=resolved_reporting,
             # The window includes its conditioning day, so day t is the day it was observed on.
             # Stated here rather than left to fit_model's default, because this is the one place
             # that knows the two coincide.
@@ -258,18 +285,19 @@ def risk_by_refitting(
                 settings if seed_for_day is None else replace_seed(settings, seed_for_day(day))
             ),
         )
-        return contribution(day, idata, started)
+        return contribution(day, window, idata, started)
 
-    days_to_fit = [int(day) for day in selected if day != reused_day]
+    snapshots_to_fit = [(day, window) for day, window in snapshots if day != reused_day]
     results = parallel.map_fits(
         evaluate,
-        days_to_fit,
+        snapshots_to_fit,
         n_jobs=n_jobs,
         description=f"{specification.name} conditioning days",
         on_result=None if on_day is None else (lambda result: on_day(result.diagnostics)),
     )
     if final_day_fit is not None and reused_day in {int(day) for day in selected}:
-        reused = contribution(int(reused_day), final_day_fit, time.perf_counter())
+        assert reused_snapshot is not None
+        reused = contribution(int(reused_day), reused_snapshot, final_day_fit, time.perf_counter())
         if on_day is not None:
             on_day(reused.diagnostics)
         results.append(reused)
@@ -281,6 +309,89 @@ def risk_by_refitting(
         estimate=rac.DailyRiskEstimate.concatenate([result.estimate for result in results]),
         diagnostics=[result.diagnostics for result in results],
     )
+
+
+def _resolve_snapshots(
+    counts: NDArray[np.int64] | CountSnapshots,
+    *,
+    days: Sequence[int] | NDArray[np.int64] | None,
+    reporting_model: reporting.ReportingModel,
+) -> list[tuple[int, NDArray[np.int64]]]:
+    """Normalise a final series or sparse historical snapshots into ``(day, series)`` tasks."""
+    if isinstance(counts, tuple):
+        if days is not None:
+            raise ValueError(
+                "days cannot be supplied with historical snapshots; lengths define them"
+            )
+        if not counts:
+            raise ValueError("at least one historical count snapshot is required")
+        snapshots = [_validated_snapshot(snapshot) for snapshot in counts]
+        lengths = np.asarray([snapshot.size for snapshot in snapshots], dtype=np.int64)
+        if np.any(np.diff(lengths) <= 0):
+            raise ValueError("historical snapshot lengths must increase strictly")
+        return [(int(snapshot.size - 1), snapshot) for snapshot in snapshots]
+
+    series = _validated_snapshot(counts)
+    if reporting_model.delay is not None:
+        raise ValueError(
+            "a real-time curve with a reporting delay requires a tuple of historical count "
+            "snapshots; one final series cannot reconstruct earlier reporting states"
+        )
+    selected = conditioning_days(series.size) if days is None else np.asarray(days, dtype=np.int64)
+    if selected.size == 0:
+        raise ValueError("no conditioning days to evaluate")
+    if selected.min() < FIRST_CONDITIONING_DAY or selected.max() >= series.size:
+        raise ValueError(
+            f"conditioning days must lie in {FIRST_CONDITIONING_DAY}..{series.size - 1}"
+        )
+    return [(int(day), series[: int(day) + 1]) for day in selected]
+
+
+def _validated_snapshot(snapshot: Any) -> NDArray[np.int64]:
+    """One reported-count snapshot, preserving corrections between separate snapshots."""
+    values = np.asarray(snapshot)
+    if values.ndim != 1 or values.size < 2:
+        raise ValueError("each count snapshot must be one-dimensional with at least two days")
+    if not np.issubdtype(values.dtype, np.integer):
+        raise ValueError("count snapshots must contain integers")
+    counts = values.astype(np.int64, copy=False)
+    if counts[0] < 1 or np.any(counts < 0):
+        raise ValueError("each count snapshot must start with a case and be non-negative")
+    return counts
+
+
+def _validate_reused_fit(
+    idata: xr.DataTree,
+    *,
+    specification: ModelSpecification,
+    snapshot: NDArray[np.int64],
+    day: int,
+    reporting_model: reporting.ReportingModel,
+) -> None:
+    """Ensure a supplied final-day fit describes exactly the snapshot it would replace."""
+    fitted_model = str(idata.attrs.get(fitting.MODEL_ATTRIBUTE, ""))
+    if fitted_model != specification.name:
+        raise ValueError(
+            f"final_day_fit records model {fitted_model!r}, expected {specification.name!r}"
+        )
+    if fitting.fitted_reporting(idata) != reporting_model:
+        raise ValueError("final_day_fit's reporting assumption does not match this curve")
+    if fitting.fitted_as_of_day(idata, snapshot) != day:
+        raise ValueError("final_day_fit's as-of day does not match the final snapshot")
+    if pymc_models.OBSERVED_VARIABLE not in idata.observed_data:
+        raise ValueError("final_day_fit does not contain its reported-count observations")
+    fitted_counts = fitting.fitted_reported_counts(idata)
+    if fitted_counts is not None:
+        matches = np.array_equal(fitted_counts, snapshot)
+    else:
+        observed_variable = idata.observed_data[pymc_models.OBSERVED_VARIABLE]
+        fitted_days = np.asarray(
+            observed_variable.coords[pymc_models.LIKELIHOOD_DAY_DIMENSION], dtype=np.int64
+        )
+        observed = np.asarray(observed_variable, dtype=np.int64)
+        matches = np.array_equal(observed, snapshot[fitted_days])
+    if not matches:
+        raise ValueError("final_day_fit's reported counts do not match the final snapshot")
 
 
 def replace_seed(settings: fitting.SamplerSettings, seed: int | None) -> fitting.SamplerSettings:

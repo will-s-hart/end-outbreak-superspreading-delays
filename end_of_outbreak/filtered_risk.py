@@ -12,10 +12,10 @@ It is an approximation in two distinct places, and they should not be conflated:
 2. Conditioning the latents on less data than the parameters ignores their posterior
    correlation, so the pair is not the day-``t`` joint posterior of either.
 
-For **DLO and SSE there is no approximation of the second kind at all** — they have no latent
-state, so no filter runs and the retained state is exactly the observed counts. Whatever gap
-those two models show against the refit curve is entirely (1), which makes them a useful
-control when reading the comparison.
+Under complete reporting, **DLO and SSE have no approximation of the second kind at all** — they
+have no latent state, so no filter runs and the retained state is exactly the observed counts.
+Under incomplete reporting the imputed counts become state: SSE uses the filter, while DLO RAC
+is refused because the filter does not retain the future-force profile its closed form needs.
 
 Where the filtering state comes from
 ------------------------------------
@@ -73,7 +73,7 @@ class FilteredRiskResult:
 
     estimate: rac.DailyRiskEstimate
     diagnostics: FilterDiagnostics | None
-    """``None`` for DLO and SSE, which have no latent state and so run no filter at all."""
+    """``None`` where no latent state exists and no filter ran."""
 
 
 def thin_draws(state: rac.PosteriorState, n_draws: int) -> rac.PosteriorState:
@@ -107,6 +107,7 @@ def thin_draws(state: rac.PosteriorState, n_draws: int) -> rac.PosteriorState:
         k=take(state.k),
         sampled_infectivity=take(state.sampled_infectivity),
         unsampled=unsampled,
+        true_counts=take(state.true_counts),
         n_chains=state.n_chains,
     )
 
@@ -150,6 +151,12 @@ def risk_by_filtering(
     resolved_reporting = (
         reporting.COMPLETE_REPORTING if reporting_model is None else reporting_model
     )
+    if resolved_reporting.delay is not None:
+        raise NotImplementedError(
+            "single_fit_filtered does not support reporting delays: a real-time delayed-"
+            "reporting curve needs the historical reported-count snapshot for each "
+            "conditioning day. Use refit_daily with a tuple of snapshots"
+        )
 
     if not specification.has_latents and resolved_reporting.is_complete:
         # No latent state to filter: the retained state is the observed counts, so this is the

@@ -28,6 +28,7 @@ import numpy as np
 import pandas as pd
 import utils
 from matplotlib.axes import Axes
+from matplotlib.lines import Line2D
 from numpy.typing import NDArray
 
 from end_of_outbreak import outbreak_data, risk_curves
@@ -266,7 +267,37 @@ def reporting_comparison_panel(
     ax.set_xlabel("conditioning day $t$ (2018)")
     ax.set_ylabel("risk of additional cases")
     ax.set_title(title)
-    ax.legend(loc="center left", bbox_to_anchor=(0.015, 0.55), ncols=2)
+    models = list(next(iter(curves.values())).keys())
+    model_key = ax.legend(
+        handles=[
+            Line2D(
+                [],
+                [],
+                color=utils.model_colour(model),
+                label=utils.model_label(model),
+            )
+            for model in models
+        ],
+        title="Model",
+        loc="center left",
+        bbox_to_anchor=(0.015, 0.62),
+    )
+    ax.add_artist(model_key)
+    ax.legend(
+        handles=[
+            Line2D(
+                [],
+                [],
+                color="black",
+                linestyle=utils.reporting_linestyle(probability),
+                label=f"{probability:.0%} reported",
+            )
+            for probability in sorted(curves, reverse=True)
+        ],
+        title="Reporting",
+        loc="center left",
+        bbox_to_anchor=(0.015, 0.32),
+    )
     if letter is not None:
         utils.panel_label(ax, letter)
 

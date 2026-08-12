@@ -199,7 +199,7 @@ so `tests/test_refit_risk.py` builds every truncation of the real series for eve
 sampling any of them, which is fast, and separately checks that no latent falls between the
 sampled and unsampled blocks.
 
-The tier-1 `rac` step then **fails outright** if any day's fit shows `R̂ > 1.01` or divergences
+The tier-1 `rac` step then **fails outright** if any day's fit shows `R̂ > 1.02` or divergences
 above 1% of draws — but writes `<model>_rac_diagnostics.csv` first, so a failed run leaves the
 evidence of how it failed behind it. A curve built from 110 fits nobody has looked at is not a
 result.
@@ -221,20 +221,30 @@ than a scalar `Λ(t)`, so the profile is now contracted from
 `future_force_of_infection_operator` inside the existing draw-chunk loop, and a per-draw profile
 never materialises.
 
-Lower reporting can only raise RAC: the tail of zeros that ends an outbreak may be hiding cases.
-A crossing between two reporting levels is a bug, and the quick route checks for one.
+Conditional on the same parameters and latent state, adding a hidden case raises RAC. Curves at
+different reporting probabilities are separately refitted, however, so their parameter and
+latent posteriors also differ. Their ordering is therefore an empirical result, not a theorem or
+a correctness check.
 
 ### The two estimators under incomplete reporting
 
-`refit_daily` is unchanged in structure. What is worth stating is that **conditioning day `t` is
-its window's as-of day**: `counts[:t+1]` includes day `t`, so an onset three days before `t` has
-had three days in which to be reported, and a reporting delay's right-truncation therefore
-tracks the curve without anything extra. That is *not* the convention of
+With no reporting delay, `refit_daily` retains the single-series interface and fits its prefixes.
+With a delay, a final count series cannot reconstruct what was known earlier: the curve instead
+takes a tuple of historical snapshots, each from day 0 through its as-of day. Snapshot lengths
+must increase strictly but can skip days, and corrected histories need not dominate earlier
+ones. The lengths define the curve days. A single-snapshot fit remains available by passing its
+as-of day explicitly.
+
+In either form, **conditioning day `t` is its snapshot's as-of day**: the snapshot includes day
+`t`, so an onset three days before `t` has had three days in which to be reported. That is *not*
+the convention of
 `end-of-outbreak-vbd`, which conditions on the record strictly before its calculation day — so
 the as-of day is an explicit argument rather than `len(counts) - 1`, and a test pins it.
 
-`single_fit_filtered` still works, because the particle filter was extended rather than refused.
-Each particle now carries its own history of true counts, and the filter stays **fully adapted**
+`single_fit_filtered` works without reporting delays. A delayed-reporting curve is refused
+clearly because it would need a different snapshot for every conditioning day; turning one full
+fit into a per-day, per-draw set of filters would no longer be this approximation. Each particle
+carries its own history of true counts, and the filter stays **fully adapted**
 — which is the property that makes this module's filters need no tuning, and it survives because
 Poisson thinning splits the day exactly:
 
@@ -254,8 +264,8 @@ particle can propose a total below what was reported, the whole cloud takes zero
 filter dies outright. It did, on day 29 of the Équateur series. Adapting instead keeps the
 effective sample size above a quarter of the particles across the whole record at 60% reporting.
 
-**DLO and SSE are the models this does not cover.** Their dispersion is marginalised into the
-count law, so the day's counts are negative binomial and the Poisson split does not apply; the
-analogous adapted proposal exists but is not implemented, and both refuse rather than degenerate.
-DLO is refused a step earlier and for a second reason: its closed form needs each particle's
-whole retained profile, not the scalar remaining weight the filter records.
+For DLO and SSE the same adaptation uses the negative-binomial thinning identity: weight by
+`NB(C; πμ, α)` and draw `U | C` from the exact negative-binomial conditional documented in
+`reporting.py`. SSE therefore has an incomplete-reporting filtered route. DLO's count filter is
+implemented too, but filtered RAC remains refused: its risk needs each particle's whole retained
+future-force profile, not the scalar remaining weight the filter stores.

@@ -1029,17 +1029,22 @@ model is fitted once per conditioning day, and the diagnostics below cover all o
 evidence and dispersion comparisons are properties of a model given the whole record, and use the
 fit to the complete series, which also serves as the final conditioning day.
 
+Under incomplete reporting, the free count block is the number unreported on each day. Its
+scalar support makes PyMC assign its ordinary coordinate-wise Metropolis kernel; the continuous
+parameters and Gamma inverse-CDF coordinates retain their samplers above.
+
 \paragraph{Convergence.} The four analyses rest on
-\resultnum{overall.diagnostics.fits} fits in total. Across every one of them, and over every
+\resultnum{core.diagnostics.fits} fits in total. Across every one of them, and over every
 sampled variable including the latent blocks, the worst $\hat{R}$ is
-\resultnum{overall.diagnostics.maxrhat}, the smallest bulk effective sample size is
-\resultnum{overall.diagnostics.minbulkess}, and the total number of divergent NUTS transitions is
-\resultnum{overall.diagnostics.divergences}. Per analysis the minimum bulk effective sample sizes
+\resultnum{core.diagnostics.maxrhat}, the smallest bulk effective sample size is
+\resultnum{core.diagnostics.minbulkess}, and the total number of divergent NUTS transitions is
+\resultnum{core.diagnostics.divergences}. Per analysis the minimum bulk effective sample sizes
 are \resultnum{naivemodelsfixedk.diagnostics.minbulkess},
 \resultnum{naivemodelsestimatedk.diagnostics.minbulkess},
 \resultnum{onsetmodelsfixedk.diagnostics.minbulkess} and
 \resultnum{onsetmodelsestimatedk.diagnostics.minbulkess}. The analysis workflow refuses to
-produce a risk curve if any of the fits behind it exceeds $\hat{R} = 1.01$ or shows divergent
+produce a risk curve if any of the fits behind it exceeds $\hat{R} =
+\resultnum{convergence.maxrhat}$ or shows divergent
 transitions in more than 1\% of draws, so these are enforced criteria rather than a report of
 what happened to occur.
 
@@ -1553,13 +1558,23 @@ Every result above reads the observed onset series as the true one. A day with n
 is then a day with no onset, and it is exactly those days that drive the risk down. Relaxing the
 assumption asks what a case-free record is worth when cases can go unseen.
 
-The observation model is the one of Section~\ref{sec:estimand} applied to latent true onsets
-$D_t$, with $c_t \mid D_t \sim \Binom(D_t, \pi)$ reported. The estimand is unchanged and still
+The observation model is the one of Section~\ref{sec:estimand} applied to true onsets
+$D_t=c_t+U_t$, where $U_t$ is the latent unreported count. For a Poisson count law the exact
+split is $c_t\sim\operatorname{Pois}(\pi\mu_t)$ and
+$U_t\sim\operatorname{Pois}((1-\pi)\mu_t)$. For a negative-binomial
+count law, the reported marginal and the conditional law of $U_t$ are negative binomial as well.
+This is algebraically identical to $D_t$ followed by $c_t\mid D_t\sim\Binom(D_t,\pi)$, without
+requiring a potential term. The estimand is unchanged and still
 concerns \emph{true} cases: $\RAC(t)$ is the posterior probability of at least one further true
 onset, whether or not anyone would record it. Only $D_0=c_0$ is fixed, so no day after the first
 is constrained to have been fully observed. $\pi$ is an assumed input, not an estimate --- these
 data cannot identify it without external information --- so Fig.~\ref{fig:underreporting} is a
 sweep over assumed values rather than a fit.
+
+\emph{Recomputation note.} The reporting-sweep numbers and diagnostics in this draft come from
+the algebraically equivalent totals-plus-binomial parameterisation. They must be regenerated
+with the unreported-count parameterisation, checked against combined Monte-Carlo error and the
+configured convergence gate, and only then used for publication.
 
 \begin{figure}[htbp]
   \centering
@@ -1577,11 +1592,13 @@ sweep over assumed values rather than a fit.
 \end{figure}
 
 \begin{itemize}
-  \item \textbf{Unreported cases can only add risk, and they do so throughout.} The
+  \item \textbf{The fitted curves are empirically ordered by the reporting assumption.} The
     \resultnum{underreporting60.reportingpercent}\% and
     \resultnum{underreporting80.reportingpercent}\% curves lie above the completely-reported one
-    on every conditioning day, for both models. This is a check as much as a result: thinning
-    cannot remove risk, so a crossing would indicate an error rather than a finding.
+    on every conditioning day, for both models. Conditional on otherwise identical state, adding
+    a hidden case raises risk. These curves are separately refitted, however, so their parameter
+    and latent posteriors also change; monotone ordering across assumed reporting probabilities is
+    therefore an empirical result here, not a theorem or a correctness requirement.
   \item \textbf{The delay is on the order of a week, and it grows as the assumption is
     weakened.} \sseso{} first falls below 0.05 on
     \resultnum{onsetmodelsfixedk.sseso.rac05.date} under complete reporting,
@@ -1608,11 +1625,16 @@ sweep over assumed values rather than a fit.
     them by well over a week.
     Where surveillance completeness is uncertain, it dominates the model-structure question this
     report otherwise concerns itself with.
-  \item \textbf{The cost is in the sampling, not the model.} With the totals random, nothing in
+  \item \textbf{The cost is in the sampling, not the model.} With the true counts random, nothing in
     the latent block can be marginalised --- \sseso{} carries
     \resultnum{underreporting60.sseso.latents.sampled} sampled latents against
     \resultnum{onsetmodelsfixedk.sseso.latents.sampled} under complete reporting --- and the
-    true counts add a discrete block of their own. Convergence is still adequate across all
+    unreported counts add a discrete block of their own. Across the two reporting sweeps,
+    \resultnum{reporting.diagnostics.fits} fits have a worst $\hat{R}$ of
+    \resultnum{reporting.diagnostics.maxrhat}, a smallest bulk ESS of
+    \resultnum{reporting.diagnostics.minbulkess}, and
+    \resultnum{reporting.diagnostics.divergences} divergent transitions. At the weakest
+    assumption, convergence is still adequate across all
     \resultnum{underreporting60.diagnostics.fits} fits at
     \resultnum{underreporting60.reportingpercent}\% reporting (worst $\hat{R}$
     \resultnum{underreporting60.diagnostics.maxrhat}, smallest bulk ESS

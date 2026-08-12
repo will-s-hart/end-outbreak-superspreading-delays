@@ -83,6 +83,13 @@ def test_every_number_the_report_quotes_is_defined():
     )
 
 
+def test_reporting_order_is_described_as_empirical_not_as_a_theorem():
+    prose = report_body()
+    assert "empirical result" in prose
+    assert "not a theorem" in prose
+    assert "a crossing would indicate an error" not in prose
+
+
 def test_the_report_quotes_at_least_one_number_per_analysis():
     """Guards against the keys and the prose drifting apart silently in the other direction.
 
@@ -202,6 +209,21 @@ def test_rendered_file_is_sorted_and_carries_its_provenance():
     rendered = numbers.render(sources=["results/whatever.json"])
     assert rendered.index("\\defresultnum{a.key}") < rendered.index("\\defresultnum{z.key}")
     assert "results/whatever.json" in rendered
+
+
+def test_the_configured_convergence_threshold_is_generated_not_typed_into_the_report():
+    numbers = report_numbers.NumberFile()
+    report_numbers.add_convergence_settings(numbers, {"rac": {"convergence": {"max_r_hat": 1.02}}})
+    assert "\\defresultnum{convergence.maxrhat}{1.02}" in numbers.render(sources=[])
+
+
+def test_diagnostic_groups_merge_without_conflating_core_and_reporting_analyses():
+    core = report_numbers.Diagnostics(fits=10, max_rhat=1.01, min_bulk_ess=300, divergences=0)
+    reporting = report_numbers.Diagnostics(fits=4, max_rhat=1.015, min_bulk_ess=120, divergences=2)
+    all_analyses = core.merged_with(reporting)
+    assert all_analyses == report_numbers.Diagnostics(
+        fits=14, max_rhat=1.015, min_bulk_ess=120, divergences=2
+    )
 
 
 # ---------------------------------------------------------------------------------------

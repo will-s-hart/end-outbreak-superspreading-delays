@@ -282,6 +282,12 @@ def add_setting(numbers: NumberFile, data: outbreak_data.OutbreakData) -> None:
     numbers.set("data.referencedate", date_text(data.date_of(REFERENCE_DAY)))
 
 
+def add_convergence_settings(numbers: NumberFile, config: dict[str, Any]) -> None:
+    """Configured gates quoted by the methods, distinct from measured diagnostics."""
+    convergence = config["rac"]["convergence"]
+    numbers.set("convergence.maxrhat", fixed(float(convergence["max_r_hat"]), 2))
+
+
 def add_delays(numbers: NumberFile, config: dict[str, Any]) -> None:
     """The delay triple, and the variance budget that admits it.
 
@@ -555,8 +561,8 @@ def measure_diagnostics(tables: dict[str, pd.DataFrame]) -> Diagnostics:
 def add_diagnostics(numbers: NumberFile, diagnostics: Diagnostics, prefix: str) -> None:
     """Write one set of convergence figures under ``<prefix>.diagnostics``."""
     numbers.set(f"{prefix}.diagnostics.fits", str(diagnostics.fits))
-    # Three decimals, not two: the acceptance gate is at 1.01, and "1.00" would not let a reader
-    # tell a comfortable pass from a marginal one.
+    # Three decimals, not two: the acceptance gate is close to one, and "1.00" would not let a
+    # reader tell a comfortable pass from a marginal one.
     numbers.set(f"{prefix}.diagnostics.maxrhat", fixed(diagnostics.max_rhat, 3))
     numbers.set(f"{prefix}.diagnostics.minbulkess", str(int(np.floor(diagnostics.min_bulk_ess))))
     numbers.set(f"{prefix}.diagnostics.divergences", str(diagnostics.divergences))
@@ -649,8 +655,11 @@ def collect(
     sources = [repository_path(data_path)]
 
     add_setting(numbers, data)
+    add_convergence_settings(numbers, config)
     add_delays(numbers, config)
     add_priors(numbers, config, analyses)
+    core_overall: Diagnostics | None = None
+    reporting_overall: Diagnostics | None = None
     overall: Diagnostics | None = None
 
     for analysis in [*analyses, *(rac_only_analyses or [])]:
@@ -677,6 +686,16 @@ def collect(
         )
         add_diagnostics(numbers, diagnostics, slug(analysis))
         overall = diagnostics if overall is None else overall.merged_with(diagnostics)
+        if rac_only:
+            reporting_overall = (
+                diagnostics
+                if reporting_overall is None
+                else reporting_overall.merged_with(diagnostics)
+            )
+        else:
+            core_overall = (
+                diagnostics if core_overall is None else core_overall.merged_with(diagnostics)
+            )
         add_onset_shifts(numbers, analysis, curves)
 
         if not rac_only:
@@ -694,8 +713,12 @@ def collect(
             )
         )
 
-    # The report makes one claim about every fit in the study ("no divergences anywhere"), so it
-    # gets a number aggregated the same way, rather than quoting one analysis's and hoping.
+    if core_overall is not None:
+        add_diagnostics(numbers, core_overall, "core")
+    if reporting_overall is not None:
+        add_diagnostics(numbers, reporting_overall, "reporting")
+    # Keep an explicitly all-analysis summary as well: the core and reporting claims should not
+    # accidentally borrow it, but a genuine study-wide statement can.
     if overall is not None:
         add_diagnostics(numbers, overall, "overall")
     add_evidence_gains(numbers, results_root, analyses, config)
