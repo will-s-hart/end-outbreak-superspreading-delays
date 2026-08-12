@@ -337,6 +337,11 @@ def add_sampler(numbers: NumberFile, block: dict[str, Any], prefix: str) -> None
     # The number of models is the denominator of the uniform prior over models (§6.2), which the
     # posterior model probabilities are not interpretable without.
     numbers.set(f"{prefix}.nmodels", str(len(block["models"])))
+    # The assumed reporting probability, as a percentage, for the sweep of Stage 10. An input
+    # rather than an estimate -- these data do not identify it -- but the report may not write
+    # it as a literal, and an analysis that assumes nothing still has to say so.
+    probability = float((block.get("reporting") or {}).get("probability", 1.0))
+    numbers.set(f"{prefix}.reportingpercent", f"{round(probability * 100)}")
 
 
 def add_parameters(numbers: NumberFile, posterior: xr.DataTree, prefix: str) -> None:

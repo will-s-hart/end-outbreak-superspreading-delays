@@ -62,6 +62,7 @@
 \newcommand{\sinc}{\bar{f}^{\,\mathrm{inc}}}
 \newcommand{\NB}{\mathrm{NB}}
 \newcommand{\Pois}{\mathrm{Poisson}}
+\newcommand{\Binom}{\mathrm{Binomial}}
 \newcommand{\Gam}{\mathrm{Gamma}}
 \newcommand{\RAC}{\mathrm{RAC}}
 \newcommand{\RAT}{\mathrm{RAT}}
@@ -181,7 +182,9 @@ The analysis window is days $0$--$\resultnum{data.withdrawalday}$, i.e.\
 \resultnum{data.days} days, with \resultnum{data.preertcases} cases before the ERT arrived and
 \resultnum{data.postertcases} after. The series is padded with zero counts from the last
 observed onset to the end of the window. These case-free days provide the evidence that drives
-the estimated risk down. No adjustment is made for under-reporting.
+the estimated risk down. The main analyses take the series at face value;
+Section~\ref{sec:results-underreporting} relaxes that and treats the observed onsets as a
+reported fraction of the true ones.
 
 Day~$0$ is treated as an initial condition in every model, so likelihoods run over days
 $1,\dots,\resultnum{data.withdrawalday}$. Conditioning on a single imported index case asserts
@@ -1542,6 +1545,87 @@ parameter; Fig.~\ref{fig:sustained-estimated} repeats the comparison with $k$ es
     \resultnum{onsetmodelsestimatedk.ssiso.gap.max} when it is estimated --- a consequence of the
     onset-anchored $k$ posteriors already sitting on the literature value.
 \end{itemize}
+
+\subsection{Incomplete reporting}
+\label{sec:results-underreporting}
+
+Every result above reads the observed onset series as the true one. A day with no reported onset
+is then a day with no onset, and it is exactly those days that drive the risk down. Relaxing the
+assumption asks what a case-free record is worth when cases can go unseen.
+
+The observation model is the one of Section~\ref{sec:estimand} applied to latent true onsets
+$D_t$, with $c_t \mid D_t \sim \Binom(D_t, \pi)$ reported. The estimand is unchanged and still
+concerns \emph{true} cases: $\RAC(t)$ is the posterior probability of at least one further true
+onset, whether or not anyone would record it. Only $D_0=c_0$ is fixed, so no day after the first
+is constrained to have been fully observed. $\pi$ is an assumed input, not an estimate --- these
+data cannot identify it without external information --- so Fig.~\ref{fig:underreporting} is a
+sweep over assumed values rather than a fit.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.85\textwidth]{../figures/underreporting/underreporting.pdf}
+  \caption{\textbf{Assuming cases went unreported delays the declaration, and by more than the
+    choice between mechanisms does.} $\RAC$ for \sseso{} (pink) and \ssiso{} (orange) under
+    complete reporting (solid), \resultnum{underreporting80.reportingpercent}\% reporting
+    (dashed) and \resultnum{underreporting60.reportingpercent}\% reporting (dotted), from the
+    ERT's arrival onward. $k$ is held at \resultnum{underreporting60.fixedk} throughout, so the
+    only thing varying between linestyles is the assumed reporting probability. Filled circles
+    mark where each curve first falls below 0.05 and stays there. Grey bars show daily
+    \emph{reported} onsets; the fitted models carry a posterior over the true counts behind them.
+    Each point is a separate real-time fit to the reported record through that conditioning day.}
+  \label{fig:underreporting}
+\end{figure}
+
+\begin{itemize}
+  \item \textbf{Unreported cases can only add risk, and they do so throughout.} The
+    \resultnum{underreporting60.reportingpercent}\% and
+    \resultnum{underreporting80.reportingpercent}\% curves lie above the completely-reported one
+    on every conditioning day, for both models. This is a check as much as a result: thinning
+    cannot remove risk, so a crossing would indicate an error rather than a finding.
+  \item \textbf{The delay is on the order of a week, and it grows as the assumption is
+    weakened.} \sseso{} first falls below 0.05 on
+    \resultnum{onsetmodelsfixedk.sseso.rac05.date} under complete reporting,
+    \resultnum{underreporting80.sseso.rac05.date} at
+    \resultnum{underreporting80.reportingpercent}\% reporting, and
+    \resultnum{underreporting60.sseso.rac05.date} at
+    \resultnum{underreporting60.reportingpercent}\%. For \ssiso{} the same three dates are
+    \resultnum{onsetmodelsfixedk.ssiso.rac05.date},
+    \resultnum{underreporting80.ssiso.rac05.date} and
+    \resultnum{underreporting60.ssiso.rac05.date}.
+  \item \textbf{The stricter threshold is not reached at all under the weakest assumption.} At
+    0.01, \sseso{} settles on \resultnum{onsetmodelsfixedk.sseso.rac01.date} under complete
+    reporting and \resultnum{underreporting80.sseso.rac01.date} at
+    \resultnum{underreporting80.reportingpercent}\%, but at
+    \resultnum{underreporting60.reportingpercent}\% it does not reach the threshold within the
+    analysis window at all: the risk on the final day is still
+    \resultnum{underreporting60.sseso.rac.final}, against
+    \resultnum{onsetmodelsfixedk.sseso.rac.final} under complete reporting. \ssiso{} behaves the
+    same way. A declaration criterion written at 0.01 is therefore not robust to a reporting
+    assumption this weak, on a record of this length.
+  \item \textbf{Under-reporting moves the curves further than the choice of mechanism does.}
+    The two models' 0.05 crossings differ by at most a day at any one reporting level; dropping
+    from complete reporting to \resultnum{underreporting60.reportingpercent}\% moves each of
+    them by well over a week.
+    Where surveillance completeness is uncertain, it dominates the model-structure question this
+    report otherwise concerns itself with.
+  \item \textbf{The cost is in the sampling, not the model.} With the totals random, nothing in
+    the latent block can be marginalised --- \sseso{} carries
+    \resultnum{underreporting60.sseso.latents.sampled} sampled latents against
+    \resultnum{onsetmodelsfixedk.sseso.latents.sampled} under complete reporting --- and the
+    true counts add a discrete block of their own. Convergence is still adequate across all
+    \resultnum{underreporting60.diagnostics.fits} fits at
+    \resultnum{underreporting60.reportingpercent}\% reporting (worst $\hat{R}$
+    \resultnum{underreporting60.diagnostics.maxrhat}, smallest bulk ESS
+    \resultnum{underreporting60.diagnostics.minbulkess}), but the Monte-Carlo standard error on
+    the late curve is correspondingly larger:
+    \resultnum{underreporting60.sseso.rac.mcselate} against
+    \resultnum{onsetmodelsfixedk.sseso.rac.mcselate} under complete reporting.
+\end{itemize}
+
+A reporting \emph{delay} from onset to report is implemented alongside this and would
+right-truncate recent days automatically, one conditioning day at a time. It is not used here:
+the \'Equateur line list gives onset dates rather than reporting dates, so there is nothing to
+estimate the delay from.
 
 % =============================================================================================
 \section{Planned sensitivity analyses}
