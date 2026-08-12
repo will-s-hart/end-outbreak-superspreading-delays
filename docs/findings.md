@@ -28,9 +28,9 @@ those weeks is the estimand too, not the sampler: each day is a separate posteri
 a separate record.
 
 **Convergence in the four core analyses, over 1540 fits** (14 model/analysis pairs × 110 days,
-`<model>_rac_diagnostics.csv`): worst `R̂` over every sampled variable is **1.0080**; 39 days
-exceed 1.005; 159 divergences in 12.3M draws, worst single day 15; minimum bulk ESS 1020.
-**SSE-SO is the outlier by a wide margin** — 17–22 of its days are above 1.005 against none for
+`<model>_rac_diagnostics.csv`): worst `R̂` over every sampled variable is **1.0140**; 37 days
+exceed 1.005; 144 divergences in 12.3M draws, worst single day 10; minimum bulk ESS 1002.
+**SSE-SO is the outlier by a wide margin** — 15–22 of its days are above 1.005 against none for
 every other model, and its minimum ESS is a third of theirs. It is the model whose geometry
 needed `target_accept: 0.95`, and it is the one to watch. The estimated-`k` inverse-CDF models use
 the benchmarked compound sampler (Slice for `k`, NUTS for the `R` parameters and latent
@@ -40,7 +40,7 @@ bulk ESS for `k` is 4075–7956, and there are no divergences.
 ## What did incomplete reporting change?
 
 In the authoritative 60%/80% sweeps, assuming cases went unreported delayed the 0.05 crossing
-by five to nine days and moved it more than choosing SSE-SO versus SSI-SO did. At 60% reporting,
+by four to ten days and moved it more than choosing SSE-SO versus SSI-SO did. At 60% reporting,
 neither model reached the 0.01 threshold inside the analysis window; the final-day RAC was about
 0.011 rather than about 0.002 under complete reporting
 (`results/underreporting_*/<model>_rac.csv`).
@@ -51,10 +51,14 @@ separate fits whose parameter and latent posteriors change with the reporting as
 future crossing would require investigation, not automatic rejection as mathematically
 impossible.
 
-Those authoritative draws used the equivalent totals-plus-binomial latent representation and
-must be regenerated after the switch to latent unreported counts. The target posterior and RAC
-estimand are unchanged; publication updates remain blocked until the fresh diagnostics pass and
-differences are within combined Monte-Carlo error.
+The reporting sweeps have been regenerated with latent unreported counts. All 312 fits pass the
+configured convergence gate: worst `R̂` 1.019, minimum bulk ESS 292, and four divergences in
+2.50M draws. Against the equivalent totals-plus-binomial run, no threshold crossing moved by
+more than one day and the pointwise RAC differences have no systematic sign. The median absolute
+difference is 0.77 combined chain-based Monte-Carlo standard errors, but agreement is not uniform:
+29 of 312 points exceed two combined standard errors and nine exceed three, with a maximum of
+5.13. The strict pointwise Monte-Carlo comparison therefore remains a publication check even
+though the scientific findings above are unchanged.
 
 ## Does the machinery reproduce an outside answer?
 
