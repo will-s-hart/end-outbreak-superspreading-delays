@@ -29,11 +29,11 @@ What a worker has to be given
 -----------------------------
 Two things, and getting either wrong turns the parallelism into a slowdown:
 
-- **Its own PyTensor compile directory.** PyTensor caches compiled C modules in a shared
-  directory guarded by a lock file. Eight workers compiling the same never-seen-before graph at
-  once serialise on that lock, and the first fit of a curve is exactly when they all do.
-  :func:`prepare_worker` gives each worker a private cache under the configured base directory
-  and removes it at exit.
+- **Its own local compiler caches.** PyTensor caches compiled C modules and its Numba linker
+  uses Numba's on-disk cache. Eight workers compiling the same never-seen-before graph at once
+  must share neither cache — especially when their defaults live on a cluster network
+  filesystem. :func:`prepare_worker` gives each worker private PyTensor, Numba and Matplotlib
+  caches under node-local temporary storage and removes them at exit.
 - **Single-threaded numeric libraries.** BLAS and OpenMP size their own thread pools from the
   core count, so eight workers each helpfully spawning eight threads oversubscribes the machine
   by a factor of eight. joblib's ``inner_max_num_threads`` sets the environment variables in the
@@ -84,21 +84,26 @@ def prepare_worker() -> None:
     for variable in THREAD_LIMIT_VARIABLES:
         os.environ.setdefault(variable, "1")
 
-    # Imported here, not at module scope: importing PyTensor costs a second or two and reading
-    # `config.base_compiledir` fixes it, and a caller that only wants `map_fits(n_jobs=1)`
-    # should not pay for either.
-    import pytensor
-
-    base = Path(pytensor.config.base_compiledir)
-    base.mkdir(parents=True, exist_ok=True)
-    root = Path(tempfile.mkdtemp(prefix=f"end_of_outbreak_worker_{os.getpid()}_", dir=base))
+    # This must be local rather than a child of PyTensor's configured base directory: on the
+    # cluster that base is on the network filesystem, where an otherwise valid Numba cache read
+    # can fail with ESTALE while several workers compile graphs concurrently.
+    root = Path(tempfile.mkdtemp(prefix=f"end_of_outbreak_worker_{os.getpid()}_"))
     compiledir = root / "pytensor"
+    numba_cache_dir = root / "numba"
     matplotlib_configdir = root / "matplotlib"
     compiledir.mkdir()
+    numba_cache_dir.mkdir()
     matplotlib_configdir.mkdir()
-    # Matplotlib's font cache has the same contention problem as PyTensor's module cache, and
-    # the figure scripts are not the only thing that imports it.
+
+    # Set the environment before importing either compiler. The explicit Numba assignment also
+    # covers an embedding process that happened to import it before calling this initializer.
+    os.environ["NUMBA_CACHE_DIR"] = str(numba_cache_dir)
     os.environ["MPLCONFIGDIR"] = str(matplotlib_configdir)
+    import numba
+    import pytensor
+
+    # Numba's config attributes are generated dynamically from environment variables.
+    numba.config.CACHE_DIR = str(numba_cache_dir)  # ty: ignore[unresolved-attribute]
     pytensor.config.compiledir = compiledir
     atexit.register(shutil.rmtree, root, ignore_errors=True)
 
@@ -148,9 +153,15 @@ def map_fits[TaskT, ResultT](
     with parallel_config(backend="loky", inner_max_num_threads=1):
         # `batch_size=1` because the tasks are minutes long and wildly uneven: batching would
         # hand one worker several slow days while another sat idle.
-        results = Parallel(n_jobs=n_jobs, return_as="generator_unordered", batch_size=1)(
-            delayed(_prepared_call)(function, task) for task in task_list
-        )
+        # The initializer runs before the worker unpickles a task and therefore before importing
+        # the model closure can create a Numba cache locator. `_prepared_call` remains as an
+        # idempotent safeguard for backends that do not honour the initializer.
+        results = Parallel(
+            n_jobs=n_jobs,
+            return_as="generator_unordered",
+            batch_size=1,
+            initializer=prepare_worker,
+        )(delayed(_prepared_call)(function, task) for task in task_list)
         return _collect(results, total=len(task_list), description=description, on_result=on_result)
 
 

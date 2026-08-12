@@ -268,6 +268,9 @@ def test_preparing_a_worker_pins_the_numeric_thread_pools_and_gives_it_its_own_c
     program = textwrap.dedent(
         """
         import os
+        from pathlib import Path
+
+        import numba
         import pytensor
         from end_of_outbreak import parallel
 
@@ -278,6 +281,9 @@ def test_preparing_a_worker_pins_the_numeric_thread_pools_and_gives_it_its_own_c
         assert pytensor.config.compiledir == first, "not idempotent"
         assert os.path.isdir(first), first
         assert os.environ["MPLCONFIGDIR"]
+        assert os.environ["NUMBA_CACHE_DIR"]
+        assert numba.config.CACHE_DIR == os.environ["NUMBA_CACHE_DIR"]
+        assert Path(first).parent.resolve() == Path(os.environ["NUMBA_CACHE_DIR"]).parent.resolve()
         for variable in parallel.THREAD_LIMIT_VARIABLES:
             assert os.environ[variable] == "1", variable
         print("ok")

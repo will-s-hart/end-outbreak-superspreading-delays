@@ -117,13 +117,14 @@ That is why the `Snakefile` leaves `parallel` out of `RAC_CORE` and `threads` ou
 params: neither can change a number, and treating them as rerun triggers would re-run hours of
 MCMC to reproduce a byte-identical file.
 
-Two things a worker needs, and both are silent when missing. It needs its **own PyTensor
-compile directory**, because the shared module cache is guarded by a lock file and every worker
-compiles the same unseen graph at the same moment on the first day of a curve. And it needs
-**single-threaded BLAS and OpenMP**, or eight workers each spawn eight threads and oversubscribe
-the machine eightfold. `parallel.prepare_worker` handles both, and it runs only in workers —
-repointing the compile directory of an interactive session would throw away a warm cache for the
-life of the process.
+Two things a worker needs, and both are silent when missing. It needs its **own compiler caches
+on node-local storage**: PyTensor compiles the same unseen graph in every worker on the first day
+of a curve, and its Numba linker also reads and writes Numba's on-disk cache. Sharing either on a
+cluster network filesystem introduces lock contention and can produce `ESTALE` cache reads. It
+also needs **single-threaded BLAS and OpenMP**, or eight workers each spawn eight threads and
+oversubscribe the machine eightfold. `parallel.prepare_worker` handles the PyTensor, Numba and
+Matplotlib caches plus the thread limits, and Loky calls it before unpickling the first task.
+The serial path keeps its warm caches unchanged.
 
 ## Model evidence
 
