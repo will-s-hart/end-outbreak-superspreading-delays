@@ -55,6 +55,7 @@ the way it depends on `results/`; each is named in the text with the file it cam
 
 ```sh
 pixi run pipeline           # builds report/report.pdf along with everything else
+pixi run pipeline-present   # figures/report only, after pulling cluster results
 latexmk -pdf -cd report/report.tex   # just the document, from an existing report_numbers.tex
 ```
 

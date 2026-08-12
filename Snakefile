@@ -2,6 +2,7 @@
 #
 #   pixi run pipeline        # reproduce every result and figure
 #   pixi run pipeline-dry    # explain what would re-run, and why
+#   pixi run pipeline-present # after a cluster pull, render figures/report only
 #
 # Three tiers per analysis, so a change at one tier never re-runs the tiers above it:
 #

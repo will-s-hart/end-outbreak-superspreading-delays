@@ -49,6 +49,8 @@ The environment is managed by **pixi**. All commands run through `pixi run`:
 | `pixi run check` | all four of the above, in order |
 | `pixi run pipeline` | `snakemake --profile config/snakemake_profile -j4` |
 | `pixi run pipeline-dry` | dry run: what would re-run, and why |
+| `pixi run pipeline-present` | after pulling cluster results, render figures/report only; compute rules are excluded |
+| `pixi run pipeline-present-dry` | dry-run the presentation-only allowlist |
 
 **Run `pixi run check` and fix every issue before committing.** No exceptions — a failing lint,
 type or test check is not "pre-existing", it is the current state of the tree.
@@ -270,6 +272,11 @@ as the sampler saying something rather than as a threshold to raise.
 `results/` and `figures/` are committed. Git does not preserve mtimes, so the profile drops the
 `mtime` rerun trigger; after a fresh clone, `snakemake --touch` restores consistency if you want
 it.
+
+After `cluster/pull_results_cluster.sh`, use `pixi run pipeline-present`, not `pipeline`. It
+targets only `figures` and `report/report.pdf` and uses `--allowed-rules` to exclude every fit,
+RAC and tier-2 compute rule. Pulled results are therefore immutable inputs even though the
+cluster's Snakemake provenance database was not pulled.
 
 ## Testing
 
