@@ -20,8 +20,9 @@ in this tree — see `validation/` for benchmarks and cross-checks.
 | `plot_onset_models_estimated_k.py` | 3 | the same for `onset_models_estimated_k` |
 | `run_underreporting_60.py`, `run_underreporting_80.py` | 1 | the same tier-1 outputs, with the onsets read as *reported* counts |
 | `plot_underreporting.py` | 3 | `figures/underreporting/*` — the reporting sweep |
+| `plot_model_schematic.py` | 3 | Main Fig. 1: the infection- vs onset-anchored schematic. Draws no data, so it takes no input but the house style |
 | `plot_delay_distributions.py` | 3 | Supplementary Fig. S1: incubation, TOST and serial-interval distributions |
-| `plot_sustained_transmission.py` | 3 | Main Fig. 5 (fixed `k`) and Supplementary Fig. S2 (estimated `k`): RAC/RAT/RST by anchoring |
+| `plot_sustained_transmission.py` | 3 | Main Fig. 6 (fixed `k`) and Supplementary Fig. S2 (estimated `k`): RAC/RAT/RST by anchoring |
 | `figure_panels.py` | 3 | the panels the analysis figures are assembled from |
 | `utils.py` | — | presentation-only helpers shared by the plotting scripts |
 
@@ -63,7 +64,10 @@ Conventions, all of them load-bearing:
   exception is deliberate and documented: `figure_panels` borrows `RiskCurve.first_day_below`
   from the package, because "the day a curve settles below a threshold" is a definition the
   report quotes and must not be able to drift between the marker on the panel and the number in
-  the text.
+  the text. `plot_model_schematic.py` takes the rule to its limit: it draws no data, so it reads
+  no file and prints no number — the incubation period its panel D turns on is quoted in the
+  report's caption through `\resultnum`, not lettered onto the canvas where a config change could
+  not reach it.
 - **A missing input fails loudly.** `utils.read_model_evidence` and `read_dispersion_summary`
   raise rather than falling back when their file is absent: a pie chart of placeholder numbers
   is indistinguishable from a real one on the page. `run_report_numbers.read_json` does the same,

@@ -289,6 +289,36 @@ onset-anchoring results to this decomposition must therefore be assessed explici
 \label{sec:models}
 % =============================================================================================
 
+Figure~\ref{fig:schematic} sets out the two anchoring conventions and the three things that
+follow from the choice between them: how a transmission pair is dated, what state survives the
+last day of the record, and when the reproduction number switches. The rest of this section
+states the models formally.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\textwidth]{../figures/model_schematic/model_schematic.pdf}
+  \caption{\textbf{What separates the infection- and onset-anchored models.} A schematic:
+    positions are illustrative and no panel is drawn from data. \textbf{A}: one
+    infector--infectee pair. The infection-anchored models connect the two recorded dates
+    directly through the serial interval, reading each onset date as an infection date; the
+    onset-anchored models route the same interval through an unobserved infection, splitting it
+    into an onset-to-transmission delay and an incubation period, $w = \ftost * \finc$
+    (Section~\ref{sec:decomposition}). \textbf{B}, \textbf{C}: the state carried past the last
+    day of the record. Both conventions retain the transmission that observed cases have still to
+    come, $\Lambda(t)$ or $W(t)$; only the onset-anchored one also carries a pipeline of
+    individuals already infected but not yet symptomatic, of mean $M(t)$, which makes a further
+    case possible without further transmission and so separates $\RAC$ from $\RAT$
+    (Section~\ref{sec:onset-risk}). Setting $M(t) = 0$ recovers the infection-anchored
+    expressions. \textbf{D}: the day $R$ switches, in each convention's own time index. The
+    onset-anchored models change $R$ for the transmission occurring on the intervention date, so
+    the recorded onsets respond an incubation period later; the infection-anchored models change
+    it for the onsets recorded on that date, which attributes the change to transmission that took
+    place a mean incubation period --- \resultnum{delays.incubation.mean}\,d --- earlier
+    (Section~\ref{sec:switch}). The Poisson forms \cori{} and \coriso{} are drawn: overdispersion
+    changes the exponents in \textbf{B} and \textbf{C}, not the structure.}
+  \label{fig:schematic}
+\end{figure}
+
 \subsection{Notation}
 \label{sec:notation}
 
@@ -554,7 +584,7 @@ multiplies the force of infection producing \emph{cases appearing} on day $t$, s
 attributes the intervention's effect to onsets from that date.
 
 The displacement between the two conventions is the infectee's \textbf{incubation period}, not
-the serial interval. A case with onset on day $t$ was infected on day $t - A$ with
+the serial interval (Fig.~\ref{fig:schematic}D). A case with onset on day $t$ was infected on day $t - A$ with
 $A \sim \finc$; the infection-anchored model dates the intervention's effect on that
 transmission to $t$, the onset-anchored model to $t - A$. The relevant delay is therefore
 $\mathbb{E}[A] = \resultnum{delays.incubation.mean}$\,d. (The serial interval,
@@ -855,7 +885,8 @@ $\mathbb{E}[q^N]=\exp\{-M(t)(1-q)\}$ in every model. Multiplication gives
 $H_{\mathrm{on}}(t)$ describe transmission still owed by cohorts observed through day $t$.
 The onset-anchored calculation adds $M(t)$, the infections already generated under the historical
 $R_u$ whose onsets lie after $t$. A further \emph{case} requires that pipeline to be empty; no
-further \emph{transmission} requires only that its members have no offspring. Setting $M(t)=0$
+further \emph{transmission} requires only that its members have no offspring
+(Fig.~\ref{fig:schematic}B, C). Setting $M(t)=0$
 reduces the onset-anchored expressions to the same retained-cohort structure as their
 infection-anchored counterparts, with the TOST survival replacing the serial-interval survival.
 

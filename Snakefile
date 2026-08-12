@@ -148,6 +148,9 @@ DELAY_RESULTS_CORE = ["scripts/run_delay_distributions.py"] + code(
     "configuration", "delay_distributions"
 )
 DELAY_FIGURE_CORE = code("configuration") + ["scripts/utils.py"]
+# The schematic draws no data at all -- no results file, no config value, no package module. Its
+# only dependency is the house style, so this is the shortest list in the file.
+SCHEMATIC_FIGURE_CORE = ["scripts/utils.py"]
 
 ANALYSES = config["analyses"]
 ONSETS_CSV = config["shared"]["data_file"]
@@ -285,8 +288,16 @@ UNDERREPORTING_MODELS = ("sse_so", "ssi_so")
 UNDERREPORTING_TARGETS = [
     f"figures/underreporting/underreporting.{extension}" for extension in ("pdf", "png")
 ]
+# Main Fig. 1, the methods schematic. It is a main target like the rest, so that `figures` and
+# the report build it, but it depends on nothing any other tier produces.
+SCHEMATIC_FIGURE_TARGETS = [
+    f"figures/model_schematic/model_schematic.{extension}" for extension in ("pdf", "png")
+]
 MAIN_TARGETS = (
-    ANALYSIS_FIGURE_TARGETS + SUSTAINED_TRANSMISSION_TARGETS["fixed_k"] + UNDERREPORTING_TARGETS
+    SCHEMATIC_FIGURE_TARGETS
+    + ANALYSIS_FIGURE_TARGETS
+    + SUSTAINED_TRANSMISSION_TARGETS["fixed_k"]
+    + UNDERREPORTING_TARGETS
 )
 RST_SUPPLEMENTARY_TARGETS = SUSTAINED_TRANSMISSION_TARGETS["estimated_k"]
 DELAY_FIGURE_TARGETS = [
@@ -560,6 +571,19 @@ rule underreporting_figure:
         " --results-root results"
         " --data {input.data}"
         " --config {input.config}"
+        " --output-pdf {output.pdf}"
+        " --output-png {output.png}"
+
+
+rule schematic_figure:
+    input:
+        script="scripts/plot_model_schematic.py",
+        code=SCHEMATIC_FIGURE_CORE,
+    output:
+        pdf="figures/model_schematic/model_schematic.pdf",
+        png="figures/model_schematic/model_schematic.png",
+    shell:
+        "python {input.script}"
         " --output-pdf {output.pdf}"
         " --output-png {output.png}"
 
