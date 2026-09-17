@@ -30,7 +30,10 @@ naive and onset-anchored models likewise.
 `no_switch_single_R`, which remove the `R` switchpoint to ask how much of the naive/onset
 difference it accounts for. They are deliberately in neither `IMPLEMENTED_ANALYSES` nor
 `SAMPLED_ANALYSES`: no report figure and no report number depends on them, and nothing builds
-them unless you name the target (`pixi run pipeline-no-switch`).
+them unless you name the target. `no_switch_results` is the expensive half (8 fits and 8 risk
+curves, so a cluster job: `REMOTE_TARGET=no_switch_results cluster/run_snakemake_on_cluster.sh`);
+`pixi run pipeline-no-switch` builds the lot locally, and `pipeline-no-switch-present` draws just
+the figures from pulled curves.
 
 The output quantity is the **risk of additional cases (RAC)**, a real-time reset posterior
 predictive: fit parameters *and* latents to the record through day `t` alone, reset `R` to
@@ -57,6 +60,8 @@ The environment is managed by **pixi**. All commands run through `pixi run`:
 | `pixi run pipeline-dry` | dry run: what would re-run, and why |
 | `pixi run pipeline-present` | after pulling cluster results, render figures/report only; compute rules are excluded |
 | `pixi run pipeline-present-dry` | dry-run the presentation-only allowlist |
+| `pixi run pipeline-no-switch` | the exploratory no-switchpoint variants; in no other target |
+| `pixi run pipeline-no-switch-present` | their figures only, after pulling a cluster run of `no_switch_results` |
 
 **Run `pixi run check` and fix every issue before committing.** No exceptions — a failing lint,
 type or test check is not "pre-existing", it is the current state of the tree.

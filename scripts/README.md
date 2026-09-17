@@ -38,7 +38,8 @@ script that spans the analyses.
 **The two no-switchpoint variants are exploratory and stay out of the report.** They are in
 `config/config.yaml` but in neither `IMPLEMENTED_ANALYSES` nor `SAMPLED_ANALYSES`, so `rule all`
 and `run_report_numbers.py` never see them and nothing builds them unless the target is named
-(`pixi run pipeline-no-switch`). They have no `plot_script:` key, because `rule figure` would
+(`pixi run pipeline-no-switch`, or `no_switch_results` for the expensive half alone, which is
+what a cluster run should target). They have no `plot_script:` key, because `rule figure` would
 demand a `model_evidence.json` that `no_switch_fixed_R` — every parameter fixed — has nothing to
 compute; `rule no_switch_figure` draws them instead. Promoting one to a report analysis means
 adding it to `IMPLEMENTED_ANALYSES` and giving it a `plot_script`.

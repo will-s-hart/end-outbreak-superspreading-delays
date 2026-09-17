@@ -179,8 +179,9 @@ SAMPLED_ANALYSES = IMPLEMENTED_ANALYSES + RAC_ONLY_ANALYSES
 # switchpoint, by removing it -- so they feed no report figure and no report number, and they
 # stay out of both lists above. Nothing builds them unless you name the target:
 #
-#     pixi run pipeline-no-switch
-#     snakemake --profile config/snakemake_profile results/no_switch_fixed_R/sse_rac.csv
+#     pixi run pipeline-no-switch                 # everything, locally
+#     REMOTE_TARGET=no_switch_results ...         # the 8 fits and 8 curves, on the cluster
+#     pixi run pipeline-no-switch-present         # the figures, from pulled curves
 #
 # `wildcard_constraints` is built from `ANALYSES`, so the generic rules already reach them.
 # Promoting one to a report analysis means adding it to `IMPLEMENTED_ANALYSES` and giving it a
@@ -724,10 +725,22 @@ rule results:
         REPORT_NUMBERS,
 
 
-# The whole of the exploratory tier, in one target. Deliberately not reachable from `rule all`
-# or `rule figures`: these analyses answer a question about the models, not one the report asks.
+# The exploratory tier, split the way `results` and `figures` are split: everything expensive
+# is in the first target, so the cluster builds that and the figures are drawn locally in
+# seconds. Deliberately not reachable from `rule all` or `rule figures` -- these analyses
+# answer a question about the models, not one the report asks.
+rule no_switch_results:
+    input:
+        [
+            f"results/{analysis}/{model}_rac.csv"
+            for analysis in EXPLORATORY_ANALYSES
+            for model in models_of(analysis)
+        ],
+
+
 rule no_switch:
     input:
+        rules.no_switch_results.input,
         [
             f"figures/{analysis}/{analysis}.{extension}"
             for analysis in EXPLORATORY_ANALYSES
