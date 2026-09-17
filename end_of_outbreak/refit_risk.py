@@ -226,6 +226,7 @@ def risk_by_refitting(
             specification=specification,
             snapshot=reused_snapshot,
             day=reused_day,
+            switch_day=switch_day,
             reporting_model=resolved_reporting,
         )
 
@@ -233,6 +234,10 @@ def risk_by_refitting(
         day: int, window: NDArray[np.int64], idata: xr.DataTree, started: float
     ) -> DayResult:
         """One day's per-draw log-probabilities and diagnostics, given its fit."""
+        # Every parameter the analysis fixed is a constant in the graph and so is nowhere in
+        # the draws. The fit records what it was held at; read it back rather than assuming it
+        # was estimated, or `posterior_state` cannot find it at all.
+        fixed_R_pre, fixed_R_post = fitting.fitted_reproduction_numbers(idata)
         state = rac.posterior_state(
             specification,
             idata,
@@ -240,6 +245,8 @@ def risk_by_refitting(
             delays=delays,
             switch_day=switch_day,
             latent_parameterisation=fitting.fitted_parameterisation(idata),
+            fixed_R_pre=fixed_R_pre,
+            fixed_R_post=fixed_R_post,
             fixed_k=fitting.fitted_dispersion(idata),
             negligible_latent_threshold=negligible_latent_threshold,
             reporting_model=fitting.fitted_reporting(idata),
@@ -366,6 +373,7 @@ def _validate_reused_fit(
     specification: ModelSpecification,
     snapshot: NDArray[np.int64],
     day: int,
+    switch_day: int,
     reporting_model: reporting.ReportingModel,
 ) -> None:
     """Ensure a supplied final-day fit describes exactly the snapshot it would replace."""
@@ -376,6 +384,13 @@ def _validate_reused_fit(
         )
     if fitting.fitted_reporting(idata) != reporting_model:
         raise ValueError("final_day_fit's reporting assumption does not match this curve")
+    fitted_switch = fitting.fitted_switch_day(idata)
+    if fitted_switch is not None and fitted_switch != switch_day:
+        raise ValueError(
+            f"final_day_fit switched R on day {fitted_switch}, but this curve switches on day "
+            f"{switch_day}. The two describe different models, and reusing the fit would put "
+            "one convention's posterior on the other's last conditioning day"
+        )
     if fitting.fitted_as_of_day(idata, snapshot) != day:
         raise ValueError("final_day_fit's as-of day does not match the final snapshot")
     if pymc_models.OBSERVED_VARIABLE not in idata.observed_data:
@@ -415,6 +430,18 @@ def summarise_fit(idata: Any, *, day: int, seconds: float) -> DayDiagnostics:
     divergences = 0
     if "sample_stats" in idata and "diverging" in idata.sample_stats:
         divergences = int(np.asarray(idata.sample_stats["diverging"]).sum())
+    if not idata.posterior.data_vars:
+        # A fit with every parameter fixed and no latent block sampled nothing, so there is no
+        # convergence to report. `az.rhat` raises on an empty posterior rather than returning
+        # an empty result, so this is a guard and not merely a shortcut. `nan` compares false
+        # against every threshold, which is what lets the acceptance gate pass it unremarked.
+        return DayDiagnostics(
+            day=int(day),
+            divergences=divergences,
+            max_r_hat=float("nan"),
+            min_ess_bulk=float("nan"),
+            seconds=float(seconds),
+        )
     return DayDiagnostics(
         day=int(day),
         divergences=divergences,

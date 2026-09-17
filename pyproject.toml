@@ -92,8 +92,12 @@ pipeline-dry = "snakemake --profile config/snakemake_profile -n"
 # After pulling the cluster's completed `results` target, render presentation artefacts only.
 # The allowlist is load-bearing: compute rules do not enter the DAG even if local provenance
 # says their existing outputs are stale.
-pipeline-present = "snakemake --profile config/snakemake_profile -j4 figures report/report.pdf --allowed-rules figures schematic_figure delay_figure figure sustained_transmission_figure underreporting_figure report"
-pipeline-present-dry = "snakemake --profile config/snakemake_profile -n figures report/report.pdf --allowed-rules figures schematic_figure delay_figure figure sustained_transmission_figure underreporting_figure report"
+pipeline-present = "snakemake --profile config/snakemake_profile -j4 figures report/report.pdf --allowed-rules figures schematic_figure delay_figure figure sustained_transmission_figure underreporting_figure no_switch_figure report"
+pipeline-present-dry = "snakemake --profile config/snakemake_profile -n figures report/report.pdf --allowed-rules figures schematic_figure delay_figure figure sustained_transmission_figure underreporting_figure no_switch_figure report"
+# The exploratory no-switchpoint variants. A separate task because they are not in `rule all`:
+# nothing builds them unless they are named.
+pipeline-no-switch = "snakemake --profile config/snakemake_profile -j4 no_switch"
+pipeline-no-switch-dry = "snakemake --profile config/snakemake_profile -n no_switch"
 
 # ---------------------------------------------------------------------------
 # ruff

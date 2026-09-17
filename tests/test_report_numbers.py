@@ -29,6 +29,7 @@ from types import ModuleType
 import numpy as np
 import pandas as pd
 import pytest
+import xarray as xr
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 REPORT_TEX = REPO_ROOT / "report" / "report.tex"
@@ -347,3 +348,37 @@ def test_missing_results_fail_loudly_rather_than_falling_back(tmp_path):
         report_numbers.read_json(tmp_path / "model_evidence.json")
     with pytest.raises(FileNotFoundError, match="no RAC curve"):
         report_numbers.read_risk_curve(tmp_path / "ssi_rac.csv")
+
+
+def parameterless_posterior(**attributes) -> xr.DataTree:
+    """A fit with no parameters in its draws, however it came to have none."""
+    empty = xr.Dataset(coords={"chain": [0, 1], "draw": [0]})
+    tree = xr.DataTree.from_dict({"posterior": empty})
+    tree.attrs.update(attributes)
+    return tree
+
+
+def test_a_parameter_the_fit_says_was_fixed_is_skipped_rather_than_summarised():
+    """There is no posterior to summarise; `add_sampler` has already written the value."""
+    numbers = report_numbers.NumberFile()
+    report_numbers.add_parameters(
+        numbers,
+        parameterless_posterior(fixed_R_pre=0.95, fixed_R_post=0.95, fixed_k=0.18),
+        "prefix",
+    )
+    assert len(numbers) == 0
+
+
+def test_a_parameter_missing_for_no_recorded_reason_stops_the_build():
+    """The failure this guards against: a macro that is quietly never defined.
+
+    Absent from the draws *and* absent from the fit's record of what was fixed means the fit
+    is not the one this analysis describes. Skipping it would leave the key undefined, which
+    looks exactly like a key the report never needed.
+    """
+    with pytest.raises(KeyError, match="no value it was fixed at"):
+        report_numbers.add_parameters(
+            report_numbers.NumberFile(),
+            parameterless_posterior(fixed_k=0.18),
+            "prefix",
+        )

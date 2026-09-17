@@ -26,6 +26,12 @@ compared models**, and they stay out of the four analyses. Four analyses, config
 `config/config.yaml`: the naive models at a transplanted `k` and at an estimated `k`, then the
 naive and onset-anchored models likewise.
 
+`config/config.yaml` also carries two **exploratory** analyses, `no_switch_fixed_R` and
+`no_switch_single_R`, which remove the `R` switchpoint to ask how much of the naive/onset
+difference it accounts for. They are deliberately in neither `IMPLEMENTED_ANALYSES` nor
+`SAMPLED_ANALYSES`: no report figure and no report number depends on them, and nothing builds
+them unless you name the target (`pixi run pipeline-no-switch`).
+
 The output quantity is the **risk of additional cases (RAC)**, a real-time reset posterior
 predictive: fit parameters *and* latents to the record through day `t` alone, reset `R` to
 `R_pre`, and ask for the posterior probability of at least one further case. **Every conditioning
@@ -337,7 +343,16 @@ committed measurement.
   the complete record, which asks a different question rather than approximating this one; the
   shifted `R`-switch that separates structure from indexing; a non-empty initial incubation
   pipeline; and prior sensitivity. The first, second, fourth and fifth are one config value apiece
-  and no new code.
+  and no new code — the fourth only since a per-analysis `switch_day` became a setting anything
+  reads. The `shared.ert_arrival_day` key that used to look like the switch knob was dead config,
+  and is gone; the ERT's dates live in `outbreak_data.py`, where the report reads them from.
+- **The two no-switchpoint variants are implemented but not interpreted.** `no_switch_fixed_R`
+  holds `R` at 0.95 with `k` at 0.18 and estimates nothing but the latents, so any surviving
+  naive/onset gap is retained-state arithmetic alone; `no_switch_single_R` estimates one `R` per
+  model. Both move the switch past the end of the window, which also makes RAC's reset to
+  `R_pre` a no-op — so they report a forward predictive, not the reset predictive the report's
+  analyses do. Nothing is written up until a `refit_daily` run exists; the quick route is never
+  a finding.
 - **The reset-convention follow-up remains declined** unless asked for. RST is now a reported
   estimand rather than an optional follow-up.
 - **Per-fit process spawn dominates the cheap models' cost.** Each conditioning-day fit starts

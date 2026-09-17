@@ -1,4 +1,4 @@
-"""Write the discrete delay distributions used by the models for Supplementary Fig. S1."""
+"""Write the discrete delay distributions the models use, for their supplementary figure."""
 
 from __future__ import annotations
 

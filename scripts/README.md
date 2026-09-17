@@ -1,8 +1,9 @@
 # Pipeline scripts
 
-The four report analyses, and nothing else. Every script here is invoked by a Snakemake rule
-and writes to `results/` or `figures/`; if an output is not a report input, it does not belong
-in this tree — see `validation/` for benchmarks and cross-checks.
+The four report analyses, the two exploratory no-switchpoint variants, and nothing else. Every
+script here is invoked by a Snakemake rule and writes to `results/` or `figures/`; if an output
+is neither a report input nor an analysis of the outbreak, it does not belong in this tree —
+see `validation/` for benchmarks and cross-checks, whose subject is the implementation.
 
 | Script | Tier | Writes |
 | --- | --- | --- |
@@ -20,6 +21,8 @@ in this tree — see `validation/` for benchmarks and cross-checks.
 | `plot_onset_models_estimated_k.py` | 3 | the same for `onset_models_estimated_k` |
 | `run_underreporting_60.py`, `run_underreporting_80.py` | 1 | the same tier-1 outputs, with the onsets read as *reported* counts |
 | `plot_underreporting.py` | 3 | `figures/underreporting/*` — the reporting sweep |
+| `run_no_switch_fixed_R.py`, `run_no_switch_single_R.py` | 1 | the exploratory variants' tier-1 outputs, with the `R` switchpoint removed |
+| `plot_no_switch.py` | 3 | `figures/no_switch_*/*` — both variants, from one script taking `--analysis` |
 | `plot_model_schematic.py` | 3 | Main Fig. 1: the infection- vs onset-anchored schematic. Draws no data, so it takes no input but the house style |
 | `plot_delay_distributions.py` | 3 | Supplementary Fig. S1: incubation, TOST and serial-interval distributions |
 | `plot_sustained_transmission.py` | 3 | Main Fig. 6 (fixed `k`) and Supplementary Fig. S2 (estimated `k`): RAC/RAT/RST by anchoring |
@@ -31,6 +34,14 @@ figures. That explicit list, not the config, remains what
 `rule all` and the convenience aggregates are built from — and Stage 10's `run_report_numbers.py`
 takes it on the command line rather than growing a second copy of it, because it is the one
 script that spans the analyses.
+
+**The two no-switchpoint variants are exploratory and stay out of the report.** They are in
+`config/config.yaml` but in neither `IMPLEMENTED_ANALYSES` nor `SAMPLED_ANALYSES`, so `rule all`
+and `run_report_numbers.py` never see them and nothing builds them unless the target is named
+(`pixi run pipeline-no-switch`). They have no `plot_script:` key, because `rule figure` would
+demand a `model_evidence.json` that `no_switch_fixed_R` — every parameter fixed — has nothing to
+compute; `rule no_switch_figure` draws them instead. Promoting one to a report analysis means
+adding it to `IMPLEMENTED_ANALYSES` and giving it a `plot_script`.
 
 Conventions, all of them load-bearing:
 
@@ -48,7 +59,9 @@ Conventions, all of them load-bearing:
 - **The figure layout follows the number of parameter posteriors, and the RAC panel's *view*
   follows the layout.** A fixed-`k` figure has two (`R_pre`, `R_post`), so it is four panels with
   the RAC spanning the bottom row; an estimated-`k` figure has three, so it is five, with the pie
-  dropping beside the RAC curves. Where the RAC panel shares its row it starts at the ERT's
+  dropping beside the RAC curves. The no-switchpoint variants take the rule to its other end:
+  `no_switch_single_R` has one, so it is two stacked panels, and `no_switch_fixed_R` has none at
+  all, so it is the RAC panel by itself. Where the RAC panel shares its row it starts at the ERT's
   arrival (`risk_curve_panel(first_day=...)`). **`first_day` trims the view only** — every curve
   is still drawn over the whole window and the settling markers are untouched, so a trimmed panel
   can never show a different crossing date from an untrimmed one.

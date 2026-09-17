@@ -1,4 +1,4 @@
-"""RAC under incomplete reporting — SSE-SO and SSI-SO at 100%, 80% and 60% (→ Fig. 6).
+"""RAC under incomplete reporting — SSE-SO and SSI-SO at 100%, 80% and 60%.
 
 One panel, six curves: colour is the transmission mechanism and linestyle the assumed reporting
 probability, following the convention of the sustained-transmission figure. The view starts at

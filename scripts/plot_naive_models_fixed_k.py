@@ -1,4 +1,4 @@
-"""Figure 1 — the three naive models with ``k`` held at 0.18.
+"""The three naive models with ``k`` held at 0.18.
 
 Four panels, reading left to right and then down::
 
@@ -16,8 +16,8 @@ towards the Poisson answer.
 Panel C is neither decoration nor a mechanism comparison. It reports the evidence for the models
 **as specified, priors included** (§6.5) — and one of these specifications applies an
 individual-level ``k`` to a day-level mechanism deliberately, as the demonstration of a mistake
-made in the literature. The caption must say so. Fig. 2, where ``k`` is estimated under a common
-prior, is the closer thing to a comparison of mechanisms.
+made in the literature. The caption must say so. The estimated-``k`` figure, where
+``k`` moves under a common prior, is the closer thing to a comparison of mechanisms.
 
 Loads only what the tier-2 rules wrote, so a restyle costs seconds rather than an MCMC run::
 

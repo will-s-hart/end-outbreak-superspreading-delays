@@ -11,9 +11,11 @@ know which is happening — the window is just the data it is given.
 
 The recorded facts matter. The RAC calculators need to know which latent parameterisation the
 fit used — it decides which latents were integrated out of the likelihood, and therefore which
-have to be integrated back out of the risk (§6.3) — and, in the fixed-``k`` analyses, the value
-``k`` was held at, since a fixed parameter is a constant in the graph rather than a variable in
-the posterior. Both travel with the fit as attributes so that a results file is self-describing.
+have to be integrated back out of the risk (§6.3) — and the value of every parameter that was
+*fixed* rather than estimated, since a fixed parameter is a constant in the graph rather than a
+variable in the posterior. ``k`` in the fixed-``k`` analyses, and ``R_pre``/``R_post`` in the
+analyses that hold the reproduction number constant, travel with the fit as attributes so that a
+results file is self-describing. So does the switch day, which an analysis may override.
 """
 
 from __future__ import annotations
@@ -39,6 +41,8 @@ from end_of_outbreak.model_specifications import (
 MODEL_ATTRIBUTE = "model"
 PARAMETERISATION_ATTRIBUTE = "latent_parameterisation"
 FIXED_DISPERSION_ATTRIBUTE = "fixed_k"
+FIXED_R_PRE_ATTRIBUTE = "fixed_R_pre"
+FIXED_R_POST_ATTRIBUTE = "fixed_R_post"
 SWITCH_DAY_ATTRIBUTE = "switch_day"
 THRESHOLD_ATTRIBUTE = "negligible_latent_threshold"
 REPORTING_PROBABILITY_ATTRIBUTE = "reporting_probability"
@@ -147,26 +151,32 @@ def fit_model(
         reporting_model=resolved_reporting,
     )
 
-    # `target_accept` is a NUTS setting, and PyMC rejects it outright when no variable is
-    # sampled by NUTS. That happens only under incomplete reporting with every continuous
-    # parameter fixed — the latent counts are then the whole free block, and Metropolis has no
-    # acceptance target to hit.
-    overrides: dict[str, Any] = (
-        {"target_accept": settings.target_accept} if _has_continuous_variables(built) else {}
-    )
-    with built:
-        idata = pm.sample(
-            draws=settings.draws,
-            tune=settings.tune,
-            chains=settings.chains,
-            # One process, chains in sequence. See the `sampler` parameter above: the fits
-            # themselves are the parallel axis, not the chains within one.
-            cores=1,
-            random_seed=settings.seed,
-            initvals=initial_values or None,
-            progressbar=progressbar,
-            **overrides,
+    if not built.free_RVs:
+        # Every parameter fixed and no latent block: the posterior is a point mass, and PyMC
+        # refuses to sample a model with nothing free in it. Stand one up rather than making
+        # the caller special-case a model whose answer is simply deterministic.
+        idata = _point_mass_posterior(built, settings)
+    else:
+        # `target_accept` is a NUTS setting, and PyMC rejects it outright when no variable is
+        # sampled by NUTS. That happens under incomplete reporting with every continuous
+        # parameter fixed — the latent counts are then the whole free block, and Metropolis has
+        # no acceptance target to hit.
+        overrides: dict[str, Any] = (
+            {"target_accept": settings.target_accept} if _has_continuous_variables(built) else {}
         )
+        with built:
+            idata = pm.sample(
+                draws=settings.draws,
+                tune=settings.tune,
+                chains=settings.chains,
+                # One process, chains in sequence. See the `sampler` parameter above: the fits
+                # themselves are the parallel axis, not the chains within one.
+                cores=1,
+                random_seed=settings.seed,
+                initvals=initial_values or None,
+                progressbar=progressbar,
+                **overrides,
+            )
 
     idata.attrs.update(
         {
@@ -178,9 +188,12 @@ def fit_model(
                 if latent_parameterisation is None
                 else lp.parameterisation_of(latent_parameterisation).name
             ),
-            # A fixed k is a constant in the graph, so it is nowhere in the draws; record it,
-            # or the RAC calculators have no way to recover the value the fit was run at.
-            FIXED_DISPERSION_ATTRIBUTE: float(k) if isinstance(k, float | int) else np.nan,
+            # A fixed parameter is a constant in the graph, so it is nowhere in the draws;
+            # record it, or the RAC calculators have no way to recover the value the fit was
+            # run at. `nan` means "estimated", which is what `fitted_*` reads back as None.
+            FIXED_DISPERSION_ATTRIBUTE: _fixed_value(k),
+            FIXED_R_PRE_ATTRIBUTE: _fixed_value(R_pre),
+            FIXED_R_POST_ATTRIBUTE: _fixed_value(R_post),
             # Likewise the reporting assumption: it is an input, not a parameter, and the risk
             # path has to know whether the driving series is the data or the latent totals.
             REPORTING_PROBABILITY_ATTRIBUTE: float(resolved_reporting.probability),
@@ -196,6 +209,52 @@ def fit_model(
         }
     )
     return idata
+
+
+def _fixed_value(value: float | LogNormalPrior | None) -> float:
+    """The constant a parameter was held at, or ``nan`` where it was estimated or absent."""
+    return float(value) if isinstance(value, float | int) else np.nan
+
+
+def _point_mass_posterior(built: pm.Model, settings: SamplerSettings) -> xr.DataTree:
+    """The "posterior" of a model with nothing free in it: one draw, no variables.
+
+    Fixing every parameter of a model that carries no latent block leaves no free variable, and
+    ``pm.sample`` refuses such a model outright. Its posterior is nonetheless perfectly well
+    defined — it is a point mass at the values that were fixed — and the risk that follows from
+    it is deterministic. Returning an empty posterior lets every downstream step work unchanged:
+    :func:`~end_of_outbreak.risk_of_additional_cases.posterior_state` fills each parameter from
+    the ``fixed_*`` argument it is handed, and finds the draw count here.
+
+    ``settings.chains`` identical chains rather than one, because
+    :func:`~end_of_outbreak.risk_of_additional_cases.monte_carlo_standard_error` reports ``nan``
+    below two chains, whereas identical chains give it exactly zero — which is the truthful
+    Monte-Carlo error of a curve that involved no Monte Carlo.
+
+    ``observed_data`` is carried too, exactly as ``pm.sample`` would have carried it. It is not
+    decoration: :func:`~end_of_outbreak.refit_risk.risk_by_refitting` checks a reused final-day
+    fit against the snapshot it stands in for, and that check reads the observations.
+    """
+    empty = xr.Dataset(
+        coords={
+            "chain": np.arange(settings.chains, dtype=np.int64),
+            "draw": np.arange(1, dtype=np.int64),
+        }
+    )
+    observed = xr.Dataset(
+        {
+            rv.name: (
+                built.named_vars_to_dims.get(rv.name, ()),
+                np.asarray(rv.tag.observations.data),
+            )
+            for rv in built.observed_RVs
+        },
+        # `built.coords` holds tuples, which xarray would read as a (dims, data) pair.
+        coords={
+            name: np.asarray(values) for name, values in built.coords.items() if values is not None
+        },
+    )
+    return xr.DataTree.from_dict({"posterior": empty, "observed_data": observed})
 
 
 def _has_continuous_variables(built: pm.Model) -> bool:
@@ -278,8 +337,38 @@ def fitted_parameterisation(idata: xr.DataTree) -> str | None:
 
 def fitted_dispersion(idata: xr.DataTree) -> float | None:
     """The value ``k`` was fixed at, or ``None`` if it was estimated (or absent)."""
-    value = idata.attrs.get(FIXED_DISPERSION_ATTRIBUTE, np.nan)
+    return _fitted_constant(idata, FIXED_DISPERSION_ATTRIBUTE)
+
+
+def _fitted_constant(idata: xr.DataTree, attribute: str) -> float | None:
+    """A recorded fixed parameter value; ``None`` where it was estimated or never recorded."""
+    value = idata.attrs.get(attribute, np.nan)
     return None if value is None or np.isnan(float(value)) else float(value)
+
+
+def fitted_reproduction_numbers(idata: xr.DataTree) -> tuple[float | None, float | None]:
+    """The values ``R_pre`` and ``R_post`` were fixed at; ``None`` where either was estimated.
+
+    The counterpart of :func:`fitted_dispersion` for the reproduction numbers, so that a route
+    which only has the fit — :mod:`end_of_outbreak.refit_risk`, or a step reading a saved
+    posterior — can hand them back to the RAC calculators, which cannot find a fixed parameter
+    in the draws.
+    """
+    return (
+        _fitted_constant(idata, FIXED_R_PRE_ATTRIBUTE),
+        _fitted_constant(idata, FIXED_R_POST_ATTRIBUTE),
+    )
+
+
+def fitted_switch_day(idata: xr.DataTree) -> int | None:
+    """The day ``R`` switched on in the fit, or ``None`` for a fit that recorded none.
+
+    An analysis may move the switch — past the end of the window, to disable it altogether —
+    so anything rebuilding a model's structure from a saved fit has to read the day the fit
+    actually used rather than assuming the ERT arrival day.
+    """
+    value = idata.attrs.get(SWITCH_DAY_ATTRIBUTE)
+    return None if value is None else int(value)
 
 
 def fitted_reporting(idata: xr.DataTree) -> reporting.ReportingModel:

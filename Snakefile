@@ -174,11 +174,34 @@ RAC_ONLY_ANALYSES = [
 ]
 SAMPLED_ANALYSES = IMPLEMENTED_ANALYSES + RAC_ONLY_ANALYSES
 
+# The no-switchpoint variants: analyses for `rule fit`, `rule rac` and their own figure rule,
+# and for nothing else. They are exploratory -- they ask how much of the naive/onset gap is the
+# switchpoint, by removing it -- so they feed no report figure and no report number, and they
+# stay out of both lists above. Nothing builds them unless you name the target:
+#
+#     pixi run pipeline-no-switch
+#     snakemake --profile config/snakemake_profile results/no_switch_fixed_R/sse_rac.csv
+#
+# `wildcard_constraints` is built from `ANALYSES`, so the generic rules already reach them.
+# Promoting one to a report analysis means adding it to `IMPLEMENTED_ANALYSES` and giving it a
+# `plot_script`; until then `rule all` cannot see it.
+EXPLORATORY_ANALYSES = [
+    "no_switch_fixed_R",
+    "no_switch_single_R",
+]
 
-# Everything a rule's result depends on must appear in its `params:`. The default profile
-# drops the `mtime` rerun trigger (committed outputs lose their mtimes on clone), and the
-# `input` trigger tracks the *set* of input files rather than their contents -- so editing
-# config.yaml does NOT invalidate a rule unless the changed value is recorded here.
+
+# Everything a rule's result depends on must appear in its `params:`. Note what that is and is
+# not protecting against: the default profile drops the `mtime` rerun trigger (committed outputs
+# lose their mtimes on clone), but the surviving `input` trigger is per-file and content-based,
+# and `config/config.yaml` is an `input:` of every rule. So *any* edit to it -- including one to
+# a value named in no `params:` at all -- marks every fit stale, reported as
+# `Updated input files: config/config.yaml`. The same goes for the package modules each rule
+# lists, which is exactly what makes those lists worth keeping narrow.
+#
+# These `params:` are therefore a second line of defence rather than the mechanism. Keep them
+# complete anyway: dropping the config file from the `input:` lists would make them
+# load-bearing, and that trade is not worth making until they can be trusted alone.
 def analysis_params(analysis):
     """Config values that change what a fit for `analysis` produces.
 
@@ -190,6 +213,12 @@ def analysis_params(analysis):
     return {
         "fixed_k": block.get("fixed_k"),
         "k_prior": block.get("k_prior"),
+        # A fixed reproduction number and a moved switch day each change every draw, so both
+        # belong here for the same reason `fixed_k` does. Absent from all but the exploratory
+        # analyses, where they read as None.
+        "fixed_R_pre": block.get("fixed_R_pre"),
+        "fixed_R_post": block.get("fixed_R_post"),
+        "switch_day": block.get("switch_day"),
         "sampler": block["sampler"],
         "latent_parameterisation": config.get("latent_parameterisation"),
         "negligible_latent_threshold": config.get("negligible_latent_threshold"),
@@ -549,6 +578,42 @@ rule sustained_transmission_figure:
         " --output-png {output.png}"
 
 
+# `figures/{analysis}/{analysis}.{pdf,png}` is also `rule figure`'s output pattern, so the two
+# would be ambiguous for these two analyses. The constraint below keeps this rule to them and
+# the `ruleorder` settles which one Snakemake reaches for. This rule exists at all because the
+# variants take no `model_evidence.json`: `no_switch_fixed_R` fixes every parameter, leaving
+# nothing to integrate over, so neither figure draws a posterior-model-probability panel.
+ruleorder: no_switch_figure > figure
+
+
+rule no_switch_figure:
+    wildcard_constraints:
+        analysis="|".join(EXPLORATORY_ANALYSES),
+    input:
+        racs=racs_of,
+        # Only the single-R variant has a parameter posterior to draw.
+        posteriors=lambda wildcards: (
+            posteriors_of(wildcards) if wildcards.analysis == "no_switch_single_R" else []
+        ),
+        data=ONSETS_CSV,
+        config=CONFIG_FILE,
+        script="scripts/plot_no_switch.py",
+        code=PLOT_CORE,
+    output:
+        pdf="figures/{analysis}/{analysis}.pdf",
+        png="figures/{analysis}/{analysis}.png",
+    params:
+        shared=SHARED_PARAMS,
+    shell:
+        "python {input.script}"
+        " --analysis {wildcards.analysis}"
+        " --results-dir results/{wildcards.analysis}"
+        " --data {input.data}"
+        " --config {input.config}"
+        " --output-pdf {output.pdf}"
+        " --output-png {output.png}"
+
+
 rule underreporting_figure:
     input:
         racs=[
@@ -657,6 +722,17 @@ rule results:
         ],
         "results/delay_distributions.csv",
         REPORT_NUMBERS,
+
+
+# The whole of the exploratory tier, in one target. Deliberately not reachable from `rule all`
+# or `rule figures`: these analyses answer a question about the models, not one the report asks.
+rule no_switch:
+    input:
+        [
+            f"figures/{analysis}/{analysis}.{extension}"
+            for analysis in EXPLORATORY_ANALYSES
+            for extension in ("pdf", "png")
+        ],
 
 
 rule figures:

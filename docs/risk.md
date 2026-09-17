@@ -76,7 +76,16 @@ for the rest, returning a `DailyRiskEstimate` that every route produces.
   `(μ_j)_{j>t}` from `future_force_of_infection`. Collapsing it to Λ(t) would silently turn DLO
   into a different model, and the mechanism headline would vanish with it.
 - **A parameter that was *fixed* in the fit is not in the posterior.** Pass `fixed_k` for the
-  fixed-`k` analyses, and `fixed_R_pre`/`fixed_R_post` too for the fixed-`θ` cross-checks.
+  fixed-`k` analyses, and `fixed_R_pre`/`fixed_R_post` too where `R` is held constant — the
+  fixed-`θ` cross-checks, and the no-switchpoint variants. The pipeline routes do not need
+  telling: `fit_model` records every fixed value on the fit, and `refit_risk` and the filtering
+  path read them back with `fitted_reproduction_numbers` and `fitted_dispersion`. A caller
+  holding a hand-built fit still passes them itself.
+- **A model with every parameter fixed and no latent block has nothing to sample.** `fit_model`
+  returns a point-mass posterior — no variables, one draw per chain — rather than letting PyMC
+  refuse the model, because the risk that follows from it is simply deterministic. Its
+  Monte-Carlo standard error is exactly zero, and its convergence diagnostics are `NaN`, which
+  the acceptance gate passes unremarked because there was no sampling to converge.
 
 ### Eventual extinction under the reset
 

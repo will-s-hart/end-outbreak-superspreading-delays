@@ -7,10 +7,11 @@
 shared:
   data_file: data/equateur_2018_onsets.csv
 
-  # Analysis window and the R-switch convention (§5.7 of the implementation plan): R
-  # switches on this day index in *each model's own* time index.
-  ert_arrival_day: 33
-  ert_withdrawal_day: 110
+  # The analysis window and the ERT's arrival and withdrawal dates are facts about the
+  # outbreak, not settings: they live beside the onset dates in `end_of_outbreak/outbreak_data`
+  # (days 33 and 110, i.e. 8 May and 24 July 2018), which is also where the report reads them
+  # from. The day a model *switches* R is the modelling choice, and defaults to the arrival
+  # day; override it per analysis with `switch_day` (§5.7 of the implementation plan).
 
   # Delay distributions. `serial_interval` drives all five models; `incubation_period` and
   # the residual TOST drive the two onset-anchored ones.
@@ -75,6 +76,35 @@ analyses:
     run_script: scripts/run_onset_models_estimated_k.py
     plot_script: scripts/plot_onset_models_estimated_k.py
     sampler: {draws: 2000, tune: 2000, chains: 4, target_accept: 0.95, seed: 20260808}
+
+  # Exploratory, and deliberately out of IMPLEMENTED_ANALYSES: no report figure, no report
+  # number. They ask how much of the naive/onset gap in Analysis 3 is the switchpoint, by
+  # removing it. `switch_day: 111` is past the end of the 111-day window, so `switch_index`
+  # leaves R_pre in force on every day, in each model's own time index.
+  #
+  # Both therefore drop the reset counterfactual too: with R constant, RAC's reset to R_pre is
+  # a no-op and the estimand is a plain forward predictive rather than a reset predictive.
+  # That is the point of the comparison, not an oversight, and the figures say so.
+  #
+  # Under `no_switch_fixed_R` nothing at all is estimated but the latents, so SSE — fixed k,
+  # fixed R, no latent block — has no free variable and its posterior is a point mass. Under
+  # `no_switch_single_R`, R_post is still declared but reaches no day, so it returns its prior
+  # and is never plotted; a single estimated R is exactly R_pre.
+  no_switch_fixed_R:
+    models: [sse, ssi, sse_so, ssi_so]
+    fixed_k: 0.18
+    fixed_R_pre: 0.95
+    fixed_R_post: 0.95
+    switch_day: 111
+    run_script: scripts/run_no_switch_fixed_R.py
+    sampler: {draws: 2000, tune: 2000, chains: 4, target_accept: 0.9, seed: 20260916}
+
+  no_switch_single_R:
+    models: [sse, ssi, sse_so, ssi_so]
+    fixed_k: 0.18
+    switch_day: 111
+    run_script: scripts/run_no_switch_single_R.py
+    sampler: {draws: 2000, tune: 2000, chains: 4, target_accept: 0.9, seed: 20260917}
 
   # Under-reporting, at the fixed k of Analysis 3 so that the sweep isolates reporting alone
   # and its 100% panel *is* that analysis. Only the onset-anchored models are run: the naive

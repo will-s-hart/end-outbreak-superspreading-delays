@@ -256,6 +256,7 @@ def test_the_final_day_reuses_the_fit_it_is_handed():
             specification=specification_of("sse"),
             snapshot=COUNTS,
             day=last,
+            switch_day=SWITCH_DAY,
             reporting_model=reporting.COMPLETE_REPORTING,
         )
 
@@ -267,6 +268,7 @@ def test_the_final_day_reuses_the_fit_it_is_handed():
             specification=specification_of("sse"),
             snapshot=COUNTS,
             day=last,
+            switch_day=SWITCH_DAY,
             reporting_model=reporting.COMPLETE_REPORTING,
         )
 
@@ -278,8 +280,175 @@ def test_the_final_day_reuses_the_fit_it_is_handed():
             specification=specification_of("sse"),
             snapshot=COUNTS,
             day=last,
+            switch_day=SWITCH_DAY,
             reporting_model=reporting.COMPLETE_REPORTING,
         )
+
+    # A fit run under a different switch convention is a different model, and reusing it would
+    # put that model's posterior on this curve's last conditioning day.
+    wrong_switch = idata.copy(deep=True)
+    wrong_switch.attrs[fitting.SWITCH_DAY_ATTRIBUTE] = SWITCH_DAY + 1
+    with pytest.raises(ValueError, match="switched R on day"):
+        refit_risk._validate_reused_fit(
+            wrong_switch,
+            specification=specification_of("sse"),
+            snapshot=COUNTS,
+            day=last,
+            switch_day=SWITCH_DAY,
+            reporting_model=reporting.COMPLETE_REPORTING,
+        )
+
+
+# --- a fit with nothing free in it ----------------------------------------------------------
+
+
+def test_fixing_every_parameter_of_a_latent_free_model_gives_a_point_mass_posterior():
+    """SSE with ``R`` and ``k`` fixed has no free variable, and PyMC refuses such a model.
+
+    Its posterior is nonetheless well defined — a point mass at what was fixed — so `fit_model`
+    stands one up instead. Every fixed value has to come back off the fit, because none of them
+    is anywhere in the draws.
+    """
+    idata = fitting.fit_model(
+        "sse",
+        COUNTS,
+        delays=SHORT_DELAYS,
+        switch_day=SWITCH_DAY,
+        R_pre=0.95,
+        R_post=0.95,
+        k=K,
+        sampler=FAST,
+    )
+    assert not idata.posterior.data_vars
+    assert idata.posterior.sizes == {"chain": FAST.chains, "draw": 1}
+    assert fitting.fitted_reproduction_numbers(idata) == (0.95, 0.95)
+    assert fitting.fitted_dispersion(idata) == K
+    assert fitting.fitted_switch_day(idata) == SWITCH_DAY
+    # The observations travel too, or the fit cannot be reused as a final-day fit.
+    assert pymc_models.OBSERVED_VARIABLE in idata.observed_data
+
+
+def test_an_estimated_parameter_is_recorded_as_having_no_fixed_value():
+    idata = fitting.fit_model(
+        "sse",
+        COUNTS,
+        delays=SHORT_DELAYS,
+        switch_day=SWITCH_DAY,
+        R_pre=PRIOR,
+        R_post=0.5,
+        k=K,
+        sampler=FAST,
+    )
+    assert fitting.fitted_reproduction_numbers(idata) == (None, 0.5)
+
+
+def test_a_point_mass_fit_survives_the_round_trip_to_netcdf(tmp_path):
+    idata = fitting.fit_model(
+        "sse",
+        COUNTS,
+        delays=SHORT_DELAYS,
+        switch_day=SWITCH_DAY,
+        R_pre=0.95,
+        R_post=0.95,
+        k=K,
+        sampler=FAST,
+    )
+    reloaded = fitting.load_fit(fitting.save_fit(idata, tmp_path / "point_mass.nc"))
+    assert fitting.fitted_reproduction_numbers(reloaded) == (0.95, 0.95)
+    assert reloaded.posterior.sizes == {"chain": FAST.chains, "draw": 1}
+
+
+def test_a_fixed_R_curve_is_deterministic_and_carries_no_monte_carlo_error():
+    """The whole point of the fixed-``R`` variant: nothing is sampled, so nothing is noisy.
+
+    It also pins the gap this closed. `risk_by_refitting` used to pass the fit no fixed ``R``
+    at all, so `posterior_state` could not find one and raised — the fixed-``R`` analyses were
+    unreachable from the refit path even though the calculators supported them.
+    """
+    days = np.array([COUNTS.size - 3, COUNTS.size - 1])
+    result = refit_risk.risk_by_refitting(
+        "sse",
+        COUNTS,
+        delays=SHORT_DELAYS,
+        switch_day=SWITCH_DAY,
+        R_pre=0.95,
+        R_post=0.95,
+        k=K,
+        days=days,
+        sampler=FAST,
+    )
+    np.testing.assert_array_equal(result.estimate.days, days)
+    np.testing.assert_array_equal(result.estimate.standard_errors()[0], 0.0)
+
+    # The same numbers, from the closed form applied to each window by hand.
+    for position, day in enumerate(days):
+        window = COUNTS[: day + 1]
+        state = rac.posterior_state(
+            "sse",
+            fitting.fit_model(
+                "sse",
+                window,
+                delays=SHORT_DELAYS,
+                switch_day=SWITCH_DAY,
+                R_pre=0.95,
+                R_post=0.95,
+                k=K,
+                sampler=FAST,
+            ),
+            window,
+            delays=SHORT_DELAYS,
+            switch_day=SWITCH_DAY,
+            fixed_R_pre=0.95,
+            fixed_R_post=0.95,
+            fixed_k=K,
+        )
+        expected = rac.risk_log_probabilities(
+            "sse",
+            state,
+            counts=window,
+            delays=SHORT_DELAYS,
+            switch_day=SWITCH_DAY,
+            days=np.array([day]),
+        )
+        np.testing.assert_allclose(
+            result.estimate.log_no_further_cases[:, position : position + 1],
+            expected.log_no_further_cases,
+        )
+
+
+def test_a_fit_that_sampled_nothing_reports_no_convergence_rather_than_raising():
+    """`az.rhat` raises on an empty posterior, so the diagnostics need their own answer.
+
+    ``NaN`` rather than a flattering 1.0: there was no sampling, so there is nothing to report,
+    and ``NaN`` compares false against every threshold the acceptance gate applies.
+    """
+    idata = fitting.fit_model(
+        "sse",
+        COUNTS,
+        delays=SHORT_DELAYS,
+        switch_day=SWITCH_DAY,
+        R_pre=0.95,
+        R_post=0.95,
+        k=K,
+        sampler=FAST,
+    )
+    diagnostics = refit_risk.summarise_fit(idata, day=COUNTS.size - 1, seconds=0.0)
+    assert np.isnan(diagnostics.max_r_hat)
+    assert np.isnan(diagnostics.min_ess_bulk)
+    assert diagnostics.divergences == 0
+
+
+def test_a_switch_day_past_the_window_leaves_R_post_reaching_nothing():
+    """How the no-switchpoint variants work: one R governs the whole window, exactly.
+
+    ``R_post`` is still declared, so a single estimated ``R`` needs no new builder — but it
+    must couple to nothing, or it would not be a single ``R`` at all.
+    """
+    structure = pymc_models.latent_block_structure(
+        "ssi_so", COUNTS, delays=SHORT_DELAYS, switch_day=COUNTS.size
+    )
+    np.testing.assert_array_equal(structure.post_coupling, 0.0)
+    assert structure.pre_coupling.sum() > 0.0
 
 
 # --- 2 and 3. every window builds, and every latent is accounted for -------------------------

@@ -140,12 +140,43 @@ class AnalysisSetting:
         return method
 
     def reproduction_number_priors(self) -> tuple[LogNormalPrior, LogNormalPrior]:
-        """``R_pre`` and ``R_post``, shared by every model so the evidences compare."""
+        """``R_pre`` and ``R_post``'s priors, shared by every model so the evidences compare.
+
+        The priors themselves, whether or not this analysis estimates them: the figures draw
+        them behind the posteriors. :meth:`reproduction_numbers` is what the builders take.
+        """
         priors = self.block["shared"]["priors"]
         return (
             LogNormalPrior.from_config(priors["R_pre"]),
             LogNormalPrior.from_config(priors["R_post"]),
         )
+
+    def reproduction_numbers(self) -> tuple[float | LogNormalPrior, float | LogNormalPrior]:
+        """``R_pre`` and ``R_post`` as the builders take them, fixed where the analysis says so.
+
+        The same fixed-or-estimated switch :meth:`dispersion` applies to ``k``, and it carries
+        the same consequence: a fixed reproduction number is a constant in the PyMC graph, so
+        it is nowhere in the draws and has to be handed back to the RAC calculators. The fit
+        records it for exactly that reason (``fitting.fitted_reproduction_numbers``).
+        """
+        R_pre_prior, R_post_prior = self.reproduction_number_priors()
+        fixed_R_pre = self.block.get("fixed_R_pre")
+        fixed_R_post = self.block.get("fixed_R_post")
+        return (
+            R_pre_prior if fixed_R_pre is None else float(fixed_R_pre),
+            R_post_prior if fixed_R_post is None else float(fixed_R_post),
+        )
+
+    def switch_day(self) -> int:
+        """The day ``R`` switches on, in each model's own time index.
+
+        The ERT arrival day unless the analysis overrides it. An override is how a sensitivity
+        analysis shifts the switch, and how the no-switchpoint variants disable it altogether:
+        a day at or past the end of the window leaves ``R_pre`` in force throughout
+        (:func:`end_of_outbreak.renewal.switch_index`).
+        """
+        override = self.block.get("switch_day")
+        return self.data.ert_arrival_day if override is None else int(override)
 
     def dispersion(self) -> float | LogNormalPrior:
         """``k`` as the builders take it: a float where fixed, a prior where estimated.
@@ -215,13 +246,13 @@ def command_fit(args: argparse.Namespace) -> None:
     """Fit one model to the complete record and save the draws."""
     setting = setting_from_arguments(args)
     model = setting.require_model(args.model)
-    R_pre, R_post = setting.reproduction_number_priors()
+    R_pre, R_post = setting.reproduction_numbers()
 
     idata = fitting.fit_model(
         model,
         setting.data.onsets,
         delays=setting.delays,
-        switch_day=setting.data.ert_arrival_day,
+        switch_day=setting.switch_day(),
         R_pre=R_pre,
         R_post=R_post,
         k=setting.dispersion(),
@@ -344,13 +375,13 @@ def _rac_by_refitting(
     whether one process or eight produced it.
     """
     data = setting.data
-    R_pre, R_post = setting.reproduction_number_priors()
+    R_pre, R_post = setting.reproduction_numbers()
     reported = {int(day) for day in np.linspace(days[0], days[-1], 12).round()}
     result = refit_risk.risk_by_refitting(
         model,
         data.onsets,
         delays=setting.delays,
-        switch_day=data.ert_arrival_day,
+        switch_day=setting.switch_day(),
         R_pre=R_pre,
         R_post=R_post,
         k=setting.dispersion(),
@@ -399,13 +430,16 @@ def _rac_by_filtering(
     """The approximation: one full-record fit, latents filtered to each conditioning day."""
     data = setting.data
     idata = fitting.load_fit(posterior)
+    fixed_R_pre, fixed_R_post = fitting.fitted_reproduction_numbers(idata)
     state = rac.posterior_state(
         model,
         idata,
         data.onsets,
         delays=setting.delays,
-        switch_day=data.ert_arrival_day,
+        switch_day=setting.switch_day(),
         latent_parameterisation=fitting.fitted_parameterisation(idata),
+        fixed_R_pre=fixed_R_pre,
+        fixed_R_post=fixed_R_post,
         fixed_k=fitting.fitted_dispersion(idata),
         negligible_latent_threshold=setting.negligible_latent_threshold,
         reporting_model=fitting.fitted_reporting(idata),
@@ -420,7 +454,7 @@ def _rac_by_filtering(
         state,
         counts=data.onsets,
         delays=setting.delays,
-        switch_day=data.ert_arrival_day,
+        switch_day=setting.switch_day(),
         days=days,
         n_particles=int(filtering["n_particles"]),
         reporting_model=fitting.fitted_reporting(idata),
@@ -451,7 +485,7 @@ def command_evidence(args: argparse.Namespace) -> None:
     incidence dispersion in DLO. The caption has to say so; this file only computes the numbers.
     """
     setting = setting_from_arguments(args)
-    R_pre, R_post = setting.reproduction_number_priors()
+    R_pre, R_post = setting.reproduction_numbers()
     k = setting.dispersion()
 
     estimates = {
@@ -460,7 +494,7 @@ def command_evidence(args: argparse.Namespace) -> None:
             idata,
             setting.data.onsets,
             delays=setting.delays,
-            switch_day=setting.data.ert_arrival_day,
+            switch_day=setting.switch_day(),
             R_pre=R_pre,
             R_post=R_post,
             k=k,

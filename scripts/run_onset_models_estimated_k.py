@@ -1,4 +1,4 @@
-"""Analysis 4 — naive and onset-anchored SSE/SSI with ``k`` estimated (→ Fig. 4).
+"""Analysis 4 — naive and onset-anchored SSE/SSI with ``k`` estimated.
 
 This is the direct test of whether treating onsets as infections attenuates day-level
 dispersion: SSE and SSE-SO fit the same record under a common prior, while SSI and SSI-SO test

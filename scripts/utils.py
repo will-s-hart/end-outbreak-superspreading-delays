@@ -261,9 +261,10 @@ def plot_parameter_posteriors(
     of the model-probability panel compare the models *as specified*, priors included (§6.5), so
     a reader needs to see how much of each posterior is prior.
 
-    ``labels`` overrides the legend entry for a model, which is how the ``k`` panel of Fig. 2
-    carries each posterior's median and credible interval. Those numbers come from the file the
-    ``dispersion`` rule wrote; this module summarises nothing itself.
+    ``labels`` overrides the legend entry for a model, which is how an estimated-``k``
+    figure's ``k`` panel carries each posterior's median and credible interval. Those
+    numbers come from the file the ``dispersion`` rule wrote; this module summarises
+    nothing itself.
     """
     # A weakly identified R_pre has a long right tail — the 99.9th percentile of the Équateur
     # posterior is near 9 — and drawing out to it squashes the region the reader is comparing.
@@ -303,8 +304,8 @@ def plot_model_probability_pie(
     """Posterior model probabilities as a pie, with the small slices labelled honestly.
 
     A slice below ``minimum_label`` is invisible on a pie, so its value goes in the legend
-    rather than being silently dropped — the whole point of panel C in Fig. 1 is that one model
-    is overwhelmingly favoured, and the size of "overwhelmingly" is the result.
+    rather than being silently dropped — the whole point of the model-probability panel is
+    that one model is overwhelmingly favoured, and the size of "overwhelmingly" is the result.
     """
     models = list(probabilities)
     values = [probabilities[model] for model in models]

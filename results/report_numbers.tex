@@ -63,7 +63,7 @@
 %   results/underreporting_80/ssi_so_rac.csv
 %   results/underreporting_80/ssi_so_rac_diagnostics.csv
 %
-% 784 entries.
+% 802 entries.
 \defresultnum{convergence.maxrhat}{1.02}
 \defresultnum{core.diagnostics.divergences}{144}
 \defresultnum{core.diagnostics.fits}{1540}
@@ -137,6 +137,8 @@
 \defresultnum{naivemodelsestimatedk.dlo.rpre.upper}{5.25}
 \defresultnum{naivemodelsestimatedk.draws}{2000}
 \defresultnum{naivemodelsestimatedk.fixedk}{estimated}
+\defresultnum{naivemodelsestimatedk.fixedrpost}{estimated}
+\defresultnum{naivemodelsestimatedk.fixedrpre}{estimated}
 \defresultnum{naivemodelsestimatedk.nmodels}{3}
 \defresultnum{naivemodelsestimatedk.reportingpercent}{100}
 \defresultnum{naivemodelsestimatedk.sse-vs-ssi.medianratio}{3.57}
@@ -209,6 +211,7 @@
 \defresultnum{naivemodelsestimatedk.ssi.rst01.day}{93}
 \defresultnum{naivemodelsestimatedk.ssi.rst05.date}{26 June 2018}
 \defresultnum{naivemodelsestimatedk.ssi.rst05.day}{82}
+\defresultnum{naivemodelsestimatedk.switchday}{33}
 \defresultnum{naivemodelsestimatedk.targetaccept}{0.90}
 \defresultnum{naivemodelsestimatedk.tune}{2000}
 \defresultnum{naivemodelsfixedk.chains}{4}
@@ -237,6 +240,8 @@
 \defresultnum{naivemodelsfixedk.dlo.rpre.upper}{6.05}
 \defresultnum{naivemodelsfixedk.draws}{2000}
 \defresultnum{naivemodelsfixedk.fixedk}{0.18}
+\defresultnum{naivemodelsfixedk.fixedrpost}{estimated}
+\defresultnum{naivemodelsfixedk.fixedrpre}{estimated}
 \defresultnum{naivemodelsfixedk.nmodels}{3}
 \defresultnum{naivemodelsfixedk.reportingpercent}{100}
 \defresultnum{naivemodelsfixedk.sse.logevidence}{\ensuremath{-106.8}}
@@ -296,6 +301,7 @@
 \defresultnum{naivemodelsfixedk.ssi.rst01.day}{96}
 \defresultnum{naivemodelsfixedk.ssi.rst05.date}{28 June 2018}
 \defresultnum{naivemodelsfixedk.ssi.rst05.day}{84}
+\defresultnum{naivemodelsfixedk.switchday}{33}
 \defresultnum{naivemodelsfixedk.targetaccept}{0.90}
 \defresultnum{naivemodelsfixedk.tune}{2000}
 \defresultnum{onsetmodelsestimatedk.chains}{4}
@@ -305,6 +311,8 @@
 \defresultnum{onsetmodelsestimatedk.diagnostics.minbulkess}{1209}
 \defresultnum{onsetmodelsestimatedk.draws}{2000}
 \defresultnum{onsetmodelsestimatedk.fixedk}{estimated}
+\defresultnum{onsetmodelsestimatedk.fixedrpost}{estimated}
+\defresultnum{onsetmodelsestimatedk.fixedrpre}{estimated}
 \defresultnum{onsetmodelsestimatedk.nmodels}{4}
 \defresultnum{onsetmodelsestimatedk.reportingpercent}{100}
 \defresultnum{onsetmodelsestimatedk.sse-vs-sseso.medianratio}{2.80}
@@ -492,6 +500,7 @@
 \defresultnum{onsetmodelsestimatedk.ssiso.rst01.day}{88}
 \defresultnum{onsetmodelsestimatedk.ssiso.rst05.date}{21 June 2018}
 \defresultnum{onsetmodelsestimatedk.ssiso.rst05.day}{77}
+\defresultnum{onsetmodelsestimatedk.switchday}{33}
 \defresultnum{onsetmodelsestimatedk.targetaccept}{0.95}
 \defresultnum{onsetmodelsestimatedk.tune}{2000}
 \defresultnum{onsetmodelsfixedk.chains}{4}
@@ -501,6 +510,8 @@
 \defresultnum{onsetmodelsfixedk.diagnostics.minbulkess}{1002}
 \defresultnum{onsetmodelsfixedk.draws}{2000}
 \defresultnum{onsetmodelsfixedk.fixedk}{0.18}
+\defresultnum{onsetmodelsfixedk.fixedrpost}{estimated}
+\defresultnum{onsetmodelsfixedk.fixedrpre}{estimated}
 \defresultnum{onsetmodelsfixedk.nmodels}{4}
 \defresultnum{onsetmodelsfixedk.reportingpercent}{100}
 \defresultnum{onsetmodelsfixedk.sse.logevidence}{\ensuremath{-106.8}}
@@ -650,6 +661,7 @@
 \defresultnum{onsetmodelsfixedk.ssiso.rst01.day}{88}
 \defresultnum{onsetmodelsfixedk.ssiso.rst05.date}{21 June 2018}
 \defresultnum{onsetmodelsfixedk.ssiso.rst05.day}{77}
+\defresultnum{onsetmodelsfixedk.switchday}{33}
 \defresultnum{onsetmodelsfixedk.targetaccept}{0.90}
 \defresultnum{onsetmodelsfixedk.tune}{2000}
 \defresultnum{overall.diagnostics.divergences}{148}
@@ -673,6 +685,8 @@
 \defresultnum{underreporting60.diagnostics.minbulkess}{401}
 \defresultnum{underreporting60.draws}{2000}
 \defresultnum{underreporting60.fixedk}{0.18}
+\defresultnum{underreporting60.fixedrpost}{estimated}
+\defresultnum{underreporting60.fixedrpre}{estimated}
 \defresultnum{underreporting60.nmodels}{2}
 \defresultnum{underreporting60.reportingpercent}{60}
 \defresultnum{underreporting60.sseso.gap.date}{14 June 2018}
@@ -755,6 +769,7 @@
 \defresultnum{underreporting60.ssiso.rst01.day}{100}
 \defresultnum{underreporting60.ssiso.rst05.date}{30 June 2018}
 \defresultnum{underreporting60.ssiso.rst05.day}{86}
+\defresultnum{underreporting60.switchday}{33}
 \defresultnum{underreporting60.targetaccept}{0.90}
 \defresultnum{underreporting60.tune}{2000}
 \defresultnum{underreporting80.chains}{4}
@@ -764,6 +779,8 @@
 \defresultnum{underreporting80.diagnostics.minbulkess}{292}
 \defresultnum{underreporting80.draws}{2000}
 \defresultnum{underreporting80.fixedk}{0.18}
+\defresultnum{underreporting80.fixedrpost}{estimated}
+\defresultnum{underreporting80.fixedrpre}{estimated}
 \defresultnum{underreporting80.nmodels}{2}
 \defresultnum{underreporting80.reportingpercent}{80}
 \defresultnum{underreporting80.sseso.gap.date}{11 June 2018}
@@ -846,5 +863,6 @@
 \defresultnum{underreporting80.ssiso.rst01.day}{93}
 \defresultnum{underreporting80.ssiso.rst05.date}{25 June 2018}
 \defresultnum{underreporting80.ssiso.rst05.day}{81}
+\defresultnum{underreporting80.switchday}{33}
 \defresultnum{underreporting80.targetaccept}{0.90}
 \defresultnum{underreporting80.tune}{2000}

@@ -1,4 +1,4 @@
-"""Main Fig. 1 — what separates the infection- and onset-anchored models.
+"""The methods schematic — what separates the infection- and onset-anchored models.
 
 A schematic, and the one figure in the report that draws no data. Every position on every
 timeline is illustrative: the two lanes of panel A are laid out roughly in proportion to the

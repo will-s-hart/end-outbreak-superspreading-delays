@@ -1,4 +1,4 @@
-"""Figure 4 — naive and onset-anchored SSE/SSI with ``k`` estimated."""
+"""Naive and onset-anchored SSE/SSI with ``k`` estimated."""
 
 from __future__ import annotations
 
@@ -30,7 +30,7 @@ def build_figure(
     R_post_prior: LogNormalPrior,
     k_prior: LogNormalPrior,
 ) -> Figure:
-    """Assemble Fig. 4 in the same five-panel layout as Fig. 2."""
+    """Assemble it in the same five-panel layout as the naive estimated-``k`` figure."""
     utils.apply_house_style()
     figure = plt.figure(figsize=(9.4, 6.4))
     rows = figure.add_gridspec(2, 1, height_ratios=[1.0, 1.15], hspace=0.42)

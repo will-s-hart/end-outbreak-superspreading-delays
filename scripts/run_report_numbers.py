@@ -331,7 +331,9 @@ def add_priors(numbers: NumberFile, config: dict[str, Any], analyses: list[str])
         numbers.set("priors.k.quantileupper", fixed(float(k_prior.frozen().ppf(0.975)), 2))
 
 
-def add_sampler(numbers: NumberFile, block: dict[str, Any], prefix: str) -> None:
+def add_sampler(
+    numbers: NumberFile, block: dict[str, Any], prefix: str, *, default_switch_day: int
+) -> None:
     """What the sampler was asked for, so the methods can state it per analysis."""
     sampler = block["sampler"]
     numbers.set(f"{prefix}.draws", str(int(sampler["draws"])))
@@ -340,6 +342,22 @@ def add_sampler(numbers: NumberFile, block: dict[str, Any], prefix: str) -> None
     numbers.set(f"{prefix}.targetaccept", fixed(float(sampler["target_accept"]), 2))
     fixed_k = block.get("fixed_k")
     numbers.set(f"{prefix}.fixedk", "estimated" if fixed_k is None else fixed(float(fixed_k), 2))
+    # The same for the reproduction numbers, so that an analysis which holds one constant has
+    # its value on the page rather than nowhere -- `add_parameters` cannot summarise a
+    # posterior that does not exist. Both read "estimated" for every analysis that fits them.
+    for name in REPRODUCTION_NUMBERS:
+        held = block.get(f"fixed_{name}")
+        numbers.set(
+            f"{prefix}.fixed{slug(name)}", "estimated" if held is None else fixed(float(held), 2)
+        )
+    # The day R actually switched on: the ERT arrival day unless the analysis moved it, which
+    # is the whole content of a shifted-switch or no-switch variant. Resolved here rather than
+    # left as an override, so the macro reads the same whether or not one was given.
+    switch_day = block.get("switch_day")
+    numbers.set(
+        f"{prefix}.switchday",
+        str(default_switch_day if switch_day is None else int(switch_day)),
+    )
     # The number of models is the denominator of the uniform prior over models (§6.2), which the
     # posterior model probabilities are not interpretable without.
     numbers.set(f"{prefix}.nmodels", str(len(block["models"])))
@@ -356,9 +374,27 @@ def add_parameters(numbers: NumberFile, posterior: xr.DataTree, prefix: str) -> 
     Summarised with the same function ``dispersion_posteriors.json`` uses, so the ``k`` line the
     report quotes and the one the figure's legend carries are the same computation.
     """
+    fitted_R_pre, fitted_R_post = fitting.fitted_reproduction_numbers(posterior)
+    held_at = {
+        "R_pre": fitted_R_pre,
+        "R_post": fitted_R_post,
+        DISPERSION: fitting.fitted_dispersion(posterior),
+    }
     for name in (*REPRODUCTION_NUMBERS, DISPERSION):
         if name not in posterior.posterior.data_vars:
-            continue  # k is a constant in the graph where the analysis fixed it.
+            # A parameter the analysis fixed is a constant in the graph and so is nowhere in
+            # the draws; `add_sampler` has already written the value it was held at. Any other
+            # reason for its absence is a broken input, and silently emitting no macro is the
+            # failure the report's scheme exists to prevent -- so ask the fit which it is.
+            if held_at[name] is None:
+                raise KeyError(
+                    f"{prefix}: {name!r} is absent from the posterior, and the fit records no "
+                    f"value it was fixed at. Either the fit is not the one this analysis "
+                    f"describes, or it was written by a code version that did not record "
+                    f"fixed parameters. There is deliberately no fallback: a quietly missing "
+                    f"macro looks exactly like one that was never needed."
+                )
+            continue
         summary = pc.summarise_posterior(draws_of(posterior, name))
         decimals = 3 if name == DISPERSION else 2
         key = f"{prefix}.{slug(name)}"
@@ -391,11 +427,15 @@ def add_latent_block(
     specification = specification_of(model)
     if specification.latent_variable is None:
         return
+    # Both the reporting model and the switch day come from the fit rather than from the data
+    # or the config: the layout has to be derived exactly as the builder derived it, and an
+    # analysis may have moved the switch.
+    switch_day = fitting.fitted_switch_day(posterior)
     structure = pymc_models.latent_block_structure(
         model,
         pymc_models.layout_counts(data.onsets, fitting.fitted_reporting(posterior)),
         delays=delays,
-        switch_day=data.ert_arrival_day,
+        switch_day=data.ert_arrival_day if switch_day is None else switch_day,
     )
     sampled = int(posterior.posterior.sizes[structure.dimension])
     numbers.set(f"{prefix}.latents.total", str(int(structure.days.size)))
@@ -667,7 +707,7 @@ def collect(
         block = configuration.analysis_config(config, analysis)
         models = list(block["models"])
         directory = results_root / analysis
-        add_sampler(numbers, block, slug(analysis))
+        add_sampler(numbers, block, slug(analysis), default_switch_day=data.ert_arrival_day)
 
         posteriors = {
             model: open_posterior(directory / f"{model}_posterior.nc") for model in models

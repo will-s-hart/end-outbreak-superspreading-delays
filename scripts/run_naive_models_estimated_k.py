@@ -1,4 +1,4 @@
-"""Analysis 2 — the three naive models with ``k`` estimated (→ Fig. 2 and its supplement).
+"""Analysis 2 — the three naive models with ``k`` estimated.
 
 The same three models, the same onsets and the same serial interval as Analysis 1, with one
 change: ``k`` is given a prior — log-normal, median 0.18, 95% interval ``(0.09, 0.36)`` — and

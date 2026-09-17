@@ -1,18 +1,19 @@
-"""Figure 2 — the three naive models with ``k`` estimated.
+"""The three naive models with ``k`` estimated.
 
 Five panels, reading left to right and then down::
 
     A  pre-ERT reproduction number   B  post-ERT reproduction number   C  dispersion $k$
     D  model probability             E  risk of additional cases over time
 
-**What differs from Fig. 1, and why.** Estimating ``k`` adds a third parameter posterior to
-show, so this figure carries five panels where Fig. 1 carries four: the three parameters keep
-the top row, and the model-probability pie drops to the bottom row beside the RAC curves. Panel
-E also starts at the ERT's arrival rather than at the first onset. From there to well past the
-last observed case all three curves sit at 1, so on a panel that now shares its row the opening
-weeks would compress the descent — the part the figure is about — into the right-hand third.
-The curves themselves are drawn over the whole window either way; only the view is trimmed, so
-the crossing markers cannot differ between a trimmed panel and an untrimmed one.
+**What differs from the fixed-``k`` figure, and why.** Estimating ``k`` adds a third parameter
+posterior to show, so this figure carries five panels where that one carries four: the three
+parameters keep the top row, and the model-probability pie drops to the bottom row beside the
+RAC curves. Panel E also starts at the ERT's arrival rather than at the first onset. From there
+to well past the last observed case all three curves sit at 1, so on a panel that now shares its
+row the opening weeks would compress the descent — the part the figure is about — into the
+right-hand third. The curves themselves are drawn over the whole window either way; only the
+view is trimmed, so the crossing markers cannot differ between a trimmed panel and an untrimmed
+one.
 
 Panel C is the new result of this analysis. The three models are given the *same* prior on ``k``
 (§6.2) and land in different places, which is aim 2 measured rather than demonstrated. Each
@@ -26,12 +27,14 @@ each other and sit three times above SSI (0.14), which is the only one compatibl
 literature 0.18. The division is *day-level against individual-level*: DLO and SSE both attach
 their excess variance to a day, and the series being fitted is onsets, so the incubation period
 has already smoothed away much of the day-to-day variation their ``k`` is estimated from. SSI's
-variance is attached to individuals, which the same convolution merely regroups. Fig. 4 tests
-that reading, where SSE-SO models the incubation explicitly.
+variance is attached to individuals, which the same convolution merely regroups. The
+onset-anchored estimated-``k`` figure tests that reading, where SSE-SO models the
+incubation explicitly.
 
-Panel D is the closer thing to a comparison of mechanisms that Fig. 1C explicitly is not — with
-``k`` estimated under a common prior, the models are no longer being charged for a dispersion
-value that was never theirs. It still reports the models *as specified, priors included* (§6.5).
+Panel D is the closer thing to a comparison of mechanisms that the fixed-``k`` figure's
+panel C explicitly is not — with ``k`` estimated under a common prior, the models are
+no longer being charged for a dispersion value that was never theirs. It still reports
+the models *as specified, priors included* (§6.5).
 
 Loads only what the tier-2 rules wrote, so a restyle costs seconds rather than an MCMC run::
 
@@ -75,8 +78,9 @@ def build_figure(
 
     A grid per row rather than one shared grid: the top row wants three equal columns and the
     bottom row an uneven two, since the pie reads at a quarter of the width and the RAC curves
-    want the rest. Nesting keeps each row's spacing its own, and keeps the top row's at Fig. 1's
-    value so the two figures' parameter panels sit at the same size.
+    want the rest. Nesting keeps each row's spacing its own, and keeps the top row's at
+    the fixed-``k`` figure's value so the two figures' parameter panels sit at the same
+    size.
     """
     utils.apply_house_style()
     figure = plt.figure(figsize=(9.4, 6.4))

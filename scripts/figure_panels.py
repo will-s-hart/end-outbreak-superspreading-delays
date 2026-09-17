@@ -15,8 +15,8 @@ settles below a threshold" is a definition the report states, so it must come fr
 :meth:`~end_of_outbreak.risk_curves.RiskCurve.first_day_below` rather than being
 reimplemented beside the panel.
 
-Fig. 5 and Supplementary Fig. S2 reuse the same backdrop and annotation rules but distinguish
-RAC, RAT and RST by linestyle while preserving the established model colours.
+The sustained-transmission figures reuse the same backdrop and annotation rules but
+distinguish RAC, RAT and RST by linestyle while preserving the established model colours.
 """
 
 from __future__ import annotations
@@ -80,8 +80,9 @@ def risk_curve_panel(
     curves: dict[str, pd.DataFrame],
     data: outbreak_data.OutbreakData,
     *,
-    letter: str,
+    letter: str | None = None,
     first_day: int | None = None,
+    linestyles: dict[str, str] | None = None,
 ) -> None:
     """RAC over the conditioning days, with the onset series behind it.
 
@@ -101,7 +102,14 @@ def risk_curve_panel(
     real-time conditioning — early on the record is one case and a few days of silence, so the
     posterior is prior-dominated — and the day-to-day roughness there is genuine too, since
     each day is its own fit on its own data.
+
+    ``linestyles`` overrides a model's line, and exists for a figure where two curves coincide
+    to within the line width — which is a result, but reads on the page as a curve that failed
+    to draw. Colour alone then cannot separate them. Every model is solid by default, so the
+    analysis figures are unaffected. ``letter`` may be ``None`` where the figure is one panel
+    and a label would be noise.
     """
+    resolved_linestyles = linestyles or {}
     utils.plot_incidence(ax, data.dates, data.onsets)
     utils.mark_thresholds(ax)
     for model, frame in curves.items():
@@ -109,6 +117,7 @@ def risk_curve_panel(
             frame["date"],
             frame[utils.RISK_COLUMN],
             color=utils.model_colour(model),
+            linestyle=resolved_linestyles.get(model, "-"),
             label=utils.model_label(model),
             zorder=3,
         )
@@ -137,7 +146,8 @@ def risk_curve_panel(
     # the onset bars are confined to the bottom, so this is the one large region that stays
     # empty on both the trimmed and the untrimmed view.
     ax.legend(loc="center left", bbox_to_anchor=(0.015, 0.55))
-    utils.panel_label(ax, letter)
+    if letter is not None:
+        utils.panel_label(ax, letter)
 
 
 def risk_metrics_panel(

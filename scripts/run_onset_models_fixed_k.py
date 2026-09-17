@@ -1,4 +1,4 @@
-"""Analysis 3 — naive and onset-anchored SSE/SSI with ``k = 0.18`` (→ Fig. 3).
+"""Analysis 3 — naive and onset-anchored SSE/SSI with ``k = 0.18``.
 
 The four models share the observed onset series and its implied onset-to-onset serial interval.
 SSE/SSI read onsets as infection dates; SSE-SO/SSI-SO reconstruct transmission and incubation
