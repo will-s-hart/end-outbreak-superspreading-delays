@@ -137,11 +137,13 @@ analyses:
   #
   # These are the only analyses whose sampler budget is not the default 2000/2000, because they
   # are the only ones with a discrete block: the unreported counts get Metropolis, which mixes
-  # far more slowly than NUTS does on everything else. At 2000/2000 the naive models fail the
-  # R-hat gate outright (day 82 at 60%: R-hat 1.047, bulk ESS 96) and the onset-anchored ones
-  # pass with almost nothing to spare (worst 1.019 over 312 fits). Tuning is what buys the
-  # mixing, not draws alone: at 8000 draws, R-hat on that day is 1.012 after 2000 tuning steps
-  # and 1.003 after 4000. R_pre and R_post were never the problem — they sit at 1.001.
+  # far more slowly than NUTS does on everything else. At 2000/2000 SSE fails the R-hat gate
+  # outright (day 82 at 60%: R-hat 1.047, bulk ESS 96), and everything else passes only just —
+  # worst 1.019 for SSI and 1.016 for the onset-anchored pair, against a threshold of 1.02. So
+  # the budget goes up for the whole analysis rather than for the model that happened to cross
+  # the line. Tuning is what buys the mixing, not draws alone: at 8000 draws, R-hat on that day
+  # is 1.012 after 2000 tuning steps and 1.003 after 4000. R_pre and R_post were never the
+  # problem — they sit at 1.001, and only the unreported counts are bad.
   underreporting_60:
     models: [sse_so, ssi_so, sse, ssi]
     fixed_k: 0.18
