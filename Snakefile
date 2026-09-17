@@ -807,6 +807,19 @@ rule no_switch:
         ],
 
 
+# The reporting sweeps, as a target of their own. `results` covers them, but naming them alone
+# is what lets a cluster run rebuild just these -- a config edit marks every fit stale under the
+# content-based `input` trigger, so an untargeted rerun would redo the analyses it did not touch.
+# They are in `rule results` as well, and so still reach the report by the usual route.
+rule underreporting_results:
+    input:
+        [
+            f"results/{analysis}/{model}_rac.csv"
+            for analysis in RAC_ONLY_ANALYSES
+            for model in models_of(analysis)
+        ],
+
+
 # Evidence and the `k` summary ride with the curves: they read the posteriors, and `rule results`
 # puts them on the cluster side of the split for the report's analyses too.
 rule uninformative_k_results:
