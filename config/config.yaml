@@ -134,13 +134,21 @@ analyses:
   # The per-analysis `rac.first_day` starts the curves at the ERT's arrival. Before it the
   # outbreak is growing and the risk is 1 to several decimal places, so the ~32 conditioning
   # days it saves per model are hours of MCMC for nothing.
+  #
+  # These are the only analyses whose sampler budget is not the default 2000/2000, because they
+  # are the only ones with a discrete block: the unreported counts get Metropolis, which mixes
+  # far more slowly than NUTS does on everything else. At 2000/2000 the naive models fail the
+  # R-hat gate outright (day 82 at 60%: R-hat 1.047, bulk ESS 96) and the onset-anchored ones
+  # pass with almost nothing to spare (worst 1.019 over 312 fits). Tuning is what buys the
+  # mixing, not draws alone: at 8000 draws, R-hat on that day is 1.012 after 2000 tuning steps
+  # and 1.003 after 4000. R_pre and R_post were never the problem — they sit at 1.001.
   underreporting_60:
     models: [sse_so, ssi_so, sse, ssi]
     fixed_k: 0.18
     reporting: {probability: 0.6}
     rac: {first_day: 33}
     run_script: scripts/run_underreporting_60.py
-    sampler: {draws: 2000, tune: 2000, chains: 4, target_accept: 0.9, seed: 20260811}
+    sampler: {draws: 8000, tune: 4000, chains: 4, target_accept: 0.9, seed: 20260811}
 
   underreporting_80:
     models: [sse_so, ssi_so, sse, ssi]
@@ -148,7 +156,7 @@ analyses:
     reporting: {probability: 0.8}
     rac: {first_day: 33}
     run_script: scripts/run_underreporting_80.py
-    sampler: {draws: 2000, tune: 2000, chains: 4, target_accept: 0.9, seed: 20260812}
+    sampler: {draws: 8000, tune: 4000, chains: 4, target_accept: 0.9, seed: 20260812}
 
 # How the risk of additional cases is estimated. RAC(t) conditions on the record through day t
 # and nothing after it, so the honest estimator refits the model to counts[:t+1] for every
