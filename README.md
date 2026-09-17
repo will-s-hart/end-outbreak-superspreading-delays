@@ -48,8 +48,9 @@ per day rather than a summary of a single fit. That is why `pixi run pipeline` t
 A companion quantity, the **risk of additional transmission (RAT)**, asks instead for at least
 one further *transmission event*. The naive models identify the two by assumption; the
 onset-anchored models separate them, and the gap is the contribution of individuals already
-infected but not yet symptomatic. RAC is reported throughout; RAT appears in a supplementary
-analysis, where the gap between them quantifies the onset-vs-infection conflation directly.
+infected but not yet symptomatic. RAC is reported throughout; RAT is reported beside it and
+RST, both to check that the naive/onset difference is not a property of RAC alone and because the
+RAC-RAT gap quantifies the onset-vs-infection conflation directly.
 
 The **risk of sustained transmission (RST)** asks whether the reset future ever becomes extinct.
 It is computed from the same per-day posterior fits for SSE, SSI and their onset-anchored forms;

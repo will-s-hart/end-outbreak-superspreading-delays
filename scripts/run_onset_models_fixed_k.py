@@ -2,8 +2,8 @@
 
 The four models share the observed onset series and its implied onset-to-onset serial interval.
 SSE/SSI read onsets as infection dates; SSE-SO/SSI-SO reconstruct transmission and incubation
-explicitly. The headline output is RAC. The same tier-2 files carry RAT for the onset models,
-which the supplementary figure reports separately.
+explicitly. The headline output is RAC. The same tier-2 files carry RST for all four and RAT for
+the onset models, which the sustained-transmission figure sets beside it.
 """
 
 from __future__ import annotations

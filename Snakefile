@@ -174,21 +174,33 @@ RAC_ONLY_ANALYSES = [
 ]
 SAMPLED_ANALYSES = IMPLEMENTED_ANALYSES + RAC_ONLY_ANALYSES
 
-# The no-switchpoint variants: analyses for `rule fit`, `rule rac` and their own figure rule,
-# and for nothing else. They are exploratory -- they ask how much of the naive/onset gap is the
-# switchpoint, by removing it -- so they feed no report figure and no report number, and they
-# stay out of both lists above. Nothing builds them unless you name the target:
+# Analyses wired into the workflow but not into the report: each family has its own figure rule
+# and its own pair of aggregate targets, and feeds no report figure and no report number, so all
+# of them stay out of both lists above. Nothing builds them unless you name the target.
+# `wildcard_constraints` is built from `ANALYSES`, so the generic rules already reach them.
+# Promoting one to a report analysis means adding it to `IMPLEMENTED_ANALYSES` and giving it a
+# `plot_script`; until then `rule all` cannot see it.
+#
+# The no-switchpoint variants ask how much of the naive/onset gap is the switchpoint, by removing
+# it. They take `rule fit` and `rule rac` only -- `no_switch_fixed_R` fixes every parameter, so
+# there is no evidence to integrate:
 #
 #     pixi run pipeline-no-switch                 # everything, locally
 #     REMOTE_TARGET=no_switch_results ...         # the 8 fits and 8 curves, on the cluster
 #     pixi run pipeline-no-switch-present         # the figures, from pulled curves
-#
-# `wildcard_constraints` is built from `ANALYSES`, so the generic rules already reach them.
-# Promoting one to a report analysis means adding it to `IMPLEMENTED_ANALYSES` and giving it a
-# `plot_script`; until then `rule all` cannot see it.
-EXPLORATORY_ANALYSES = [
+NO_SWITCH_ANALYSES = [
     "no_switch_fixed_R",
     "no_switch_single_R",
+]
+# Analysis 4 under a `k` prior a decade wider on each side, asking whether the onset-anchored
+# `k` posteriors there are the data or the prior. It takes evidence and dispersion as well, since
+# its figure is Analysis 4's five-panel layout:
+#
+#     pixi run pipeline-uninformative-k           # everything, locally
+#     REMOTE_TARGET=uninformative_k_results ...   # fits, curves, evidence and k summary
+#     pixi run pipeline-uninformative-k-present   # the figure, from pulled results
+UNINFORMATIVE_K_ANALYSES = [
+    "onset_models_uninformative_k",
 ]
 
 
@@ -289,11 +301,22 @@ def racs_of(wildcards):
 # Targets
 # ---------------------------------------------------------------------------------------
 
-# One comparison figure per implemented analysis. Grows with `IMPLEMENTED_ANALYSES`.
-ANALYSIS_FIGURE_TARGETS = [
-    f"figures/{analysis}/{analysis}.{extension}"
+# One comparison figure per implemented analysis. Grows with `IMPLEMENTED_ANALYSES`. The report
+# carries some of them in its supplement rather than its main text; they are built identically,
+# and differ only in which of the two target lists below takes them.
+SUPPLEMENTARY_ANALYSES = ["onset_models_estimated_k"]
+ANALYSIS_FIGURE_TARGETS = {
+    analysis: [f"figures/{analysis}/{analysis}.{extension}" for extension in ("pdf", "png")]
     for analysis in IMPLEMENTED_ANALYSES
-    for extension in ("pdf", "png")
+}
+MAIN_ANALYSIS_FIGURE_TARGETS = [
+    target
+    for analysis, targets in ANALYSIS_FIGURE_TARGETS.items()
+    if analysis not in SUPPLEMENTARY_ANALYSES
+    for target in targets
+]
+SUPPLEMENTARY_ANALYSIS_FIGURE_TARGETS = [
+    target for analysis in SUPPLEMENTARY_ANALYSES for target in ANALYSIS_FIGURE_TARGETS[analysis]
 ]
 SUSTAINED_TRANSMISSION_ANALYSES = {
     "fixed_k": "onset_models_fixed_k",
@@ -307,25 +330,25 @@ SUSTAINED_TRANSMISSION_TARGETS = {
     for setting in SUSTAINED_TRANSMISSION_ANALYSES
 }
 # The reporting sweep. 100% is Analysis 3 rather than a rerun: at pi = 1 the model *is* that
-# model, so reusing the committed curves both saves ~156 fits and makes the figure's baseline
+# model, so reusing the committed curves both saves ~312 fits and makes the figure's baseline
 # the paper's headline result rather than a Monte-Carlo-different twin of it.
 UNDERREPORTING_ANALYSES = {
     1.0: "onset_models_fixed_k",
     0.8: "underreporting_80",
     0.6: "underreporting_60",
 }
-UNDERREPORTING_MODELS = ("sse_so", "ssi_so")
+UNDERREPORTING_MODELS = ("sse", "ssi", "sse_so", "ssi_so")
 UNDERREPORTING_TARGETS = [
     f"figures/underreporting/underreporting.{extension}" for extension in ("pdf", "png")
 ]
-# Main Fig. 1, the methods schematic. It is a main target like the rest, so that `figures` and
-# the report build it, but it depends on nothing any other tier produces.
+# The methods schematic. It is a main target like the rest, so that `figures` and the report
+# build it, but it depends on nothing any other tier produces.
 SCHEMATIC_FIGURE_TARGETS = [
     f"figures/model_schematic/model_schematic.{extension}" for extension in ("pdf", "png")
 ]
 MAIN_TARGETS = (
     SCHEMATIC_FIGURE_TARGETS
-    + ANALYSIS_FIGURE_TARGETS
+    + MAIN_ANALYSIS_FIGURE_TARGETS
     + SUSTAINED_TRANSMISSION_TARGETS["fixed_k"]
     + UNDERREPORTING_TARGETS
 )
@@ -334,7 +357,9 @@ DELAY_FIGURE_TARGETS = [
     f"figures/delay_distributions/delay_distributions.{extension}"
     for extension in ("pdf", "png")
 ]
-SUPPLEMENTARY_FIGURE_TARGETS = DELAY_FIGURE_TARGETS + RST_SUPPLEMENTARY_TARGETS
+SUPPLEMENTARY_FIGURE_TARGETS = (
+    DELAY_FIGURE_TARGETS + SUPPLEMENTARY_ANALYSIS_FIGURE_TARGETS + RST_SUPPLEMENTARY_TARGETS
+)
 # The compiled methods-and-results document, and the macro file every number in it expands from.
 REPORT_NUMBERS = "results/report_numbers.tex"
 REPORT_TARGET = "report/report.pdf"
@@ -589,7 +614,7 @@ ruleorder: no_switch_figure > figure
 
 rule no_switch_figure:
     wildcard_constraints:
-        analysis="|".join(EXPLORATORY_ANALYSES),
+        analysis="|".join(NO_SWITCH_ANALYSES),
     input:
         racs=racs_of,
         # Only the single-R variant has a parameter posterior to draw.
@@ -599,6 +624,40 @@ rule no_switch_figure:
         data=ONSETS_CSV,
         config=CONFIG_FILE,
         script="scripts/plot_no_switch.py",
+        code=PLOT_CORE,
+    output:
+        pdf="figures/{analysis}/{analysis}.pdf",
+        png="figures/{analysis}/{analysis}.png",
+    params:
+        shared=SHARED_PARAMS,
+    shell:
+        "python {input.script}"
+        " --analysis {wildcards.analysis}"
+        " --results-dir results/{wildcards.analysis}"
+        " --data {input.data}"
+        " --config {input.config}"
+        " --output-pdf {output.pdf}"
+        " --output-png {output.png}"
+
+
+# The same output-pattern collision, settled the same way. Here the figure is Analysis 4's
+# five-panel layout, so unlike the no-switch variants it does take the evidence and the `k`
+# summary; it needs its own rule only because `rule figure` does not tell the script which
+# analysis's config block to read the models and the `k` prior from.
+ruleorder: uninformative_k_figure > figure
+
+
+rule uninformative_k_figure:
+    wildcard_constraints:
+        analysis="|".join(UNINFORMATIVE_K_ANALYSES),
+    input:
+        racs=racs_of,
+        posteriors=posteriors_of,
+        evidence="results/{analysis}/model_evidence.json",
+        dispersion=dispersion_summary_of,
+        data=ONSETS_CSV,
+        config=CONFIG_FILE,
+        script="scripts/plot_onset_models_estimated_k.py",
         code=PLOT_CORE,
     output:
         pdf="figures/{analysis}/{analysis}.pdf",
@@ -725,15 +784,15 @@ rule results:
         REPORT_NUMBERS,
 
 
-# The exploratory tier, split the way `results` and `figures` are split: everything expensive
-# is in the first target, so the cluster builds that and the figures are drawn locally in
-# seconds. Deliberately not reachable from `rule all` or `rule figures` -- these analyses
-# answer a question about the models, not one the report asks.
+# The analyses outside the report, split the way `results` and `figures` are split: everything
+# expensive is in each family's first target, so the cluster builds that and the figures are drawn
+# locally in seconds. Deliberately not reachable from `rule all` or `rule figures` -- these
+# analyses answer questions about the models that the report does not yet ask.
 rule no_switch_results:
     input:
         [
             f"results/{analysis}/{model}_rac.csv"
-            for analysis in EXPLORATORY_ANALYSES
+            for analysis in NO_SWITCH_ANALYSES
             for model in models_of(analysis)
         ],
 
@@ -743,7 +802,30 @@ rule no_switch:
         rules.no_switch_results.input,
         [
             f"figures/{analysis}/{analysis}.{extension}"
-            for analysis in EXPLORATORY_ANALYSES
+            for analysis in NO_SWITCH_ANALYSES
+            for extension in ("pdf", "png")
+        ],
+
+
+# Evidence and the `k` summary ride with the curves: they read the posteriors, and `rule results`
+# puts them on the cluster side of the split for the report's analyses too.
+rule uninformative_k_results:
+    input:
+        [
+            f"results/{analysis}/{model}_rac.csv"
+            for analysis in UNINFORMATIVE_K_ANALYSES
+            for model in models_of(analysis)
+        ],
+        [f"results/{analysis}/model_evidence.json" for analysis in UNINFORMATIVE_K_ANALYSES],
+        [f"results/{analysis}/dispersion_posteriors.json" for analysis in UNINFORMATIVE_K_ANALYSES],
+
+
+rule uninformative_k:
+    input:
+        rules.uninformative_k_results.input,
+        [
+            f"figures/{analysis}/{analysis}.{extension}"
+            for analysis in UNINFORMATIVE_K_ANALYSES
             for extension in ("pdf", "png")
         ],
 

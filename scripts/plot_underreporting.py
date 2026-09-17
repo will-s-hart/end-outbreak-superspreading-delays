@@ -1,8 +1,16 @@
-"""RAC under incomplete reporting — SSE-SO and SSI-SO at 100%, 80% and 60%.
+"""RAC under incomplete reporting — naive and onset-anchored models at 100%, 80% and 60%.
 
-One panel, six curves: colour is the transmission mechanism and linestyle the assumed reporting
-probability, following the convention of the sustained-transmission figure. The view starts at
-the ERT's arrival, which is also where the two under-reported curves start being computed.
+Four panels, reading left to right and then down::
+
+    A  naive models, RAC by reporting        B  onset-anchored models, RAC by reporting
+    C  all four, RAC and RAT at 80%          D  all four, RAC and RAT at 60%
+
+The question is whether the naive/onset gap survives the reporting assumption. The top row asks
+it across the sweep, one anchoring convention per panel, with colour the model and linestyle the
+assumed reporting probability. The bottom row asks it at each under-reported rung, with both
+conventions in one panel, and there linestyle is the estimand instead — the convention of the
+sustained-transmission figure. Each panel's legend says which it is using. The view starts at the
+ERT's arrival, which is also where the under-reported curves start being computed.
 
 The 100% curves are Analysis 3's. At a reporting probability of one the reporting layer is the
 identity and the model *is* that analysis's, so reusing its committed curves makes the baseline
@@ -22,7 +30,9 @@ from matplotlib.figure import Figure
 
 from end_of_outbreak import configuration, outbreak_data
 
-MODELS = ["sse_so", "ssi_so"]
+NAIVE_MODELS = ["sse", "ssi"]
+ONSET_MODELS = ["sse_so", "ssi_so"]
+MODELS = NAIVE_MODELS + ONSET_MODELS
 
 ANALYSIS_OF_PROBABILITY: dict[float, str] = {
     1.0: "onset_models_fixed_k",
@@ -32,19 +42,47 @@ ANALYSIS_OF_PROBABILITY: dict[float, str] = {
 """Where each rung of the sweep's curves live. Mirrors ``UNDERREPORTING_ANALYSES`` in the
 ``Snakefile``, which is what puts them on this rule's input list."""
 
+ESTIMAND_PANEL_PROBABILITIES = (0.8, 0.6)
+"""The under-reported rungs that get a RAC/RAT panel of their own, in panel order."""
+
 
 def build_figure(
     *, curves: dict[float, dict[str, pd.DataFrame]], data: outbreak_data.OutbreakData
 ) -> Figure:
     """Assemble the figure from curves already loaded. Pure assembly: no I/O, no computation."""
-    figure = plt.figure(figsize=(6.6, 4.3))
-    figure_panels.reporting_comparison_panel(
-        figure.add_subplot(1, 1, 1),
-        curves,
-        data,
-        title="Risk of at least one further case after day $t$, by assumed reporting",
-        first_day=data.ert_arrival_day,
-    )
+    figure, axes = plt.subplots(2, 2, figsize=(9.4, 7.6), sharex=True, sharey=True)
+    for ax, models, title, letter in (
+        (axes[0, 0], NAIVE_MODELS, "Infection-anchored models, by assumed reporting", "A"),
+        (axes[0, 1], ONSET_MODELS, "Onset-anchored models, by assumed reporting", "B"),
+    ):
+        figure_panels.reporting_comparison_panel(
+            ax,
+            {
+                probability: {model: by_model[model] for model in models}
+                for probability, by_model in curves.items()
+            },
+            data,
+            title=title,
+            letter=letter,
+            first_day=data.ert_arrival_day,
+        )
+    for ax, probability, letter in zip(
+        axes[1], ESTIMAND_PANEL_PROBABILITIES, ("C", "D"), strict=True
+    ):
+        figure_panels.risk_metrics_panel(
+            ax,
+            {model: curves[probability][model] for model in MODELS},
+            data,
+            title=f"Cases and transmission, {probability:.0%} reported",
+            letter=letter,
+            metrics=("rac", "rat"),
+            first_day=data.ert_arrival_day,
+        )
+    # `figure.axes`, not `axes`: each panel's onset backdrop is a twin with its label on the right,
+    # and only the right-hand column's should survive, or it sits in the gap between the panels.
+    for ax in figure.axes:
+        ax.label_outer()
+    figure.subplots_adjust(wspace=0.12, hspace=0.18)
     return figure
 
 

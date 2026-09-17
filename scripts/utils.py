@@ -64,9 +64,10 @@ type ReportingLinestyle = Literal["-", "--", ":"]
 REPORTING_LINESTYLES: dict[float, ReportingLinestyle] = {1.0: "-", 0.8: "--", 0.6: ":"}
 """Linestyle per assumed reporting probability, solid for complete reporting.
 
-The same solid/dashed/dotted ladder ``risk_metrics_panel`` uses for the three risk estimands,
-so a reader carries one convention between the two figures: colour is always the transmission
-mechanism, linestyle always the variant being swept.
+The same three linestyles ``figure_panels.METRIC_LINESTYLES`` gives the risk estimands, and in
+both colour is the model and linestyle whatever varies within it. They do not map onto each
+other — dashed is 80% reporting here but RAC there — and the reporting figure uses both, so
+every panel's legend says which one it is using.
 """
 
 RISK_COLUMN = "risk_of_additional_cases"
@@ -254,6 +255,7 @@ def plot_parameter_posteriors(
     xlabel: str,
     labels: dict[str, str] | None = None,
     n_grid: int = 400,
+    log_scale: bool = False,
 ) -> None:
     """Overlaid posterior densities for one parameter, one line per model.
 
@@ -265,6 +267,11 @@ def plot_parameter_posteriors(
     figure's ``k`` panel carries each posterior's median and credible interval. Those
     numbers come from the file the ``dispersion`` rule wrote; this module summarises
     nothing itself.
+
+    ``log_scale`` puts the axis on a log scale, for a parameter whose posteriors span decades —
+    ``k`` under a vague prior, where on a linear axis every posterior near zero is a spike at the
+    edge and the prior cannot be seen at all. It then draws the density of ``log x`` (the density
+    of ``x`` times ``x``), so that equal areas on that axis are still equal probabilities.
     """
     # A weakly identified R_pre has a long right tail — the 99.9th percentile of the Équateur
     # posterior is near 9 — and drawing out to it squashes the region the reader is comparing.
@@ -272,12 +279,13 @@ def plot_parameter_posteriors(
     stacked = np.concatenate(list(draws.values()))
     lower = float(np.quantile(stacked, 0.002)) * 0.8
     upper = float(np.quantile(stacked, 0.99)) * 1.1
-    grid = np.linspace(max(lower, 1e-6), upper, n_grid)
+    grid = (np.geomspace if log_scale else np.linspace)(max(lower, 1e-6), upper, n_grid)
+    jacobian = grid if log_scale else np.ones_like(grid)
 
     if prior is not None:
         ax.plot(
             grid,
-            prior.frozen().pdf(grid),
+            prior.frozen().pdf(grid) * jacobian,
             color="0.55",
             linestyle=(0, (4, 2)),
             linewidth=1.0,
@@ -287,15 +295,20 @@ def plot_parameter_posteriors(
     for model, samples in draws.items():
         ax.plot(
             grid,
-            positive_density(samples, grid=grid),
+            positive_density(samples, grid=grid) * jacobian,
             color=model_colour(model),
             label=(labels or {}).get(model, model_label(model)),
             zorder=2,
         )
     ax.set_xlim(grid[0], grid[-1])
     ax.set_ylim(bottom=0.0)
+    if log_scale:
+        ax.set_xscale("log")
+        # Spread over decades, the posteriors peak across the whole width, so no corner is free
+        # for the legend; headroom above the tallest curve is the only space that is.
+        ax.set_ylim(top=ax.get_ylim()[1] * 1.8)
     ax.set_xlabel(xlabel)
-    ax.set_ylabel("posterior density")
+    ax.set_ylabel(f"posterior density of log {xlabel}" if log_scale else "posterior density")
 
 
 def plot_model_probability_pie(

@@ -19,8 +19,9 @@ A companion quantity, the **risk of additional transmission (RAT)**, is the prob
 least one further *transmission event* after that day. Under the three naive models the two
 coincide by assumption — that identification is exactly the conflation this project is about —
 and they separate only under `sse_so`/`ssi_so`, where the gap is the contribution of the latent
-pipeline of already-infected but not-yet-symptomatic individuals. Use RAC everywhere except the
-supplementary analysis that treats RAT explicitly. `RAC(t) ≥ RAT(t)` always.
+pipeline of already-infected but not-yet-symptomatic individuals. RAC is the headline; RAT is
+drawn beside it where the figures ask whether a result holds for more than one risk — the
+sustained-transmission figures and the reporting figure's bottom row. `RAC(t) ≥ RAT(t)` always.
 
 The **risk of sustained transmission (RST)** is the late-outbreak analogue: after the same
 conditioning and reset, it is the posterior probability that the future transmission process

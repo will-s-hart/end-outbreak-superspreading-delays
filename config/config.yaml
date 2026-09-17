@@ -77,6 +77,18 @@ analyses:
     plot_script: scripts/plot_onset_models_estimated_k.py
     sampler: {draws: 2000, tune: 2000, chains: 4, target_accept: 0.95, seed: 20260808}
 
+  # Supplementary, and deliberately out of IMPLEMENTED_ANALYSES: wired into the workflow, but no
+  # report figure and no report number until it is promoted. Under the prior above, the
+  # onset-anchored k posteriors sit on its median, which could be the data or the prior. This
+  # asks which: the same analysis, with the prior a decade wider on each side of the same median,
+  # so width is the only thing that changes. A posterior that merely widens with it was the prior.
+  onset_models_uninformative_k:
+    models: [sse, ssi, sse_so, ssi_so]
+    fixed_k: null
+    k_prior: {distribution: lognormal, median: 0.18, quantile_025: 0.018, quantile_975: 1.8}
+    run_script: scripts/run_onset_models_uninformative_k.py
+    sampler: {draws: 2000, tune: 2000, chains: 4, target_accept: 0.95, seed: 20260918}
+
   # Exploratory, and deliberately out of IMPLEMENTED_ANALYSES: no report figure, no report
   # number. They ask how much of the naive/onset gap in Analysis 3 is the switchpoint, by
   # removing it. `switch_day: 111` is past the end of the 111-day window, so `switch_index`
@@ -107,8 +119,12 @@ analyses:
     sampler: {draws: 2000, tune: 2000, chains: 4, target_accept: 0.9, seed: 20260917}
 
   # Under-reporting, at the fixed k of Analysis 3 so that the sweep isolates reporting alone
-  # and its 100% panel *is* that analysis. Only the onset-anchored models are run: the naive
-  # ones are supported and tested but add nothing to the question the figure asks.
+  # and its 100% rung *is* that analysis. The naive models are run too, so the figure can show
+  # whether the naive/onset gap survives the reporting assumption.
+  #
+  # Keep the naive models *after* the onset-anchored ones. Each model's seed stream is its index
+  # in `models` (`AnalysisSetting.model_entropy`), so inserting them first would silently change
+  # every draw of the curves that were already here.
   #
   # `reporting.probability` is a fixed input, not a parameter. It is not identified from these
   # data without an external prior, so the figure is deliberately a sweep over assumed values.
@@ -119,7 +135,7 @@ analyses:
   # outbreak is growing and the risk is 1 to several decimal places, so the ~32 conditioning
   # days it saves per model are hours of MCMC for nothing.
   underreporting_60:
-    models: [sse_so, ssi_so]
+    models: [sse_so, ssi_so, sse, ssi]
     fixed_k: 0.18
     reporting: {probability: 0.6}
     rac: {first_day: 33}
@@ -127,7 +143,7 @@ analyses:
     sampler: {draws: 2000, tune: 2000, chains: 4, target_accept: 0.9, seed: 20260811}
 
   underreporting_80:
-    models: [sse_so, ssi_so]
+    models: [sse_so, ssi_so, sse, ssi]
     fixed_k: 0.18
     reporting: {probability: 0.8}
     rac: {first_day: 33}

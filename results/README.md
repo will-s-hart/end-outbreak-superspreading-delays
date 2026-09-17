@@ -1,6 +1,6 @@
 Committed analysis outputs, one subdirectory per analysis. Everything here is produced by a
 Snakemake rule from a script in `scripts/`, and everything here feeds a figure — all but the
-two exploratory directories noted below also feed the report.
+three directories noted below as outside the report also feed it.
 
 | Path | What it is |
 | --- | --- |
@@ -9,9 +9,10 @@ two exploratory directories noted below also feed the report.
 | `<analysis>/<model>_rac_diagnostics.csv` | Tier-1 sampler diagnostics for those fits, one row per conditioning day. The per-day posteriors themselves are not kept. |
 | `<analysis>/model_evidence.json` | Tier-2 marginal likelihoods and posterior model probabilities. |
 | `<analysis>/dispersion_posteriors.json` | Tier-2 `k` posterior summaries and their pairwise divergences — only for the analyses that estimate `k`. |
-| `underreporting_60/`, `underreporting_80/` | The reporting sweep. Tier-1 files only: comparing a model with itself under a different reporting assumption needs no model evidence and no dispersion summary, so those two are absent by design rather than missing. Their posteriors additionally carry `true_incidence`, the imputed true onsets. |
+| `underreporting_60/`, `underreporting_80/` | The reporting sweep, for the naive and the onset-anchored SSE/SSI. Tier-1 files only: comparing a model with itself under a different reporting assumption needs no model evidence and no dispersion summary, so those two are absent by design rather than missing. Their posteriors additionally carry `true_incidence`, the imputed true onsets. |
 | `no_switch_fixed_R/`, `no_switch_single_R/` | The exploratory no-switchpoint variants: tier-1 files only, and no model evidence (`no_switch_fixed_R` fixes every parameter, so there is nothing to integrate over). They feed their own figures and **nothing in the report** — see `AGENTS.md`. |
-| `delay_distributions.csv` | Tier-2 discrete incubation, TOST, target serial-interval and implied serial-interval distributions for Supplementary Fig. S1. |
+| `onset_models_uninformative_k/` | Analysis 4 under a `k` prior a decade wider on each side: the full tier-1 and tier-2 set, evidence and `k` summary included. It feeds its own figure and **nothing in the report** yet. |
+| `delay_distributions.csv` | Tier-2 discrete incubation, TOST, target serial-interval and implied serial-interval distributions for the supplementary delay figure. |
 | `report_numbers.tex` | Tier-2 LaTeX macros: every number `report/report.tex` quotes, collected from the files above. Spans the analyses rather than sitting inside one, which is why it is not in a subdirectory. |
 
 The per-analysis subdirectories arrive one per stage: `naive_models_fixed_k/` with Stage 5,

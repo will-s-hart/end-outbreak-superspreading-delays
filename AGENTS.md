@@ -35,6 +35,14 @@ curves, so a cluster job: `REMOTE_TARGET=no_switch_results cluster/run_snakemake
 `pixi run pipeline-no-switch` builds the lot locally, and `pipeline-no-switch-present` draws just
 the figures from pulled curves.
 
+`onset_models_uninformative_k` is kept out of the report the same way. It repeats the onset
+analysis with estimated `k` under a prior a decade wider on each side of the same median, to ask
+whether that analysis's onset-anchored `k` posteriors — which reproduce their prior — are the data
+or the prior. `uninformative_k_results` is its cluster half (4 fits, 4 curves, evidence and the
+`k` summary); `pipeline-uninformative-k` and `pipeline-uninformative-k-present` mirror the
+no-switch tasks. The report itself carries that analysis's estimated-`k` figure in the supplement
+(`SUPPLEMENTARY_ANALYSES` in the `Snakefile`), not the main text.
+
 The output quantity is the **risk of additional cases (RAC)**, a real-time reset posterior
 predictive: fit parameters *and* latents to the record through day `t` alone, reset `R` to
 `R_pre`, and ask for the posterior probability of at least one further case. **Every conditioning
@@ -62,6 +70,8 @@ The environment is managed by **pixi**. All commands run through `pixi run`:
 | `pixi run pipeline-present-dry` | dry-run the presentation-only allowlist |
 | `pixi run pipeline-no-switch` | the exploratory no-switchpoint variants; in no other target |
 | `pixi run pipeline-no-switch-present` | their figures only, after pulling a cluster run of `no_switch_results` |
+| `pixi run pipeline-uninformative-k` | the vague-`k` repeat of the onset analysis; in no other target |
+| `pixi run pipeline-uninformative-k-present` | its figure only, after pulling a cluster run of `uninformative_k_results` |
 
 **Run `pixi run check` and fix every issue before committing.** No exceptions — a failing lint,
 type or test check is not "pre-existing", it is the current state of the tree.
@@ -340,7 +350,7 @@ committed measurement.
   mean 11.4 d and SD 8.1 d, leaving a residual TOST of mean 3.9 d and SD 4.57 d. Configurable in
   `config/config.yaml`; `check_delay_budget` rejects any estimate whose variance exceeds the
   serial interval's.
-- **Under-reporting is implemented for every model but run only for SSE-SO/SSI-SO at 60% and 80%.** Reporting *delays* are implemented and tested but used by no analysis: there are no reporting dates for Équateur. The reporting probability is a fixed input, not a parameter — it is not identified from these data without an external prior.
+- **Under-reporting is implemented for every model but run only for SSE, SSI, SSE-SO and SSI-SO at 60% and 80%.** The naive models were added after the onset-anchored ones and sit after them in `models:`, because each model's seed stream is its index there. Reporting *delays* are implemented and tested but used by no analysis: there are no reporting dates for Équateur. The reporting probability is a fixed input, not a parameter — it is not identified from these data without an external prior.
 - **Six sensitivity analyses, listed in the report and none of them run.** In order of value: the
   outbreak-specific serial interval (naive models only — it is structurally inadmissible for the
   onset-anchored ones, and saying so is itself a result); the incubation/TOST decomposition;
@@ -358,6 +368,13 @@ committed measurement.
   `R_pre` a no-op — so they report a forward predictive, not the reset predictive the report's
   analyses do. Nothing is written up until a `refit_daily` run exists; the quick route is never
   a finding.
+- **The vague-`k` repeat is implemented but not interpreted.** Under the report's `k` prior the
+  onset-anchored posteriors land on its median with almost no evidence gain, which the report now
+  says is ambiguous. `onset_models_uninformative_k` settles it: posteriors that widen roughly in
+  proportion to the prior mean the data say little about `k` under onset anchoring; posteriors
+  that stay near 0.18 and narrow mean they do. Its model probabilities are not comparable with the
+  report analysis's, since a wider prior is charged for in the evidence. It is also the first
+  piece of the prior-sensitivity analysis listed above.
 - **The reset-convention follow-up remains declined** unless asked for. RST is now a reported
   estimand rather than an optional follow-up.
 - **Per-fit process spawn dominates the cheap models' cost.** Each conditioning-day fit starts

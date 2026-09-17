@@ -1,4 +1,10 @@
-"""Naive and onset-anchored SSE/SSI with ``k`` estimated."""
+"""Naive and onset-anchored SSE/SSI with ``k`` estimated.
+
+One script, two analyses, chosen by ``--analysis``: the report's, and
+``onset_models_uninformative_k``, which repeats it under a ``k`` prior a decade wider on each side
+of the same median. The layout is identical so the two can be laid side by side, and only the
+title says which prior a figure was drawn under.
+"""
 
 from __future__ import annotations
 
@@ -16,7 +22,18 @@ from matplotlib.figure import Figure
 from end_of_outbreak import configuration, outbreak_data
 from end_of_outbreak.model_specifications import LogNormalPrior
 
-ANALYSIS = "onset_models_estimated_k"
+SUPTITLES = {
+    "onset_models_estimated_k": "Équateur 2018: onset anchoring compared, $k$ estimated",
+    "onset_models_uninformative_k": (
+        "Équateur 2018: onset anchoring compared, $k$ estimated under a vague prior"
+    ),
+}
+"""The analyses this script draws, each with the title that tells their figures apart."""
+
+LOG_K_AXIS = {"onset_models_uninformative_k"}
+"""Analyses whose ``k`` panel needs a log axis. Under the vague prior the posteriors run from
+about 0.01 to 5, so on a linear axis every one near zero is a spike at the edge and the prior
+cannot be seen — which is the comparison the analysis exists to show."""
 
 
 def build_figure(
@@ -29,6 +46,8 @@ def build_figure(
     R_pre_prior: LogNormalPrior,
     R_post_prior: LogNormalPrior,
     k_prior: LogNormalPrior,
+    suptitle: str,
+    log_k: bool = False,
 ) -> Figure:
     """Assemble it in the same five-panel layout as the naive estimated-``k`` figure."""
     utils.apply_house_style()
@@ -63,6 +82,7 @@ def build_figure(
         letter="C",
         labels=figure_panels.credible_interval_labels(dispersion["posterior"]),
         legend=True,
+        log_scale=log_k,
     )
     figure_panels.model_probability_panel(
         figure.add_subplot(bottom[0]), evidence, models, letter="D"
@@ -74,14 +94,14 @@ def build_figure(
         letter="E",
         first_day=data.ert_arrival_day,
     )
-    figure.suptitle("Équateur 2018: onset anchoring compared, $k$ estimated", fontsize=9.5)
+    figure.suptitle(suptitle, fontsize=9.5)
     return figure
 
 
 def main(argv: list[str] | None = None) -> None:
     args = parse_arguments(argv)
     config = configuration.load_config(args.config)
-    analysis = configuration.analysis_config(config, ANALYSIS)
+    analysis = configuration.analysis_config(config, args.analysis)
     models = list(analysis["models"])
     priors = analysis["shared"]["priors"]
     figure = build_figure(
@@ -93,6 +113,8 @@ def main(argv: list[str] | None = None) -> None:
         R_pre_prior=LogNormalPrior.from_config(priors["R_pre"]),
         R_post_prior=LogNormalPrior.from_config(priors["R_post"]),
         k_prior=LogNormalPrior.from_config(analysis["k_prior"]),
+        suptitle=SUPTITLES[args.analysis],
+        log_k=args.analysis in LOG_K_AXIS,
     )
     utils.save_figure(figure, pdf=args.output_pdf, png=args.output_png)
     print(f"wrote {args.output_pdf} and {args.output_png}")
@@ -103,10 +125,12 @@ def parse_arguments(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--config", type=Path, default=configuration.DEFAULT_CONFIG_FILE)
     parser.add_argument("--data", type=Path, default=outbreak_data.DEFAULT_DATA_FILE)
     parser.add_argument(
-        "--results-dir",
-        type=Path,
-        default=configuration.REPO_ROOT / "results" / ANALYSIS,
+        "--analysis",
+        choices=SUPTITLES,
+        default="onset_models_estimated_k",
+        help="whose config block supplies the models and the k prior",
     )
+    parser.add_argument("--results-dir", type=Path, required=True)
     parser.add_argument("--output-pdf", type=Path, required=True)
     parser.add_argument("--output-png", type=Path, required=True)
     return parser.parse_args(argv)

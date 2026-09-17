@@ -103,7 +103,7 @@ additional cases (RAC) after each day. Models placing overdispersion at the leve
 transmission event, or individual produced materially different risks at the same nominal
 dispersion parameter and inferred different values when that parameter was estimated. Models
 that anchored transmission to the infector's symptom onset and represented incubation explicitly
-crossed both decision thresholds 8--12 days earlier than their infection-anchored counterparts;
+crossed both decision thresholds a week or more earlier than their infection-anchored counterparts;
 they also inferred substantially smaller post-intervention reproduction numbers. Finally,
 distinguishing additional cases from additional transmission isolated the contribution of people
 already infected but not yet symptomatic---a component that infection-anchored models cannot
@@ -144,8 +144,8 @@ onset-to-onset serial interval, allowing differences to be attributed to transmi
 and temporal anchoring rather than to different interval assumptions. We first compare three
 infection-anchored mechanisms with the dispersion fixed and estimated, then compare event- and
 individual-level models with onset-anchored counterparts. The primary estimand is the risk of
-additional cases; a supplementary analysis separates it from the risk of additional
-transmission. Sensitivity analyses needed to assess the robustness of these comparisons are
+additional cases; we then ask whether the anchoring comparison holds for the risks of additional
+transmission and of sustained transmission too, and under incomplete reporting. Sensitivity analyses needed to assess the robustness of these comparisons are
 specified separately.
 
 % =============================================================================================
@@ -1347,39 +1347,22 @@ where they are furthest apart.
   \label{fig:onset-fixed}
 \end{figure}
 
-\begin{figure}[htbp]
-  \centering
-  \includegraphics[width=\textwidth]{../figures/onset_models_estimated_k/onset_models_estimated_k.pdf}
-  \caption{\textbf{Onset anchoring with the dispersion estimated.} Panels as in
-    Fig.~\ref{fig:naive-estimated}. In panel~\textbf{C}, \sseso{}'s $k$ posterior shifts below
-    \sse{}'s and towards the literature estimate, whereas \ssiso{} remains close to \ssi{}.
-    This contrast supports attenuation of day-level, but not individual-level, heterogeneity when
-    onsets are treated as infections.}
-  \label{fig:onset-estimated}
-\end{figure}
-
 \begin{itemize}
-  \item \textbf{Onset anchoring advances both crossings by 8--12 days.} With $k$ estimated
-    (Fig.~\ref{fig:onset-estimated}), \sseso{} crosses $0.05$ on
-    day~\resultnum{onsetmodelsestimatedk.sseso.rac05.day} against \sse{}'s
-    day~\resultnum{onsetmodelsestimatedk.sse.rac05.day}, an advance of
-    \resultnum{onsetmodelsestimatedk.sseso-vs-sse.shift05} days, and $0.01$ on
-    day~\resultnum{onsetmodelsestimatedk.sseso.rac01.day} against
-    day~\resultnum{onsetmodelsestimatedk.sse.rac01.day}, an advance of
-    \resultnum{onsetmodelsestimatedk.sseso-vs-sse.shift01} days. \ssiso{} advances \ssi{}'s
-    crossings by \resultnum{onsetmodelsestimatedk.ssiso-vs-ssi.shift05} and
-    \resultnum{onsetmodelsestimatedk.ssiso-vs-ssi.shift01} days respectively
-    (day~\resultnum{onsetmodelsestimatedk.ssiso.rac05.day} against
-    day~\resultnum{onsetmodelsestimatedk.ssi.rac05.day}, and
-    day~\resultnum{onsetmodelsestimatedk.ssiso.rac01.day} against
-    day~\resultnum{onsetmodelsestimatedk.ssi.rac01.day}). At a fixed $k$
-    (Fig.~\ref{fig:onset-fixed}) the same comparisons give
-    \resultnum{onsetmodelsfixedk.sseso-vs-sse.shift05} and
-    \resultnum{onsetmodelsfixedk.sseso-vs-sse.shift01} days for \sseso{} against \sse{}, and
-    \resultnum{onsetmodelsfixedk.ssiso-vs-ssi.shift05} and
-    \resultnum{onsetmodelsfixedk.ssiso-vs-ssi.shift01} days for \ssiso{} against \ssi{}. The
-    displacement is on the scale of the mean incubation period,
-    \resultnum{delays.incubation.mean}\,d.
+  \item \textbf{Onset anchoring advances both crossings by a week or more.} At fixed $k$
+    (Fig.~\ref{fig:onset-fixed}), \sseso{} crosses $0.05$ on
+    day~\resultnum{onsetmodelsfixedk.sseso.rac05.day} against \sse{}'s
+    day~\resultnum{onsetmodelsfixedk.sse.rac05.day}, an advance of
+    \resultnum{onsetmodelsfixedk.sseso-vs-sse.shift05} days, and $0.01$ on
+    day~\resultnum{onsetmodelsfixedk.sseso.rac01.day} against
+    day~\resultnum{onsetmodelsfixedk.sse.rac01.day}, an advance of
+    \resultnum{onsetmodelsfixedk.sseso-vs-sse.shift01} days. \ssiso{} advances \ssi{}'s
+    crossings by \resultnum{onsetmodelsfixedk.ssiso-vs-ssi.shift05} and
+    \resultnum{onsetmodelsfixedk.ssiso-vs-ssi.shift01} days respectively
+    (day~\resultnum{onsetmodelsfixedk.ssiso.rac05.day} against
+    day~\resultnum{onsetmodelsfixedk.ssi.rac05.day}, and
+    day~\resultnum{onsetmodelsfixedk.ssiso.rac01.day} against
+    day~\resultnum{onsetmodelsfixedk.ssi.rac01.day}). The displacement is on the scale of the
+    mean incubation period, \resultnum{delays.incubation.mean}\,d.
   \item \textbf{Why the direction is \emph{earlier}, and why it is not a shorter generation
     time.} All four models share the same onset-to-onset serial interval; what changes is which
     side of the conditioning day a transmission falls on once that interval is cut into
@@ -1390,65 +1373,67 @@ where they are furthest apart.
     spent. The infection-anchored models have no pipeline, move the infection decision to the
     later symptom-onset date, and apply the reset $\Rreset$ to it, which makes the residual state
     look younger and drain later.
-  \item \textbf{The infection-anchored convention more than doubles the inferred $\Rpost$.} With $k$
-    estimated the posterior medians (95\% credible intervals) are
-    \resultnum{onsetmodelsestimatedk.sse.rpost.interval} for \sse{} and
-    \resultnum{onsetmodelsestimatedk.ssi.rpost.interval} for \ssi{}, against
-    \resultnum{onsetmodelsestimatedk.sseso.rpost.interval} for \sseso{} and
-    \resultnum{onsetmodelsestimatedk.ssiso.rpost.interval} for \ssiso{}. The infection-anchored convention
-    applies the day-\resultnum{data.ertarrivalday} switch to \emph{onsets}, so post-arrival onsets
-    that arose from pre-arrival infections are charged to the controlled period. $\Rpre$ is far
-    more stable across the four --- \resultnum{onsetmodelsestimatedk.sse.rpre.interval},
-    \resultnum{onsetmodelsestimatedk.ssi.rpre.interval},
-    \resultnum{onsetmodelsestimatedk.sseso.rpre.interval} and
-    \resultnum{onsetmodelsestimatedk.ssiso.rpre.interval} --- consistent with an effect on
+  \item \textbf{The infection-anchored convention more than doubles the inferred $\Rpost$.} The
+    posterior medians (95\% credible intervals) are
+    \resultnum{onsetmodelsfixedk.sse.rpost.interval} for \sse{} and
+    \resultnum{onsetmodelsfixedk.ssi.rpost.interval} for \ssi{}, against
+    \resultnum{onsetmodelsfixedk.sseso.rpost.interval} for \sseso{} and
+    \resultnum{onsetmodelsfixedk.ssiso.rpost.interval} for \ssiso{}. The infection-anchored
+    convention applies the day-\resultnum{data.ertarrivalday} switch to \emph{onsets}, so
+    post-arrival onsets that arose from pre-arrival infections are charged to the controlled
+    period. $\Rpre$ is far more stable across the four ---
+    \resultnum{onsetmodelsfixedk.sse.rpre.interval},
+    \resultnum{onsetmodelsfixedk.ssi.rpre.interval},
+    \resultnum{onsetmodelsfixedk.sseso.rpre.interval} and
+    \resultnum{onsetmodelsfixedk.ssiso.rpre.interval} --- consistent with an effect on
     \emph{when} the switch lands rather than on the epidemic's early growth.
-  \item \textbf{The results support attenuation of day-level dispersion.} \sseso{}'s $k$ posterior,
-    \resultnum{onsetmodelsestimatedk.sseso.k.interval}, sits below infection-anchored \sse{}'s
-    \resultnum{onsetmodelsestimatedk.sse.k.interval} and towards the literature value: median
-    ratio \resultnum{onsetmodelsestimatedk.sse-vs-sseso.medianratio}, overlap
-    \resultnum{onsetmodelsestimatedk.sse-vs-sseso.overlap},
+  \item \textbf{The onset-anchored models are strongly preferred, and are indistinguishable from
+    each other.} The posterior model probabilities are
+    \resultnum{onsetmodelsfixedk.sseso.probability} for \sseso{} and
+    \resultnum{onsetmodelsfixedk.ssiso.probability} for \ssiso{}, against
+    \resultnum{onsetmodelsfixedk.ssi.probability} for \ssi{} and
+    \resultnum{onsetmodelsfixedk.sse.probability} for \sse{}; the log evidences are
+    \resultnum{onsetmodelsfixedk.sseso.logevidence},
+    \resultnum{onsetmodelsfixedk.ssiso.logevidence},
+    \resultnum{onsetmodelsfixedk.ssi.logevidence} and
+    \resultnum{onsetmodelsfixedk.sse.logevidence} nats.
+  \item \textbf{Estimating $k$ changes little of this} (Fig.~\ref{fig:onset-estimated}). The
+    onset-anchored crossings still come
+    \resultnum{onsetmodelsestimatedk.sseso-vs-sse.shift05} and
+    \resultnum{onsetmodelsestimatedk.sseso-vs-sse.shift01} days earlier for \sseso{} against
+    \sse{}, and \resultnum{onsetmodelsestimatedk.ssiso-vs-ssi.shift05} and
+    \resultnum{onsetmodelsestimatedk.ssiso-vs-ssi.shift01} days for \ssiso{} against \ssi{};
+    the $\Rpost$ contrast and the model ordering are unchanged
+    (\resultnum{onsetmodelsestimatedk.sseso.probability},
+    \resultnum{onsetmodelsestimatedk.ssiso.probability},
+    \resultnum{onsetmodelsestimatedk.ssi.probability},
+    \resultnum{onsetmodelsestimatedk.sse.probability}).
+  \item \textbf{The onset-anchored $k$ posteriors reproduce their prior.} \sseso{}'s is
+    \resultnum{onsetmodelsestimatedk.sseso.k.interval} and \ssiso{}'s
+    \resultnum{onsetmodelsestimatedk.ssiso.k.interval}, against a prior with median
+    \resultnum{priors.k.median} and 95\% interval
+    \resultnum{priors.k.quantilelower}--\resultnum{priors.k.quantileupper}, and releasing $k$ is worth
+    \resultnum{onsetmodelsestimatedk.sseso.evidencegain} and
+    \resultnum{onsetmodelsestimatedk.ssiso.evidencegain} nats to them, within their own
+    estimation error. That is what data agreeing with the literature value would look like, but
+    also what data carrying no information about $k$ would look like; a repeat under a much
+    wider prior is needed to tell the two apart, and has not yet been run.
+  \item \textbf{The infection-anchored $k$ posteriors do move, and in the direction attenuation
+    predicts.} \sse{}'s $k$ posterior, \resultnum{onsetmodelsestimatedk.sse.k.interval}, sits
+    above \sseso{}'s: median ratio \resultnum{onsetmodelsestimatedk.sse-vs-sseso.medianratio},
+    overlap \resultnum{onsetmodelsestimatedk.sse-vs-sseso.overlap},
     $\Pr(k_{\msse}>k_{\msseso}) =
-     \resultnum{onsetmodelsestimatedk.sse-vs-sseso.probabilitygreater}$. \ssi{} moves far less ---
-    \resultnum{onsetmodelsestimatedk.ssi.k.interval} against \ssiso{}'s
-    \resultnum{onsetmodelsestimatedk.ssiso.k.interval}, overlap
+     \resultnum{onsetmodelsestimatedk.sse-vs-sseso.probabilitygreater}$, with a gain of
+    \resultnum{onsetmodelsestimatedk.sse.evidencegain} nats from releasing it. \ssi{} moves far
+    less --- \resultnum{onsetmodelsestimatedk.ssi.k.interval}, overlap with \ssiso{}
     \resultnum{onsetmodelsestimatedk.ssi-vs-ssiso.overlap}. Incubation convolution attenuates
     \emph{day-level} dispersion when onsets are read as infections; individual-level dispersion is
-    comparatively stable under regrouping.
-  \item \textbf{The two onset-anchored mechanisms infer similar $k$ values.} \sseso{} and
-    \ssiso{} agree almost exactly --- overlap
-    \resultnum{onsetmodelsestimatedk.sseso-vs-ssiso.overlap}, median ratio
-    \resultnum{onsetmodelsestimatedk.sseso-vs-ssiso.medianratio},
-    $\Pr(k_{\msseso}>k_{\mssiso}) =
-     \resultnum{onsetmodelsestimatedk.sseso-vs-ssiso.probabilitygreater}$ --- where their infection-anchored
-    counterparts differ by a factor of
-    \resultnum{onsetmodelsestimatedk.sse-vs-ssi.medianratio} at an overlap of
-    \resultnum{onsetmodelsestimatedk.sse-vs-ssi.overlap}. The event-versus-individual gap of
+    comparatively stable under regrouping. The event-versus-individual gap of
     Section~\ref{sec:results-naive-estimated} is therefore largely attributable to temporal
     conflation in this outbreak.
-  \item \textbf{The onset-anchored models are strongly preferred, and are indistinguishable from
-    each other.} With $k$ estimated the posterior model probabilities are
-    \resultnum{onsetmodelsestimatedk.sseso.probability} for \sseso{} and
-    \resultnum{onsetmodelsestimatedk.ssiso.probability} for \ssiso{}, against
-    \resultnum{onsetmodelsestimatedk.ssi.probability} for \ssi{} and
-    \resultnum{onsetmodelsestimatedk.sse.probability} for \sse{}; the log evidences are
-    \resultnum{onsetmodelsestimatedk.sseso.logevidence},
-    \resultnum{onsetmodelsestimatedk.ssiso.logevidence},
-    \resultnum{onsetmodelsestimatedk.ssi.logevidence} and
-    \resultnum{onsetmodelsestimatedk.sse.logevidence} nats. The fixed-$k$ analysis gives the same
-    ordering (\resultnum{onsetmodelsfixedk.sseso.probability},
-    \resultnum{onsetmodelsfixedk.ssiso.probability},
-    \resultnum{onsetmodelsfixedk.ssi.probability},
-    \resultnum{onsetmodelsfixedk.sse.probability}).
-  \item \textbf{Estimating $k$ adds little evidence for the onset-anchored models.} Releasing $k$ is worth
-    \resultnum{onsetmodelsestimatedk.sseso.evidencegain} nats to \sseso{} and
-    \resultnum{onsetmodelsestimatedk.ssiso.evidencegain} to \ssiso{} --- within their own
-    estimation error --- against \resultnum{onsetmodelsestimatedk.sse.evidencegain} for infection-anchored
-    \sse{}. Their $k$ posteriors already sit on \resultnum{onsetmodelsfixedk.fixedk}, so fixing it
-    there costs them nothing.
-  \item \textbf{The 8--12-day advance is specific to this analysis.} Its direction is conditional
-    on the reset and switch conventions, the outbreak history and the posterior; it is not a
-    general result for arbitrary time series or interventions.
+  \item \textbf{The advance is specific to this analysis.} Its direction is conditional on the
+    reset and switch conventions, the outbreak history and the posterior; it is not a general
+    result for arbitrary time series or interventions.
 \end{itemize}
 
 \begin{table}[htbp]
@@ -1508,18 +1493,21 @@ where they are furthest apart.
 \subsection{Cases, transmission and sustained transmission}
 \label{sec:results-rat}
 
-Figure~\ref{fig:sustained-fixed} compares all three risks at the transplanted dispersion
-parameter; Fig.~\ref{fig:sustained-estimated} repeats the comparison with $k$ estimated.
+The advance of Section~\ref{sec:results-onset} is measured on $\RAC$.
+Figure~\ref{fig:sustained-fixed} asks whether it is a property of that one risk, by putting all
+four models on each of the three at the transplanted dispersion parameter;
+Fig.~\ref{fig:sustained-estimated} repeats the comparison with $k$ estimated.
 
 \begin{figure}[htbp]
   \centering
   \includegraphics[width=\textwidth]{../figures/sustained_transmission_fixed_k/sustained_transmission_fixed_k.pdf}
-  \caption{\textbf{The risk of sustained transmission distinguishes a future transmission from
-    a transmission lineage that persists.} Models fitted with $k$ fixed at
-    \resultnum{onsetmodelsfixedk.fixedk}. \textbf{A}: infection-anchored \sse{} and \ssi{};
-    $\RAC=\RAT$ by construction (dashed), while $\RST$ is dotted. \textbf{B}: onset-anchored
-    \sseso{} and \ssiso{}; dashed, solid and dotted curves are $\RAC$, $\RAT$ and $\RST$,
-    respectively. Colours identify models in both panels. Grey bars show daily symptom onsets;
+  \caption{\textbf{Onset anchoring brings the decline forward whichever risk is asked about.}
+    Models fitted with $k$ fixed at \resultnum{onsetmodelsfixedk.fixedk}. \textbf{A}: $\RAC$
+    (dashed) and $\RAT$ (solid) for all four models. Under infection anchoring a case is a
+    transmission event, so $\RAC=\RAT$ by construction and \sse{} and \ssi{} each have a single
+    dashed curve; only \sseso{} and \ssiso{} separate the two. \textbf{B}: $\RST$ for all four
+    models, drawn solid since it is the only risk in the panel. Colours identify models in both
+    panels. Grey bars show daily symptom onsets;
     vertical lines mark ERT arrival and withdrawal, and horizontal lines mark the 0.05 and 0.01
     decision thresholds. Each point is a separate posterior fit to the record through that
     conditioning day, followed by a reset to $\Rpre$. \dlo{} is omitted because its day-level
@@ -1528,58 +1516,66 @@ parameter; Fig.~\ref{fig:sustained-estimated} repeats the comparison with $k$ es
 \end{figure}
 
 \begin{itemize}
+  \item \textbf{Onset anchoring advances the decline whichever risk is asked about.} On $\RAC$,
+    \sseso{} settles below 0.05 on day~\resultnum{onsetmodelsfixedk.sseso.rac05.day} against
+    day~\resultnum{onsetmodelsfixedk.sse.rac05.day} for \sse{}, and \ssiso{} on
+    day~\resultnum{onsetmodelsfixedk.ssiso.rac05.day} against
+    day~\resultnum{onsetmodelsfixedk.ssi.rac05.day} for \ssi{}. On $\RAT$ --- which for the
+    infection-anchored models is the same curve --- \sseso{} and \ssiso{} settle on
+    days~\resultnum{onsetmodelsfixedk.sseso.rat05.day} and
+    \resultnum{onsetmodelsfixedk.ssiso.rat05.day}. On $\RST$ the four settle on
+    days~\resultnum{onsetmodelsfixedk.sse.rst05.day} (\sse{}),
+    \resultnum{onsetmodelsfixedk.sseso.rst05.day} (\sseso{}),
+    \resultnum{onsetmodelsfixedk.ssi.rst05.day} (\ssi{}) and
+    \resultnum{onsetmodelsfixedk.ssiso.rst05.day} (\ssiso{}). The advance is never less than a
+    week, and reaches about two on $\RAT$, where the onset-anchored models also set aside the
+    incubation pipeline. The normalised delay distributions affect when residual transmission and the
+    pipeline cross the conditioning day, but not the eventual-extinction root under the constant
+    reset reproduction number.
   \item \textbf{Sustained transmission changes the ranking of the two heterogeneity mechanisms.}
-    At the reference day under fixed $k$, \sse{} has $\RST=
+    At the reference day, \sse{} has $\RST=
     \resultnum{onsetmodelsfixedk.sse.rst.reference}$ against
     \resultnum{onsetmodelsfixedk.ssi.rst.reference} for \ssi{}, even though their $\RAC$ values
     are \resultnum{onsetmodelsfixedk.sse.rac.reference} and
     \resultnum{onsetmodelsfixedk.ssi.rac.reference}, respectively. \sse{} assigns the remaining
     risk to rarer, larger bursts: a burst is less likely to occur, but more likely than an isolated
     transmission to start a lineage that survives. Thus the ordering measured for $\RAC$ is not an
-    ordering of late-outbreak risk in general; it depends on the event being asked about.
-  \item \textbf{Onset anchoring advances the decline in sustained-transmission risk.} At fixed
-    $k$, \sseso{} settles below 0.05 on day
-    \resultnum{onsetmodelsfixedk.sseso.rst05.day}, against day
-    \resultnum{onsetmodelsfixedk.sse.rst05.day} for \sse{}; \ssiso{} does so on day
-    \resultnum{onsetmodelsfixedk.ssiso.rst05.day}, against day
-    \resultnum{onsetmodelsfixedk.ssi.rst05.day} for \ssi{}. The normalised delay distributions
-    affect when residual transmission and the incubation pipeline cross the conditioning day, but
-    not the eventual-extinction root under the constant reset reproduction number.
-  \item \textbf{The pipeline is worth about a quarter of a unit of probability at its widest.}
-    With $k$ estimated, $\RAC$ exceeds $\RAT$ by at most
-    \resultnum{onsetmodelsestimatedk.sseso.gap.max} for \sseso{}, on
-    day~\resultnum{onsetmodelsestimatedk.sseso.gap.day}
-    (\resultnum{onsetmodelsestimatedk.sseso.gap.date}), and by at most
-    \resultnum{onsetmodelsestimatedk.ssiso.gap.max} for \ssiso{}, on
-    day~\resultnum{onsetmodelsestimatedk.ssiso.gap.day}. The gap peaks shortly after the last
+    ordering of late-outbreak risk in general; it depends on the event being asked about. The
+    anchoring comparison, by contrast, points the same way on all three.
+  \item \textbf{Only onset anchoring separates cases from transmission, by about a quarter of a
+    unit of probability at the widest.} $\RAC$ exceeds $\RAT$ by at most
+    \resultnum{onsetmodelsfixedk.sseso.gap.max} for \sseso{}, on
+    day~\resultnum{onsetmodelsfixedk.sseso.gap.day}
+    (\resultnum{onsetmodelsfixedk.sseso.gap.date}), and by at most
+    \resultnum{onsetmodelsfixedk.ssiso.gap.max} for \ssiso{}, on
+    day~\resultnum{onsetmodelsfixedk.ssiso.gap.day}. The gap peaks shortly after the last
     observed onset (day~\resultnum{data.lastonsetday}), when the pipeline is largest relative to
     the transmission still to come, and closes as it drains.
-  \item \textbf{It delays a case-based declaration by most of a week.} With $k$ estimated,
-    \sseso{}'s $\RAT$ settles below $0.05$ on
-    day~\resultnum{onsetmodelsestimatedk.sseso.rat05.day} and below $0.01$ on
-    day~\resultnum{onsetmodelsestimatedk.sseso.rat01.day}, against
-    day~\resultnum{onsetmodelsestimatedk.sseso.rac05.day} and
-    day~\resultnum{onsetmodelsestimatedk.sseso.rac01.day} for $\RAC$ --- later by
-    \resultnum{onsetmodelsestimatedk.sseso.gap.shift05} and
-    \resultnum{onsetmodelsestimatedk.sseso.gap.shift01} days. For \ssiso{} the same comparison
-    gives \resultnum{onsetmodelsestimatedk.ssiso.gap.shift05} and
-    \resultnum{onsetmodelsestimatedk.ssiso.gap.shift01} days ($\RAT$ on days
-    \resultnum{onsetmodelsestimatedk.ssiso.rat05.day} and
-    \resultnum{onsetmodelsestimatedk.ssiso.rat01.day} against $\RAC$ on days
-    \resultnum{onsetmodelsestimatedk.ssiso.rac05.day} and
-    \resultnum{onsetmodelsestimatedk.ssiso.rac01.day}).
+  \item \textbf{It delays a case-based declaration by most of a week.} \sseso{}'s $\RAT$ settles
+    below $0.05$ on day~\resultnum{onsetmodelsfixedk.sseso.rat05.day} and below $0.01$ on
+    day~\resultnum{onsetmodelsfixedk.sseso.rat01.day}, against
+    day~\resultnum{onsetmodelsfixedk.sseso.rac05.day} and
+    day~\resultnum{onsetmodelsfixedk.sseso.rac01.day} for $\RAC$ --- later by
+    \resultnum{onsetmodelsfixedk.sseso.gap.shift05} and
+    \resultnum{onsetmodelsfixedk.sseso.gap.shift01} days. For \ssiso{} the same comparison
+    gives \resultnum{onsetmodelsfixedk.ssiso.gap.shift05} and
+    \resultnum{onsetmodelsfixedk.ssiso.gap.shift01} days ($\RAT$ on days
+    \resultnum{onsetmodelsfixedk.ssiso.rat05.day} and
+    \resultnum{onsetmodelsfixedk.ssiso.rat01.day} against $\RAC$ on days
+    \resultnum{onsetmodelsfixedk.ssiso.rac05.day} and
+    \resultnum{onsetmodelsfixedk.ssiso.rac01.day}).
   \item \textbf{The two quantities answer different questions, and the difference is
     decision-relevant.} $\RAT$ isolates what relaxing interventions does; $\RAC$ is what a
     surveillance system would actually see. A criterion written on cases keeps interventions in
     place while the pipeline drains, even though transmission risk has already settled --- and an
     infection-anchored model, which identifies the two by assumption, cannot represent that
     distinction at all.
-  \item \textbf{Fixing $k$ changes very little here}, as the near-identical panels show: the
-    widest gap is \resultnum{onsetmodelsfixedk.sseso.gap.max} for \sseso{} and
-    \resultnum{onsetmodelsfixedk.ssiso.gap.max} for \ssiso{}, against
-    \resultnum{onsetmodelsestimatedk.sseso.gap.max} and
-    \resultnum{onsetmodelsestimatedk.ssiso.gap.max} when it is estimated --- a consequence of the
-    onset-anchored $k$ posteriors already sitting on the literature value.
+  \item \textbf{Estimating $k$ changes very little here} (Fig.~\ref{fig:sustained-estimated}): the
+    widest gap between $\RAC$ and $\RAT$ is \resultnum{onsetmodelsestimatedk.sseso.gap.max} for
+    \sseso{} and \resultnum{onsetmodelsestimatedk.ssiso.gap.max} for \ssiso{}, against
+    \resultnum{onsetmodelsfixedk.sseso.gap.max} and
+    \resultnum{onsetmodelsfixedk.ssiso.gap.max} at fixed $k$ --- a consequence of the
+    onset-anchored $k$ posteriors sitting on the prior's median, which is the literature value.
 \end{itemize}
 
 \subsection{Incomplete reporting}
@@ -1612,16 +1608,21 @@ convergence summaries alone.
 
 \begin{figure}[htbp]
   \centering
-  \includegraphics[width=0.85\textwidth]{../figures/underreporting/underreporting.pdf}
-  \caption{\textbf{Assuming cases went unreported delays the declaration, and by more than the
-    choice between mechanisms does.} $\RAC$ for \sseso{} (pink) and \ssiso{} (orange) under
-    complete reporting (solid), \resultnum{underreporting80.reportingpercent}\% reporting
-    (dashed) and \resultnum{underreporting60.reportingpercent}\% reporting (dotted), from the
-    ERT's arrival onward. $k$ is held at \resultnum{underreporting60.fixedk} throughout, so the
-    only thing varying between linestyles is the assumed reporting probability. Filled circles
-    mark where each curve first falls below 0.05 and stays there. Grey bars show daily
-    \emph{reported} onsets; the fitted models carry a posterior over the true counts behind them.
-    Each point is a separate real-time fit to the reported record through that conditioning day.}
+  \includegraphics[width=\textwidth]{../figures/underreporting/underreporting.pdf}
+  \caption{\textbf{Assuming cases went unreported delays the declaration, but leaves onset
+    anchoring's advance in place.} $k$ is held at \resultnum{underreporting60.fixedk} throughout.
+    \textbf{A}: $\RAC$ for infection-anchored \sse{} and \ssi{} under complete reporting (solid),
+    \resultnum{underreporting80.reportingpercent}\% reporting (dashed) and
+    \resultnum{underreporting60.reportingpercent}\% reporting (dotted), from the ERT's arrival
+    onward; filled circles mark where each curve first falls below 0.05 and stays there.
+    \textbf{B}: the same for onset-anchored \sseso{} and \ssiso{}. \textbf{C}: $\RAC$ (dashed) and
+    $\RAT$ (solid) for all four models at \resultnum{underreporting80.reportingpercent}\%
+    reporting; as in Fig.~\ref{fig:sustained-fixed}, the infection-anchored models have a single
+    curve for both. \textbf{D}: the same at \resultnum{underreporting60.reportingpercent}\%
+    reporting. Linestyle therefore marks the reporting assumption in the top row and the risk in
+    the bottom row. Grey bars show daily \emph{reported} onsets; the fitted models carry a
+    posterior over the true counts behind them. Each point is a separate real-time fit to the
+    reported record through that conditioning day.}
   \label{fig:underreporting}
 \end{figure}
 
@@ -1840,12 +1841,25 @@ through the same configuration and is used only for the comparison reported ther
 
 \begin{figure}[htbp]
   \centering
+  \includegraphics[width=\textwidth]{../figures/onset_models_estimated_k/onset_models_estimated_k.pdf}
+  \caption{\textbf{Onset anchoring with the dispersion estimated.} The four models of
+    Fig.~\ref{fig:onset-fixed}, with $k$ given the shared prior drawn in panel~\textbf{C}
+    instead of being held at its literature value; panels as in Fig.~\ref{fig:naive-estimated}.
+    In panel~\textbf{C}, \sseso{}'s $k$ posterior shifts below \sse{}'s and onto the prior's
+    median, whereas \ssiso{} remains close to \ssi{}. This contrast supports attenuation of
+    day-level, but not individual-level, heterogeneity when onsets are treated as infections.
+    The risk curves in panel~\textbf{E} are separated much as they are at fixed $k$.}
+  \label{fig:onset-estimated}
+\end{figure}
+
+\begin{figure}[htbp]
+  \centering
   \includegraphics[width=\textwidth]{../figures/sustained_transmission_estimated_k/sustained_transmission_estimated_k.pdf}
   \caption{\textbf{Risks of additional cases, additional transmission and sustained transmission
     with the dispersion estimated.} Layout and line conventions are identical to
-    Fig.~\ref{fig:sustained-fixed}. \textbf{A}: infection-anchored \sse{} and \ssi{}.
-    \textbf{B}: onset-anchored \sseso{} and \ssiso{}. The dotted $\RST$ curves use each posterior
-    draw's extinction probability under the reset to $\Rpre$; they are zero for subcritical reset
+    Fig.~\ref{fig:sustained-fixed}. \textbf{A}: $\RAC$ and $\RAT$ for all four models.
+    \textbf{B}: $\RST$ for all four models. The $\RST$ curves use each posterior draw's
+    extinction probability under the reset to $\Rpre$; they are zero for subcritical reset
     draws.}
   \label{fig:sustained-estimated}
 \end{figure}

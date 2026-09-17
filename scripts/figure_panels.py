@@ -1,10 +1,10 @@
 """The panels the report's analysis figures are assembled from.
 
-Figs. 1–4 are the same four kinds of panel in different arrangements: posterior densities for a
-scalar parameter, the posterior model probabilities, and the RAC curves over the conditioning
-days. Each figure script chooses the arrangement, the titles and the letters; the drawing lives
-here so that a change to how a RAC panel looks lands on every figure at once and the two naive
-analyses cannot drift apart visually while claiming to be comparable.
+The per-analysis figures are the same few kinds of panel in different arrangements: posterior
+densities for a scalar parameter, the posterior model probabilities, and the RAC curves over the
+conditioning days. Each figure script chooses the arrangement, the titles and the letters; the
+drawing lives here so that a change to how a RAC panel looks lands on every figure at once and
+the two naive analyses cannot drift apart visually while claiming to be comparable.
 
 The split from :mod:`utils` is by altitude rather than by subject. ``utils`` holds the house
 style, the loading of what the tier-2 rules wrote, and the drawing primitives — a density, a
@@ -15,13 +15,13 @@ settles below a threshold" is a definition the report states, so it must come fr
 :meth:`~end_of_outbreak.risk_curves.RiskCurve.first_day_below` rather than being
 reimplemented beside the panel.
 
-The sustained-transmission figures reuse the same backdrop and annotation rules but
-distinguish RAC, RAT and RST by linestyle while preserving the established model colours.
+The risk-metric panels reuse the same backdrop and annotation rules but distinguish RAC, RAT
+and RST by linestyle while preserving the established model colours.
 """
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 import matplotlib.dates as mdates
 import numpy as np
@@ -32,10 +32,22 @@ from matplotlib.lines import Line2D
 from numpy.typing import NDArray
 
 from end_of_outbreak import outbreak_data, risk_curves
-from end_of_outbreak.model_specifications import LogNormalPrior
+from end_of_outbreak.model_specifications import LogNormalPrior, specification_of
 
 SETTLING_THRESHOLD = 0.05
 """The threshold whose crossing is marked on a RAC panel; the report quotes 0.01 as well."""
+
+type RiskMetric = Literal["rac", "rat", "rst"]
+"""One of the three risk estimands a curve file can carry."""
+
+METRIC_COLUMNS: dict[RiskMetric, str] = {
+    "rac": utils.RISK_COLUMN,
+    "rat": utils.TRANSMISSION_RISK_COLUMN,
+    "rst": utils.SUSTAINED_RISK_COLUMN,
+}
+METRIC_LABELS: dict[RiskMetric, str] = {"rac": "RAC", "rat": "RAT", "rst": "RST"}
+METRIC_LINESTYLES: dict[RiskMetric, str] = {"rac": "--", "rat": "-", "rst": ":"}
+"""Where more than one estimand shares a panel, linestyle is the estimand and colour the model."""
 
 
 def parameter_posterior_panel(
@@ -48,6 +60,7 @@ def parameter_posterior_panel(
     letter: str | None = None,
     labels: dict[str, str] | None = None,
     legend: bool = False,
+    log_scale: bool = False,
 ) -> None:
     """One posterior density per model for a single scalar, over the prior they share.
 
@@ -55,8 +68,13 @@ def parameter_posterior_panel(
     specified, priors included* (§6.5), so a reader needs to see how much of each posterior is
     prior — most of all for ``k``, where the prior is deliberately fairly informative and the
     question is whether the data move each model away from it in different directions.
+
+    ``log_scale`` is for a parameter whose posteriors span decades; see
+    :func:`utils.plot_parameter_posteriors`.
     """
-    utils.plot_parameter_posteriors(ax, draws, prior=prior, xlabel=xlabel, labels=labels)
+    utils.plot_parameter_posteriors(
+        ax, draws, prior=prior, xlabel=xlabel, labels=labels, log_scale=log_scale
+    )
     ax.set_title(title)
     if letter is not None:
         utils.panel_label(ax, letter)
@@ -157,58 +175,46 @@ def risk_metrics_panel(
     *,
     title: str,
     letter: str,
+    metrics: tuple[RiskMetric, ...] = ("rac", "rat", "rst"),
     first_day: int | None = None,
-    infection_anchored: bool,
+    metric_linestyles: dict[RiskMetric, str] | None = None,
 ) -> None:
-    """RAC, RAT and RST for one anchoring convention.
+    """The chosen risk estimands, for any mix of infection- and onset-anchored models.
 
-    Colour identifies the transmission mechanism throughout; linestyle identifies the risk
-    estimand. Infection-anchored RAC and RAT are the same event and therefore share one dashed
-    curve and one legend label.
+    Colour identifies the model throughout; linestyle identifies the estimand. Both anchoring
+    conventions share the panel, so the naive/onset comparison is read within one estimand
+    rather than across panels.
+
+    Under infection anchoring a case *is* a transmission event, so RAC and RAT are one quantity
+    and the curve file carries only the first. Asked for both, such a model is drawn once and
+    labelled for both — and its missing second line is itself the point that the two separate
+    only under onset anchoring. The convention is read off the model's specification rather than
+    inferred from the columns present, so a file that has lost a column fails instead of quietly
+    drawing one line fewer.
+
+    ``metric_linestyles`` overrides the default estimand linestyles, for a panel showing a single
+    estimand, where linestyle has nothing left to distinguish. It is keyed by estimand, unlike
+    :func:`risk_curve_panel`'s ``linestyles``, which is keyed by model.
     """
+    resolved_linestyles = METRIC_LINESTYLES | (metric_linestyles or {})
     utils.plot_incidence(ax, data.dates, data.onsets)
     utils.mark_thresholds(ax)
     for model, frame in curves.items():
-        if utils.SUSTAINED_RISK_COLUMN not in frame:
-            raise ValueError(
-                f"the {model} RAC file has no {utils.SUSTAINED_RISK_COLUMN!r} column; "
-                "regenerate it with the RST-aware risk rule"
-            )
-        if not infection_anchored and utils.TRANSMISSION_RISK_COLUMN not in frame:
-            raise ValueError(
-                f"the onset-anchored {model} RAC file has no "
-                f"{utils.TRANSMISSION_RISK_COLUMN!r} column"
-            )
-        colour = utils.model_colour(model)
-        ax.plot(
-            frame["date"],
-            frame[utils.RISK_COLUMN],
-            color=colour,
-            linestyle="--",
-            label=(
-                f"{utils.model_label(model)} RAC/RAT"
-                if infection_anchored
-                else f"{utils.model_label(model)} RAC"
-            ),
-            zorder=3,
-        )
-        if not infection_anchored:
+        for style, column_metric, label in _drawn_metrics(model, metrics):
+            column = METRIC_COLUMNS[column_metric]
+            if column not in frame:
+                raise ValueError(
+                    f"the {model} curve file has no {column!r} column, which "
+                    f"{METRIC_LABELS[style]} needs; regenerate it with the current risk rule"
+                )
             ax.plot(
                 frame["date"],
-                frame[utils.TRANSMISSION_RISK_COLUMN],
-                color=colour,
-                linestyle="-",
-                label=f"{utils.model_label(model)} RAT",
-                zorder=4,
+                frame[column],
+                color=utils.model_colour(model),
+                linestyle=resolved_linestyles[style],
+                label=f"{utils.model_label(model)} {label}",
+                zorder=3 + list(METRIC_COLUMNS).index(style),
             )
-        ax.plot(
-            frame["date"],
-            frame[utils.SUSTAINED_RISK_COLUMN],
-            color=colour,
-            linestyle=":",
-            label=f"{utils.model_label(model)} RST",
-            zorder=5,
-        )
     utils.mark_intervention_dates(
         ax,
         arrival=data.date_of(data.ert_arrival_day),
@@ -220,8 +226,34 @@ def risk_metrics_panel(
     ax.set_xlabel("conditioning day $t$ (2018)")
     ax.set_ylabel("posterior risk")
     ax.set_title(title)
-    ax.legend(loc="center left", bbox_to_anchor=(0.015, 0.55), ncols=2)
+    # Lower left, one column: with both anchorings in one panel the onset-anchored curves start
+    # their descent weeks earlier, straight through the mid-left region the RAC panel uses. Below
+    # the plateau and above the onset bars is the one region every curve here leaves empty.
+    ax.legend(loc="lower left", bbox_to_anchor=(0.015, 0.15))
     utils.panel_label(ax, letter)
+
+
+def _drawn_metrics(
+    model: str, metrics: tuple[RiskMetric, ...]
+) -> list[tuple[RiskMetric, RiskMetric, str]]:
+    """What to draw for one model: the estimand setting the style, the column, and the label.
+
+    Onset-anchored models draw every requested estimand from its own column. An
+    infection-anchored model's RAT is its RAC column, so with both requested it contributes one
+    curve labelled ``RAC/RAT``, and asked for RAT alone it draws that same column in RAT's style.
+    """
+    if specification_of(model).anchoring == "onsets":
+        return [(metric, metric, METRIC_LABELS[metric]) for metric in metrics]
+    both = "rac" in metrics and "rat" in metrics
+    drawn: list[tuple[RiskMetric, RiskMetric, str]] = []
+    for metric in metrics:
+        if metric == "rac":
+            drawn.append(("rac", "rac", "RAC/RAT" if both else "RAC"))
+        elif metric == "rat" and not both:
+            drawn.append(("rat", "rac", "RAT"))
+        elif metric == "rst":
+            drawn.append(("rst", "rst", "RST"))
+    return drawn
 
 
 def reporting_comparison_panel(
@@ -236,9 +268,8 @@ def reporting_comparison_panel(
     """RAC against conditioning day, for each model at each assumed reporting probability.
 
     The same convention as :func:`risk_metrics_panel`, with the reporting probability in the
-    estimand's place: colour identifies the transmission mechanism, linestyle the variant. So a
-    reader who has taken in the sustained-transmission figure can read this one the same way,
-    and the vertical gap between two lines of one colour is what the assumption costs.
+    estimand's place: colour identifies the model, linestyle the variant. So the vertical gap
+    between two lines of one colour is what the assumption costs.
 
     ``curves`` is keyed by reporting probability and then by model. The settling markers are the
     same ones every RAC panel carries, so the crossings can be compared by eye across the sweep.
