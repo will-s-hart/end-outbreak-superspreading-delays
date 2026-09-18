@@ -401,6 +401,55 @@ def test_saving_compresses_without_changing_a_single_value(tmp_path):
             assert variable.encoding.get("zlib") is True, f"{group}/{name}"
 
 
+def test_thinning_keeps_every_nth_draw_of_every_group(tmp_path):
+    """Storage only: the draws kept must be the draws sampled, not a resampling of them."""
+    idata = fitting.fit_model(
+        "ssi",
+        COUNTS,
+        delays=SHORT_DELAYS,
+        switch_day=SWITCH_DAY,
+        R_pre=PRIOR,
+        R_post=PRIOR,
+        k=K,
+        latent_parameterisation="marginalised_inverse_cdf",
+        sampler=FAST,
+    )
+    thinned = fitting.thin_draws(idata, 3)
+    for group in ("posterior", "sample_stats"):
+        was, now = idata[group].to_dataset(), thinned[group].to_dataset()
+        assert now.sizes["draw"] == -(-was.sizes["draw"] // 3), group
+        for name, variable in was.data_vars.items():
+            np.testing.assert_array_equal(np.asarray(now[name]), np.asarray(variable)[:, ::3, ...])
+    # `observed_data` has no draw dimension and must come through untouched.
+    np.testing.assert_array_equal(
+        np.asarray(thinned["observed_data"].to_dataset()["incidence"]),
+        np.asarray(idata["observed_data"].to_dataset()["incidence"]),
+    )
+    assert thinned.attrs == idata.attrs
+
+
+def test_thinning_by_one_is_the_identity(tmp_path):
+    """The default, and the path every unthinned analysis takes."""
+    idata = fitting.fit_model(
+        "sse",
+        COUNTS,
+        delays=SHORT_DELAYS,
+        switch_day=SWITCH_DAY,
+        R_pre=PRIOR,
+        R_post=PRIOR,
+        k=K,
+        sampler=FAST,
+    )
+    assert fitting.thin_draws(idata, 1) is idata
+
+
+def test_the_sampler_settings_read_thin_from_the_config_block():
+    """Absent from every analysis but the reporting sweeps, so the default has to be 1."""
+    block = {"draws": 10, "tune": 10, "chains": 2, "target_accept": 0.9, "seed": 1}
+    assert fitting.SamplerSettings.from_config(block).thin == 1
+    assert fitting.SamplerSettings.from_config({**block, "thin": 5}).thin == 5
+
+
 def test_the_free_variables_survive_saving(tmp_path):
     """Bridge sampling walks the built model's free variables and demands each by name.
 

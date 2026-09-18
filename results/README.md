@@ -4,7 +4,7 @@ three directories noted below as outside the report also feed it.
 
 | Path | What it is |
 | --- | --- |
-| `<analysis>/<model>_posterior.nc` | Tier-1 MCMC draws for the fit to the complete record, one file per model. It feeds the evidence and dispersion steps, and serves as the last conditioning day's fit. Written gzipped (`fitting.NETCDF_COMPRESSION`), which is lossless and roughly a third of the size — a reporting-sweep fit is 113 MB raw, past GitHub's 100 MB ceiling. |
+| `<analysis>/<model>_posterior.nc` | Tier-1 MCMC draws for the fit to the complete record, one file per model. It feeds the evidence and dispersion steps, and serves as the last conditioning day's fit. Written gzipped (`fitting.NETCDF_COMPRESSION`), which is lossless and roughly a third of the size — a reporting-sweep fit is 113 MB raw, past GitHub's 100 MB ceiling. The two sweeps are additionally thinned to every 5th draw (`sampler.thin`), which is not lossless and is why it is confined to the analyses computing no model evidence. |
 | `<analysis>/<model>_rac.csv` | Tier-1 RAC curve, plus RAT for onset-anchored models and RST for every branching model (never DLO), from one fit per conditioning day. |
 | `<analysis>/<model>_rac_diagnostics.csv` | Tier-1 sampler diagnostics for those fits, one row per conditioning day. The per-day posteriors themselves are not kept. |
 | `<analysis>/model_evidence.json` | Tier-2 marginal likelihoods and posterior model probabilities. |

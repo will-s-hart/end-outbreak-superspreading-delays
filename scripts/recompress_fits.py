@@ -12,6 +12,10 @@ Run it wherever fits live, including the cluster, and then re-stamp provenance::
 
 Without the `--touch`, Snakemake sees changed input bytes and marks every curve stale.
 
+It rewrites the container, never the contents: it does not thin. `sampler.thin` decides how
+many draws a fit is written with, and that is a property of the run that produced it, so
+changing it means refitting rather than rewriting.
+
 Idempotent: a fit already in the current format is rewritten to the same content. Nothing is
 replaced until the rewrite has been read back and checked array by array against the original,
 because these are committed results and the failure mode of a silent dtype or fill-value change

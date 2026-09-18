@@ -247,6 +247,7 @@ def command_fit(args: argparse.Namespace) -> None:
     setting = setting_from_arguments(args)
     model = setting.require_model(args.model)
     R_pre, R_post = setting.reproduction_numbers()
+    sampler = fitting.SamplerSettings.from_config(setting.block["sampler"])
 
     idata = fitting.fit_model(
         model,
@@ -259,11 +260,18 @@ def command_fit(args: argparse.Namespace) -> None:
         latent_parameterisation=setting.latent_parameterisation,
         negligible_latent_threshold=setting.negligible_latent_threshold,
         reporting_model=setting.reporting_model(),
-        sampler=fitting.SamplerSettings.from_config(setting.block["sampler"]),
+        sampler=sampler,
         progressbar=args.progressbar,
     )
-    fitting.save_fit(idata, args.output)
-    print(f"{model}: {int(idata.posterior.sizes['chain'])} chains saved to {args.output}")
+    # Thinned here rather than inside `save_fit`, because this is the one place a persisted fit
+    # is produced: the daily refits behind a curve are summarised and discarded, and thinning
+    # those would raise the Monte-Carlo error of every point on it.
+    stored = fitting.thin_draws(idata, sampler.thin)
+    fitting.save_fit(stored, args.output)
+    total = int(idata.posterior.sizes["draw"]) * int(idata.posterior.sizes["chain"])
+    kept = int(stored.posterior.sizes["draw"]) * int(stored.posterior.sizes["chain"])
+    suffix = "" if sampler.thin <= 1 else f", every {sampler.thin}th of {total} sampled"
+    print(f"{model}: {kept} draws saved to {args.output}{suffix}")
 
 
 # ---------------------------------------------------------------------------------------

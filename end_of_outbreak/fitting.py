@@ -71,6 +71,14 @@ class SamplerSettings:
     chains: int = 4
     target_accept: float = 0.9
     seed: int | None = None
+    thin: int = 1
+    """Keep every ``thin``-th draw when the fit is *persisted*. Sampling is unaffected.
+
+    Storage only, and only for the whole-record fit that :func:`save_fit` writes: the daily
+    refits behind a curve are never written, so their draws are untouched whatever this says.
+    Diagnostics are computed before the fit is thinned, so the acceptance gate still sees every
+    draw. See :func:`thin_draws` for when this is worth doing.
+    """
 
     @classmethod
     def from_config(cls, block: dict[str, Any]) -> SamplerSettings:
@@ -81,6 +89,7 @@ class SamplerSettings:
             chains=int(block["chains"]),
             target_accept=float(block["target_accept"]),
             seed=None if block.get("seed") is None else int(block["seed"]),
+            thin=int(block.get("thin", 1)),
         )
 
 
@@ -335,6 +344,39 @@ def _compressed_encoding(idata: xr.DataTree) -> dict[str, dict[str, dict[str, An
         for group in idata.groups
         if group != "/"
     }
+
+
+def thin_draws(idata: xr.DataTree, step: int) -> xr.DataTree:
+    """Keep every ``step``-th draw of every group that has a draw dimension.
+
+    Thinning trades effective sample size for disk, and on these fits the trade is lopsided in
+    a useful direction. The blocks that dominate the file are the ones that mix worst: under
+    incomplete reporting the per-day latent arrays are 28 MB apiece with an integrated
+    autocorrelation time near 16 draws, so keeping one draw in five costs them about a fifth of
+    their ESS. The scalars that thinning hurts --- ``R_post`` mixes at an autocorrelation time
+    near 1 --- are a few hundred kilobytes, so nothing is saved by thinning them and they are
+    the reason not to thin harder.
+
+    Use it only where no marginal quantity depends on those scalars' full precision. The
+    reporting sweeps qualify: they compute no model evidence, so the joint draws are not feeding
+    a Bayes factor. The report's four analyses do not, and their fits are small anyway.
+
+    Note that the last conditioning day of a curve reuses this fit rather than repeating it
+    (:func:`refit_risk.risk_by_refitting`), so that one point inherits the thinned draws and
+    carries a correspondingly larger Monte-Carlo error than its neighbours. At ``step=5`` that
+    is about 1.4x, measured on the final day of the 80% sweep.
+    """
+    if step <= 1:
+        return idata
+    thinned = idata.copy()
+    for group in idata.groups:
+        if group == "/":
+            continue
+        dataset = idata[group].to_dataset()
+        if "draw" not in dataset.sizes:
+            continue
+        thinned[group] = xr.DataTree(dataset.isel(draw=slice(None, None, step)))
+    return thinned
 
 
 def save_fit(idata: xr.DataTree, path: str | Path) -> Path:
