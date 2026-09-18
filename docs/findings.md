@@ -40,10 +40,18 @@ bulk ESS for `k` is 4075–7956, and there are no divergences.
 ## What did incomplete reporting change?
 
 In the authoritative 60%/80% sweeps, assuming cases went unreported delayed the 0.05 crossing
-by four to ten days and moved it more than choosing SSE-SO versus SSI-SO did. At 60% reporting,
-neither model reached the 0.01 threshold inside the analysis window; the final-day RAC was about
-0.011 rather than about 0.002 under complete reporting
+by nine to thirteen days at 60% reporting, and moved it much further than choosing SSE versus SSI
+did. At 60% reporting, no model reached 0.01 inside the analysis window, and the
+infection-anchored models failed to reach it at 80% either
 (`results/underreporting_*/<model>_rac.csv`).
+
+**Onset anchoring's advance is the part the reporting assumption does not touch.** SSE-SO crosses
+0.05 seven days before SSE under complete reporting, seven days before it at 80% and eight at
+60%; SSI-SO leads SSI by eight, nine and eleven days. The last is a lower bound, since SSI first
+falls below 0.05 only on the final day of the record. The RAC-to-RAT gap inside the onset-anchored
+models is similarly fixed — six days for SSE-SO at all three levels, six/five/five for SSI-SO. So
+the two things the anchoring convention buys survive a reporting assumption strong enough to move
+every curve by more than a week.
 
 The fitted curves were empirically ordered `RAC(60%) ≥ RAC(80%) ≥ RAC(100%)` at every day.
 Do not present that as a theorem: adding a hidden case conditionally raises risk, but these are
@@ -51,14 +59,19 @@ separate fits whose parameter and latent posteriors change with the reporting as
 future crossing would require investigation, not automatic rejection as mathematically
 impossible.
 
-The reporting sweeps have been regenerated with latent unreported counts. All 312 fits pass the
-configured convergence gate: worst `R̂` 1.019, minimum bulk ESS 292, and four divergences in
-2.50M draws. Against the equivalent totals-plus-binomial run, no threshold crossing moved by
-more than one day and the pointwise RAC differences have no systematic sign. The median absolute
-difference is 0.77 combined chain-based Monte-Carlo standard errors, but agreement is not uniform:
-29 of 312 points exceed two combined standard errors and nine exceed three, with a maximum of
-5.13. The strict pointwise Monte-Carlo comparison therefore remains a publication check even
-though the scientific findings above are unchanged.
+The reporting sweeps use latent unreported counts, and now cover the infection-anchored models
+as well. All 624 fits pass the configured convergence gate: worst `R̂` 1.009, minimum bulk ESS
+567, and 64 divergences in 20.0M draws. That needed 8000 draws after 4000 tuning steps per chain,
+against 2000/2000 elsewhere: the discrete unreported-count block mixes far more slowly than the
+rest of the model and sets the budget. At 2000/2000 one SSE fit reached `R̂` 1.047 on
+`unreported_incidence` and failed the gate outright.
+
+Against the earlier totals-plus-binomial run, no threshold crossing moved by more than one day
+and the pointwise RAC differences had no systematic sign; the median absolute difference was 0.77
+combined chain-based Monte-Carlo standard errors, with 29 of 312 points beyond two and a maximum
+of 5.13. That comparison was made between the two parameterisations at the old sampler budget and
+has not been repeated since the budget rose, so the strict pointwise Monte-Carlo check remains
+outstanding. The scientific findings above are unchanged across both.
 
 ## Does the machinery reproduce an outside answer?
 

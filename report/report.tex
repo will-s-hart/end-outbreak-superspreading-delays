@@ -1599,8 +1599,10 @@ data cannot identify it without external information --- so Fig.~\ref{fig:underr
 sweep over assumed values rather than a fit.
 
 The reporting sweeps were regenerated with this unreported-count parameterisation. All fits pass
-the configured convergence gate and the substantive results below are unchanged from the
-algebraically equivalent totals-plus-binomial run. No threshold crossing moved by more than one
+the configured convergence gate and the onset-anchored results below are unchanged from the
+algebraically equivalent totals-plus-binomial run. The infection-anchored models were added to
+the sweep only afterwards, so they have no counterpart under the earlier parameterisation and
+are not part of that comparison. No threshold crossing moved by more than one
 day and the pointwise differences have no systematic direction. Agreement is not uniformly
 within the chain-based combined Monte-Carlo standard error, however, so that stricter numerical
 comparison remains a publication check rather than being treated as established by the matching
@@ -1627,13 +1629,39 @@ convergence summaries alone.
 \end{figure}
 
 \begin{itemize}
+  \item \textbf{Onset anchoring's advance survives the reporting assumption.} \sseso{} reaches
+    0.05 \resultnum{onsetmodelsfixedk.sseso-vs-sse.shift05} days ahead of \sse{} under complete
+    reporting, \resultnum{underreporting80.sseso-vs-sse.shift05} days ahead at
+    \resultnum{underreporting80.reportingpercent}\% reporting and
+    \resultnum{underreporting60.sseso-vs-sse.shift05} days ahead at
+    \resultnum{underreporting60.reportingpercent}\%. For \ssiso{} against \ssi{} the three gaps
+    are \resultnum{onsetmodelsfixedk.ssiso-vs-ssi.shift05},
+    \resultnum{underreporting80.ssiso-vs-ssi.shift05} and
+    \resultnum{underreporting60.ssiso-vs-ssi.shift05} days; the last is a lower bound, because
+    \ssi{} only crosses on the final day of the record. Panels~C and~D show the same thing
+    without the subtraction: at either reduced reporting level both onset-anchored models lie to
+    the left of both infection-anchored ones throughout. Weakening the assumption moves every
+    curve later without closing the gap between the two conventions.
+  \item \textbf{The pipeline delay within the onset-anchored models is equally insensitive.}
+    \sseso{}'s $\RAC$ crossing trails its $\RAT$ crossing by
+    \resultnum{onsetmodelsfixedk.sseso.gap.shift05} days under complete reporting,
+    \resultnum{underreporting80.sseso.gap.shift05} at
+    \resultnum{underreporting80.reportingpercent}\% and
+    \resultnum{underreporting60.sseso.gap.shift05} at
+    \resultnum{underreporting60.reportingpercent}\%; for \ssiso{} the three are
+    \resultnum{onsetmodelsfixedk.ssiso.gap.shift05},
+    \resultnum{underreporting80.ssiso.gap.shift05} and
+    \resultnum{underreporting60.ssiso.gap.shift05}. The reporting assumption moves the two curves
+    together rather than changing the distance between them, which is what the incubation
+    pipeline being a property of the model rather than of the data would predict.
   \item \textbf{The fitted curves are empirically ordered by the reporting assumption.} The
     \resultnum{underreporting60.reportingpercent}\% and
     \resultnum{underreporting80.reportingpercent}\% curves lie above the completely-reported one
-    on every conditioning day, for both models. Conditional on otherwise identical state, adding
-    a hidden case raises risk. These curves are separately refitted, however, so their parameter
-    and latent posteriors also change; monotone ordering across assumed reporting probabilities is
-    therefore an empirical result here, not a theorem or a correctness requirement.
+    on every conditioning day, for all four models. Conditional on otherwise identical state,
+    adding a hidden case raises risk. These curves are separately refitted, however, so their
+    parameter and latent posteriors also change; monotone ordering across assumed reporting
+    probabilities is therefore an empirical result here, not a theorem or a correctness
+    requirement.
   \item \textbf{The delay is on the order of a week, and it grows as the assumption is
     weakened.} \sseso{} first falls below 0.05 on
     \resultnum{onsetmodelsfixedk.sseso.rac05.date} under complete reporting,
@@ -1643,7 +1671,14 @@ convergence summaries alone.
     \resultnum{underreporting60.reportingpercent}\%. For \ssiso{} the same three dates are
     \resultnum{onsetmodelsfixedk.ssiso.rac05.date},
     \resultnum{underreporting80.ssiso.rac05.date} and
-    \resultnum{underreporting60.ssiso.rac05.date}.
+    \resultnum{underreporting60.ssiso.rac05.date}. The infection-anchored models start later and
+    lose more: \sse{} goes from \resultnum{onsetmodelsfixedk.sse.rac05.date} to
+    \resultnum{underreporting80.sse.rac05.date} and \resultnum{underreporting60.sse.rac05.date},
+    and \ssi{} from \resultnum{onsetmodelsfixedk.ssi.rac05.date} to
+    \resultnum{underreporting80.ssi.rac05.date} and \resultnum{underreporting60.ssi.rac05.date}
+    --- the last being \resultnum{data.withdrawaldate}, the day the ERT actually withdrew, so at
+    \resultnum{underreporting60.reportingpercent}\% reporting \ssi{} clears 0.05 only as the
+    window closes.
   \item \textbf{The stricter threshold is not reached at all under the weakest assumption.} At
     0.01, \sseso{} settles on \resultnum{onsetmodelsfixedk.sseso.rac01.date} under complete
     reporting and \resultnum{underreporting80.sseso.rac01.date} at
@@ -1652,14 +1687,27 @@ convergence summaries alone.
     analysis window at all: the risk on the final day is still
     \resultnum{underreporting60.sseso.rac.final}, against
     \resultnum{onsetmodelsfixedk.sseso.rac.final} under complete reporting. \ssiso{} behaves the
-    same way. A declaration criterion written at 0.01 is therefore not robust to a reporting
-    assumption this weak, on a record of this length.
-  \item \textbf{Under-reporting moves the curves further than the choice of mechanism does.}
-    The two models' 0.05 crossings differ by at most a day at any one reporting level; dropping
-    from complete reporting to \resultnum{underreporting60.reportingpercent}\% moves each of
-    them by well over a week.
-    Where surveillance completeness is uncertain, it dominates the model-structure question this
-    report otherwise concerns itself with.
+    same way. The infection-anchored models fail sooner: neither \sse{} nor \ssi{} reaches 0.01
+    at \emph{either} reduced level, ending at \resultnum{underreporting80.sse.rac.final} and
+    \resultnum{underreporting60.sse.rac.final} for \sse{} and
+    \resultnum{underreporting80.ssi.rac.final} and \resultnum{underreporting60.ssi.rac.final} for
+    \ssi{}, against \resultnum{onsetmodelsfixedk.sse.rac01.date} and
+    \resultnum{onsetmodelsfixedk.ssi.rac01.date} when reporting is assumed complete. A
+    declaration criterion written at 0.01 is therefore not robust to a reporting assumption this
+    weak, on a record of this length.
+  \item \textbf{Three things move the declaration, and they are of very different sizes.} The
+    choice between the two superspreading mechanisms is the smallest: \sse{} and \ssi{} cross
+    0.05 on days \resultnum{underreporting60.sse.rac05.day} and
+    \resultnum{underreporting60.ssi.rac05.day} at
+    \resultnum{underreporting60.reportingpercent}\% reporting, and the onset-anchored pair are
+    closer still. The anchoring convention is worth about a week at every reporting level, as
+    above. Weakening the reporting assumption from complete to
+    \resultnum{underreporting60.reportingpercent}\% is worth a comparable amount --- \sseso{}
+    moves from day \resultnum{onsetmodelsfixedk.sseso.rac05.day} to
+    \resultnum{underreporting60.sseso.rac05.day} and \sse{} from
+    \resultnum{onsetmodelsfixedk.sse.rac05.day} to \resultnum{underreporting60.sse.rac05.day}.
+    Surveillance completeness and the anchoring convention therefore matter on the same scale,
+    and each matters more than which superspreading mechanism is assumed.
   \item \textbf{The cost is in the sampling, not the model.} With the true counts random, nothing in
     the latent block can be marginalised --- \sseso{} carries
     \resultnum{underreporting60.sseso.latents.sampled} sampled latents against
@@ -1676,7 +1724,12 @@ convergence summaries alone.
     \resultnum{underreporting60.diagnostics.minbulkess}), but the Monte-Carlo standard error on
     the late curve is correspondingly larger:
     \resultnum{underreporting60.sseso.rac.mcselate} against
-    \resultnum{onsetmodelsfixedk.sseso.rac.mcselate} under complete reporting.
+    \resultnum{onsetmodelsfixedk.sseso.rac.mcselate} under complete reporting. Reaching that
+    required \resultnum{underreporting60.draws} draws after
+    \resultnum{underreporting60.tune} tuning steps per chain, against
+    \resultnum{onsetmodelsfixedk.draws} and \resultnum{onsetmodelsfixedk.tune} for the
+    completely-reported analyses: the discrete unreported-count block is the slowest-mixing part
+    of the model and sets the budget.
 \end{itemize}
 
 A reporting \emph{delay} from onset to report is implemented alongside this and would
