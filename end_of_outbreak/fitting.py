@@ -311,11 +311,40 @@ def _initial_values(
     )
 
 
+NETCDF_COMPRESSION: dict[str, Any] = {"compression": "gzip", "compression_opts": 4}
+"""How every array in a saved fit is stored. Lossless: the round trip is bit-identical.
+
+Fits are committed, and under incomplete reporting they are large -- four per-day arrays of
+``chain x draw x day`` float64, which at the 8000 draws the discrete block needs came to 113 MB
+per fit, past GitHub's 100 MB ceiling. gzip at level 4 takes that to 39 MB and the whole
+``results/`` tree from 850 MB to under 300 MB, for a decompression cost far below the time to
+read the file.
+
+Thinning was the obvious alternative and does not work: ``Y_uniform`` and
+``unreported_incidence`` look redundant beside the deterministics recovered from them, but
+:meth:`model_evidence.BridgeSampler` walks the built model's *free* variables and demands each
+by name, so dropping them makes the fit unusable for evidence. Level 4 rather than 9 because
+the last levels buy a few percent for several times the write time.
+"""
+
+
+def _compressed_encoding(idata: xr.DataTree) -> dict[str, dict[str, dict[str, Any]]]:
+    """``encoding`` for :meth:`xarray.DataTree.to_netcdf`, keyed by group path then variable."""
+    return {
+        group: {str(name): dict(NETCDF_COMPRESSION) for name in idata[group].to_dataset().data_vars}
+        for group in idata.groups
+        if group != "/"
+    }
+
+
 def save_fit(idata: xr.DataTree, path: str | Path) -> Path:
-    """Write a fit to netCDF, creating the directory if need be. Attributes travel with it."""
+    """Write a fit to netCDF, creating the directory if need be. Attributes travel with it.
+
+    Compressed: see :data:`NETCDF_COMPRESSION`.
+    """
     destination = Path(path)
     destination.parent.mkdir(parents=True, exist_ok=True)
-    idata.to_netcdf(str(destination), engine=NETCDF_ENGINE)
+    idata.to_netcdf(str(destination), engine=NETCDF_ENGINE, encoding=_compressed_encoding(idata))
     return destination
 
 

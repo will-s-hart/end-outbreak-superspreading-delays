@@ -30,6 +30,7 @@ see `validation/` for benchmarks and cross-checks, whose subject is the implemen
 | `plot_sustained_transmission.py` | 3 | Main text (fixed `k`) and supplement (estimated `k`): RAC/RAT, then RST, for all four models |
 | `figure_panels.py` | 3 | the panels the analysis figures are assembled from |
 | `utils.py` | — | presentation-only helpers shared by the plotting scripts |
+| `recompress_fits.py` | — | maintenance, not a rule: rewrites committed fits through the current on-disk format in place, verifying every array first. Run it after a change to `fitting.NETCDF_COMPRESSION`, then `snakemake --touch` |
 
 The two onset-anchored analyses supply every curve of the RST figures. That explicit list, not the config, remains what
 `rule all` and the convenience aggregates are built from — and Stage 10's `run_report_numbers.py`

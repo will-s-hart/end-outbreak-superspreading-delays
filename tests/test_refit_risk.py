@@ -358,6 +358,72 @@ def test_a_point_mass_fit_survives_the_round_trip_to_netcdf(tmp_path):
     assert reloaded.posterior.sizes == {"chain": FAST.chains, "draw": 1}
 
 
+def test_saving_compresses_without_changing_a_single_value(tmp_path):
+    """Fits are committed and large, so they are gzipped. Lossless is the whole requirement.
+
+    Checked array by array rather than by file size: a silent dtype or fill-value change on the
+    way through the encoder would be invisible in the size and fatal in the results. That the
+    filter is actually on is asserted separately, by reading the encoding back --- a fit this
+    small comes out *larger* compressed, because gzip's per-chunk overhead swamps arrays of a
+    few hundred draws. The saving is on the real thing: 113 MB to 39 MB on a sweep fit.
+    """
+    idata = fitting.fit_model(
+        "ssi",
+        COUNTS,
+        delays=SHORT_DELAYS,
+        switch_day=SWITCH_DAY,
+        R_pre=PRIOR,
+        R_post=PRIOR,
+        k=K,
+        latent_parameterisation="marginalised_inverse_cdf",
+        sampler=FAST,
+    )
+    path = fitting.save_fit(idata, tmp_path / "compressed.nc")
+    reloaded = fitting.load_fit(path)
+
+    assert sorted(reloaded.groups) == sorted(idata.groups)
+    for group in idata.groups:
+        if group == "/":
+            continue
+        was, now = idata[group].to_dataset(), reloaded[group].to_dataset()
+        assert set(now.data_vars) == set(was.data_vars), group
+        for name, variable in was.data_vars.items():
+            np.testing.assert_array_equal(np.asarray(now[name]), np.asarray(variable))
+            assert now[name].dtype == variable.dtype, name
+            assert now[name].dims == variable.dims, name
+
+    for group in reloaded.groups:
+        if group == "/":
+            continue
+        for name, variable in reloaded[group].to_dataset().data_vars.items():
+            # Written as `compression="gzip"`, reported on the way back as h5netcdf's
+            # `zlib`/`complevel` pair; they are the same HDF5 filter.
+            assert variable.encoding.get("zlib") is True, f"{group}/{name}"
+
+
+def test_the_free_variables_survive_saving(tmp_path):
+    """Bridge sampling walks the built model's free variables and demands each by name.
+
+    ``Y_uniform`` looks redundant beside the ``Y`` recovered from it, and dropping it halves the
+    file --- but it makes the fit unusable for `model_evidence`, which is why the saved fit is
+    compressed rather than thinned. This pins that, since the failure is remote from the change.
+    """
+    idata = fitting.fit_model(
+        "ssi",
+        COUNTS,
+        delays=SHORT_DELAYS,
+        switch_day=SWITCH_DAY,
+        R_pre=PRIOR,
+        R_post=PRIOR,
+        k=K,
+        latent_parameterisation="marginalised_inverse_cdf",
+        sampler=FAST,
+    )
+    reloaded = fitting.load_fit(fitting.save_fit(idata, tmp_path / "free.nc"))
+    assert "Y_uniform" in reloaded.posterior.data_vars
+    assert "Y" in reloaded.posterior.data_vars
+
+
 def test_a_fixed_R_curve_is_deterministic_and_carries_no_monte_carlo_error():
     """The whole point of the fixed-``R`` variant: nothing is sampled, so nothing is noisy.
 
