@@ -450,6 +450,17 @@ def test_the_sampler_settings_read_thin_from_the_config_block():
     assert fitting.SamplerSettings.from_config({**block, "thin": 5}).thin == 5
 
 
+def test_only_an_unthinned_fit_may_be_reused_as_the_last_conditioning_day():
+    """The coupling that keeps a storage decision out of the curve.
+
+    Every other day of a curve is fit at full draws. Reusing a thinned archive for the last one
+    would give that single point a larger Monte-Carlo error than its neighbours, and
+    ``rac.mcselate`` is a maximum over the tail, so it could end up setting a quoted number.
+    """
+    assert fitting.SamplerSettings(thin=1).reuses_final_day_fit
+    assert not fitting.SamplerSettings(thin=5).reuses_final_day_fit
+
+
 def test_the_free_variables_survive_saving(tmp_path):
     """Bridge sampling walks the built model's free variables and demands each by name.
 

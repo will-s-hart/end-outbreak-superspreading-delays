@@ -378,11 +378,21 @@ def _rac_by_refitting(
     rather than repeated, so the end of the curve and the evidence and dispersion summaries
     describe the same posterior.
 
+    **Unless that fit was thinned for storage** (``sampler.thin``), in which case the day is
+    refit like any other. Reusing a thinned archive would give one point in the curve a
+    Monte-Carlo error around 1.4x its neighbours', for no reason a reader could infer -- and
+    ``rac.mcselate`` is a maximum over the tail, so a storage decision could end up setting a
+    number the report quotes. The extra fit is one in seventy-eight. Analyses that are not
+    thinned keep the reuse and the guarantee above; a thinned one has no evidence or dispersion
+    summary for the endpoint to agree with, which is the condition for thinning in the first
+    place.
+
     ``jobs`` spreads the days over worker processes. It changes the wall time and nothing else:
     each day carries a seed derived from the analysis and the day, so the curve is the same
     whether one process or eight produced it.
     """
     data = setting.data
+    sampler = fitting.SamplerSettings.from_config(setting.block["sampler"])
     R_pre, R_post = setting.reproduction_numbers()
     reported = {int(day) for day in np.linspace(days[0], days[-1], 12).round()}
     result = refit_risk.risk_by_refitting(
@@ -397,9 +407,9 @@ def _rac_by_refitting(
         negligible_latent_threshold=setting.negligible_latent_threshold,
         reporting_model=setting.reporting_model(),
         days=days,
-        sampler=fitting.SamplerSettings.from_config(setting.block["sampler"]),
+        sampler=sampler,
         seed_for_day=setting.daily_fit_seed(model),
-        final_day_fit=fitting.load_fit(posterior),
+        final_day_fit=fitting.load_fit(posterior) if sampler.reuses_final_day_fit else None,
         on_day=lambda day: _report_day(model, day, reported),
         n_jobs=jobs,
     )

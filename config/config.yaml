@@ -151,10 +151,11 @@ analyses:
   # because the arrays that fill the file are the ones that mix worst — integrated
   # autocorrelation time near 16 draws, so a fifth of the draws keep four fifths of the ESS.
   # Only these two analyses are thinned: they compute no model evidence, so no Bayes factor
-  # depends on the well-mixing scalars that thinning does cost. The last conditioning day
-  # reuses the saved fit, so its Monte-Carlo error is about 1.4x its neighbours'; measured on
-  # the 80% sweep that is 0.00053 against 0.00039, against report claims that clear their
-  # threshold by 2 errors or more.
+  # depends on the well-mixing scalars that thinning does cost. A thinned fit is also not
+  # reused as the curve's last conditioning day -- that day is refit like any other, so the
+  # curve's Monte-Carlo error stays uniform and thinning cannot leak into a quoted number.
+  # What thinning does reach is the R_pre and R_post intervals report_numbers reads from the
+  # archive.
   underreporting_60:
     models: [sse_so, ssi_so, sse, ssi]
     fixed_k: 0.18

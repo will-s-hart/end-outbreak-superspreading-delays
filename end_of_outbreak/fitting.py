@@ -80,6 +80,17 @@ class SamplerSettings:
     draw. See :func:`thin_draws` for when this is worth doing.
     """
 
+    @property
+    def reuses_final_day_fit(self) -> bool:
+        """Whether a curve may reuse the saved whole-record fit as its last conditioning day.
+
+        Only an unthinned one may. Reusing a thinned archive would leave a single point of the
+        curve with a Monte-Carlo error larger than its neighbours' --- an artefact of how the
+        file is stored, showing up in a result. Named rather than written inline at the call
+        site, because the two settings are coupled and the coupling is not obvious from either.
+        """
+        return self.thin <= 1
+
     @classmethod
     def from_config(cls, block: dict[str, Any]) -> SamplerSettings:
         """Build from an analysis's ``sampler:`` block."""
@@ -361,10 +372,11 @@ def thin_draws(idata: xr.DataTree, step: int) -> xr.DataTree:
     reporting sweeps qualify: they compute no model evidence, so the joint draws are not feeding
     a Bayes factor. The report's four analyses do not, and their fits are small anyway.
 
-    Note that the last conditioning day of a curve reuses this fit rather than repeating it
-    (:func:`refit_risk.risk_by_refitting`), so that one point inherits the thinned draws and
-    carries a correspondingly larger Monte-Carlo error than its neighbours. At ``step=5`` that
-    is about 1.4x, measured on the final day of the 80% sweep.
+    A curve's last conditioning day normally reuses this fit rather than repeating it
+    (:func:`refit_risk.risk_by_refitting`). A thinned one is *not* reused --- see
+    ``analysis_driver._rac_by_refitting`` --- because one point carrying 1.4x its neighbours'
+    Monte-Carlo error would put an artefact of storage into the curve. So thinning reaches the
+    archive and the parameter summaries read from it, and nothing else.
     """
     if step <= 1:
         return idata

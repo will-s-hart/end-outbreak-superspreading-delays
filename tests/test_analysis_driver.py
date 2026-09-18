@@ -48,6 +48,33 @@ def setting_of():
     return load
 
 
+# --- what the committed config asks of the sampler ---------------------------------------
+
+
+def test_the_reporting_sweeps_are_thinned_and_the_report_analyses_are_not(setting_of):
+    """Thinning is confined to the analyses that compute no model evidence.
+
+    Where a Bayes factor is computed, the joint draws feed it, and on this data the two
+    onset-anchored models are separated by about 2.4 standard errors -- there is no precision
+    to give away. The sweeps compute none, which is what makes their fits thinnable.
+    """
+    from end_of_outbreak import fitting
+
+    for analysis in ("underreporting_60", "underreporting_80"):
+        sampler = fitting.SamplerSettings.from_config(setting_of(analysis).block["sampler"])
+        assert sampler.thin == 5, analysis
+        assert not sampler.reuses_final_day_fit, analysis
+    for analysis in (
+        "naive_models_fixed_k",
+        "naive_models_estimated_k",
+        "onset_models_fixed_k",
+        "onset_models_estimated_k",
+    ):
+        sampler = fitting.SamplerSettings.from_config(setting_of(analysis).block["sampler"])
+        assert sampler.thin == 1, analysis
+        assert sampler.reuses_final_day_fit, analysis
+
+
 # --- fixed or estimated -----------------------------------------------------------------
 
 
