@@ -29,3 +29,5 @@ report/*.synctex.gz
 
 # Claude
 .claude/
+# Local-only cluster notes: names the private tool repo and the gitignored .cluster/
+CLAUDE.local.md
