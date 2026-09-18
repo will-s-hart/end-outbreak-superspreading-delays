@@ -299,6 +299,14 @@ targets only `figures` and `report/report.pdf` and uses `--allowed-rules` to exc
 RAC and tier-2 compute rule. Pulled results are therefore immutable inputs even though the
 cluster's Snakemake provenance database was not pulled.
 
+**Re-run the cheap rules first, though: `evidence`, `dispersion` and `report_numbers`.** None of
+the three is in `pipeline-present`'s allowlist, so a pull leaves whatever the cluster produced,
+and on 2026-09-18 that was a `dispersion_posteriors.json` inconsistent with the
+`ssi_posterior.nc` beside it — `dispersion` is a deterministic read of the stored `k` draws, so
+it could not have come from that file. All three take seconds to minutes and recomputing them is
+the only way to know tier 2 matches tier 1. Do this **before** any `snakemake --touch`, which
+stamps an inconsistent pair as current and hides the problem for good.
+
 ## Testing
 
 `pytest`, tests under `tests/`. Validation is by property rather than by golden file wherever

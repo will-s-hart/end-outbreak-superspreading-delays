@@ -73,6 +73,29 @@ of 5.13. That comparison was made between the two parameterisations at the old s
 has not been repeated since the budget rose, so the strict pointwise Monte-Carlo check remains
 outstanding. The scientific findings above are unchanged across both.
 
+## How far can the model probabilities be trusted?
+
+**Not to the second decimal place.** In `onset_models_fixed_k` the two onset-anchored models are
+separated by 0.096 nats of log evidence, against bridge-sampling standard errors of 0.036
+(SSE-SO) and 0.019 (SSI-SO) — a combined 0.040, so the gap is 2.4 standard errors. The
+probabilities that follow (SSE-SO 0.511, SSI-SO 0.464) are therefore uncertain in the second
+decimal: the ranking is real but its margin is not quotable to that precision. Raising
+`n_proposal_draws` in the evidence step would shrink the error as `1/sqrt(n)`, and the step is
+tier-2 — seconds to minutes, not a refit.
+
+The estimator itself is not the problem. It is seeded per model from the analysis seed
+(`AnalysisSetting.reconstruction_rng`) and reproduces to 1e-16 across processes and thread counts;
+the models with no latent block reproduce to the last bit. It is the *width* of the honest
+standard error against the *narrowness* of the gap being measured.
+
+**Re-run `evidence` and `dispersion` after every pull.** On 2026-09-18 the pulled
+`dispersion_posteriors.json` reported a `k` median for naive SSI that the `ssi_posterior.nc`
+beside it does not produce — and that posterior is bit-identical to the one committed before the
+pull. `dispersion` is a pure deterministic read of the stored `k` draws, so this is proof of an
+inconsistency rather than an inference about one. Both rules are cheap, so recomputing them is
+the only way to know the tier-2 files match the tier-1 files they claim to summarise. Note that
+`snakemake --touch` will stamp an inconsistent pair as current and hide exactly this.
+
 ## Does the machinery reproduce an outside answer?
 
 **Yes, exactly** (`validation/results/rac_validation.md`). Thompson et al.'s convention differs

@@ -14,68 +14,68 @@
   },
   "posterior": {
     "sse": {
-      "median": 0.5009254823759648,
+      "median": 0.5009254823759677,
       "mean": 0.519394334642791,
-      "interval_lower": 0.30601561413527495,
-      "interval_upper": 0.8474233715803651,
+      "interval_lower": 0.30601561413527545,
+      "interval_upper": 0.8474233715803247,
       "interval_probability": 0.95,
       "n_draws": 8000
     },
     "ssi": {
-      "median": 0.14135985149640817,
-      "mean": 0.1490335529472458,
-      "interval_lower": 0.07376849403392437,
-      "interval_upper": 0.27059748649508075,
+      "median": 0.13929150378670072,
+      "mean": 0.14768862738053712,
+      "interval_lower": 0.07264680093155437,
+      "interval_upper": 0.270419349031957,
       "interval_probability": 0.95,
       "n_draws": 8000
     },
     "sse_so": {
-      "median": 0.17576527093091576,
-      "mean": 0.18749588011589424,
-      "interval_lower": 0.08682331225742118,
-      "interval_upper": 0.35528279621808756,
+      "median": 0.17891026199165516,
+      "mean": 0.19025180237434391,
+      "interval_lower": 0.08983760216926039,
+      "interval_upper": 0.35672181965558936,
       "interval_probability": 0.95,
       "n_draws": 8000
     },
     "ssi_so": {
-      "median": 0.17554104274591636,
-      "mean": 0.18713236383039578,
-      "interval_lower": 0.0881422859617994,
-      "interval_upper": 0.35071808009466326,
+      "median": 0.17418656902340166,
+      "mean": 0.18543445230446884,
+      "interval_lower": 0.08841453770571576,
+      "interval_upper": 0.35056093926387666,
       "interval_probability": 0.95,
       "n_draws": 8000
     }
   },
   "divergence": {
     "sse_vs_ssi": {
-      "median_ratio": 3.543619189418099,
-      "overlap": 0.03309710243816192,
-      "probability_greater": 0.998642
+      "median_ratio": 3.59623859860859,
+      "overlap": 0.03359843314838884,
+      "probability_greater": 0.998592546875
     },
     "sse_vs_sse_so": {
-      "median_ratio": 2.849968481958263,
-      "overlap": 0.08941711586058196,
-      "probability_greater": 0.990596859375
+      "median_ratio": 2.7998700398713416,
+      "overlap": 0.09481889041825585,
+      "probability_greater": 0.990937953125
     },
     "sse_vs_ssi_so": {
-      "median_ratio": 2.8536089027397433,
-      "overlap": 0.09044354419734527,
-      "probability_greater": 0.991735984375
+      "median_ratio": 2.8757985485589836,
+      "overlap": 0.08808384745121331,
+      "probability_greater": 0.9917138125
     },
     "ssi_vs_sse_so": {
-      "median_ratio": 0.8042535976971777,
-      "overlap": 0.7514124366296303,
-      "probability_greater": 0.325987859375
+      "median_ratio": 0.7785551384033949,
+      "overlap": 0.7173103164055332,
+      "probability_greater": 0.303873359375
     },
     "ssi_vs_ssi_so": {
-      "median_ratio": 0.8052809148514452,
-      "overlap": 0.7535254177835312,
-      "probability_greater": 0.326132734375
+      "median_ratio": 0.7996684507172718,
+      "overlap": 0.7506432725347911,
+      "probability_greater": 0.32434448437499996
     },
     "sse_so_vs_ssi_so": {
-      "median_ratio": 1.0012773547512985,
-      "overlap": 0.9846252503426164,
-      "probability_greater": 0.50004153125
+      "median_ratio": 1.0271185832222167,
+      "overlap": 0.9660614204749323,
+      "probability_greater": 0.522515703125
     }
   }
 }
