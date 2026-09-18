@@ -31,7 +31,7 @@ naive and onset-anchored models likewise.
 difference it accounts for. They are deliberately in neither `IMPLEMENTED_ANALYSES` nor
 `SAMPLED_ANALYSES`: no report figure and no report number depends on them, and nothing builds
 them unless you name the target. `no_switch_results` is the expensive half (8 fits and 8 risk
-curves, so a cluster job: `REMOTE_TARGET=no_switch_results cluster/run_snakemake_on_cluster.sh`);
+curves, so a cluster job: `hpc run no_switch_results`);
 `pixi run pipeline-no-switch` builds the lot locally, and `pipeline-no-switch-present` draws just
 the figures from pulled curves.
 
@@ -110,7 +110,7 @@ expected. If the edited analysis feeds a figure, agents must also render the app
 figure(s) to a clearly named temporary directory, present the PNGs or direct file links to the user
 for visual checking, and keep those previews in place through the handoff. Saying only that the
 agent inspected a temporary figure is not sufficient. When the answer needs to be the estimand,
-give the user the manual commands from `cluster/README.md` (local-only like `starter_docs/`) and
+give the user the manual commands from `.cluster/CHEATSHEET.md` (local-only like `starter_docs/`) and
 stop; do not execute any cluster command on the user's behalf without their explicit request.
 
 Two habits that follow from this, both learned the hard way:
@@ -294,7 +294,7 @@ as the sampler saying something rather than as a threshold to raise.
 `mtime` rerun trigger; after a fresh clone, `snakemake --touch` restores consistency if you want
 it.
 
-After `cluster/pull_results_cluster.sh`, use `pixi run pipeline-present`, not `pipeline`. It
+After `hpc pull`, use `pixi run pipeline-present`, not `pipeline`. It
 targets only `figures` and `report/report.pdf` and uses `--allowed-rules` to exclude every fit,
 RAC and tier-2 compute rule. Pulled results are therefore immutable inputs even though the
 cluster's Snakemake provenance database was not pulled.
@@ -392,7 +392,7 @@ Go to these when you are about to change the thing they describe.
 | [docs/models.md](docs/models.md) | The renewal core, the builders and simulators, the latent block and what the sampler benchmark settled, model evidence, dispersion comparison |
 | [docs/findings.md](docs/findings.md) | What the study has measured, and which file holds each number. **Read it before "fixing" a surprising result** |
 | `starter_docs/implementation_plan.md` | Legacy rationale only; its warning names the authoritative sources. Untracked, so local only |
-| `cluster/README.md` | Running the full pipeline on ARC, and `racstat` for watching one. Untracked, so local only |
+| `.cluster/CHEATSHEET.md` | Running the full pipeline on ARC via the `hpc` CLI. Untracked, so local only |
 | `scripts/README.md` | The script table, the tier conventions, figure layout rules, the no-fallback rule |
 | `validation/README.md` | What each validation study answers and where it writes |
 | `report/README.md` | The report's register, and the generated-numbers scheme |
