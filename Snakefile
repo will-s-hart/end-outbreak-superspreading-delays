@@ -186,7 +186,7 @@ SAMPLED_ANALYSES = IMPLEMENTED_ANALYSES + RAC_ONLY_ANALYSES
 # there is no evidence to integrate:
 #
 #     pixi run pipeline-no-switch                 # everything, locally
-#     REMOTE_TARGET=no_switch_results ...         # the 8 fits and 8 curves, on the cluster
+#     hpc run no_switch_results                   # the 8 fits and 8 curves, on the cluster
 #     pixi run pipeline-no-switch-present         # the figures, from pulled curves
 NO_SWITCH_ANALYSES = [
     "no_switch_fixed_R",
@@ -197,7 +197,7 @@ NO_SWITCH_ANALYSES = [
 # its figure is Analysis 4's five-panel layout:
 #
 #     pixi run pipeline-uninformative-k           # everything, locally
-#     REMOTE_TARGET=uninformative_k_results ...   # fits, curves, evidence and k summary
+#     hpc run uninformative_k_results             # fits, curves, evidence and k summary
 #     pixi run pipeline-uninformative-k-present   # the figure, from pulled results
 UNINFORMATIVE_K_ANALYSES = [
     "onset_models_uninformative_k",
