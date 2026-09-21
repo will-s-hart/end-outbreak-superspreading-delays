@@ -87,7 +87,21 @@ analyses:
     fixed_k: null
     k_prior: {distribution: lognormal, median: 0.18, quantile_025: 0.018, quantile_975: 1.8}
     run_script: scripts/run_onset_models_uninformative_k.py
-    sampler: {draws: 2000, tune: 2000, chains: 4, target_accept: 0.95, seed: 20260918}
+    # `target_accept` is 0.99 here against 0.95 everywhere else, and the raise is forced by the
+    # prior rather than chosen. Widening `k` a decade each side puts real prior mass at small
+    # `k`, where the offspring distribution is heavy-tailed and the latent block's geometry is
+    # awkward; `k` is Slice-sampled (see AGENTS.md on the compound sampler), so the prior reaches
+    # NUTS only through which `k` it visits. At 0.95 the conditioning-day refits diverged badly
+    # enough to fail `rac.convergence`: 649/937/2611 divergences for ssi/ssi_so/sse_so, with six
+    # days over the 1% gate. At 0.99, ssi falls to 14 divergences and passes, for 28% more time.
+    # Measured 2026-09-21, not assumed. A gamma prior was tried as an alternative and is worse:
+    # its lower tail goes as `k**shape`, heavier in log space than the log-normal's, so it puts
+    # *more* mass where the trouble is.
+    #
+    # This is a sampling cost of the wide prior, not a finding in itself -- the finding is that
+    # the onset-anchored `k` posteriors track the prior. Worth one sentence wherever this
+    # analysis is eventually written up.
+    sampler: {draws: 2000, tune: 2000, chains: 4, target_accept: 0.99, seed: 20260918}
 
   # Exploratory, and deliberately out of IMPLEMENTED_ANALYSES: no report figure, no report
   # number. They ask how much of the naive/onset gap in Analysis 3 is the switchpoint, by
