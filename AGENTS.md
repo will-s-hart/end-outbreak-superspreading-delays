@@ -113,7 +113,16 @@ agent inspected a temporary figure is not sufficient. When the answer needs to b
 give the user the manual commands from `.cluster/CHEATSHEET.md` (local-only like `starter_docs/`) and
 stop; do not execute any cluster command on the user's behalf without their explicit request.
 
-Two habits that follow from this, both learned the hard way:
+**The quick route cannot exercise the convergence gate.** `single_fit_filtered` writes filter
+diagnostics with no `R̂` column at all, so every acceptance-criteria bug reaches the cluster
+untested. Two have: an SSE sweep fit at `R̂` 1.047, and a nan `R̂` on `no_switch_fixed_R/sse`
+that stopped the whole analysis. So **run `refit_daily` locally wherever it is affordable** —
+it is not always hours. `no_switch_fixed_R` fixes every parameter, so its SSE curve is 110
+fits that sample nothing and takes 22 seconds on a laptop. Check the per-fit `seconds` column
+of an existing `<analysis>/<model>_rac_diagnostics.csv` before assuming an analysis needs the
+cluster.
+
+Three habits that follow from this, all learned the hard way:
 
 - **Do not edit a rule's inputs while a long run is in flight.** `config/config.yaml` and
   `scripts/analysis_driver.py` are inputs to every `rac` rule, so touching either marks all
