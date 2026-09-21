@@ -107,6 +107,12 @@ pipeline-no-switch-present = "snakemake --profile config/snakemake_profile -j4 n
 pipeline-uninformative-k = "snakemake --profile config/snakemake_profile -j4 uninformative_k"
 pipeline-uninformative-k-dry = "snakemake --profile config/snakemake_profile -n uninformative_k"
 pipeline-uninformative-k-present = "snakemake --profile config/snakemake_profile -j4 uninformative_k --allowed-rules uninformative_k uninformative_k_results uninformative_k_figure"
+# The anchoring comparison with superspreading removed (`cori` vs `cori_so`), likewise outside
+# `rule all`. Its cluster half is `no_superspreading_results`, which carries the evidence as
+# well as the curves -- though at 220 fits with no latent block it is also a laptop job.
+pipeline-no-superspreading = "snakemake --profile config/snakemake_profile -j4 no_superspreading"
+pipeline-no-superspreading-dry = "snakemake --profile config/snakemake_profile -n no_superspreading"
+pipeline-no-superspreading-present = "snakemake --profile config/snakemake_profile -j4 no_superspreading --allowed-rules no_superspreading no_superspreading_results no_superspreading_figure"
 
 # ---------------------------------------------------------------------------
 # ruff

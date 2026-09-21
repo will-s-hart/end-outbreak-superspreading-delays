@@ -104,6 +104,39 @@ analyses:
     sampler: {draws: 2000, tune: 2000, chains: 4, target_accept: 0.99, seed: 20260918}
 
   # Exploratory, and deliberately out of IMPLEMENTED_ANALYSES: no report figure, no report
+  # number. Every measurement of the naive-versus-onset-anchored difference elsewhere is made
+  # in models that also carry superspreading. This removes superspreading entirely — `cori` and
+  # `cori_so` are the k → ∞ Poisson limits of the two mechanisms — and asks whether the
+  # difference survives. What is left is one anchoring convention against the other, with
+  # nothing else varying.
+  #
+  # Keep `cori` *before* `cori_so`. Each model's seed stream is its index in `models`
+  # (`AnalysisSetting.model_entropy`), so reordering them would silently change every draw of
+  # the curves that were already here. Naive first, matching `onset_models_fixed_k`.
+  #
+  # **No `fixed_k`, no `k_prior`, and deliberately not even `fixed_k: null`.** These models have
+  # no dispersion parameter for a value to attach to: `pymc_models._validate_dispersion` refuses
+  # a `k` wherever the specification has none, so either key would fail at the first fit — and
+  # `fixed_k: null` means "estimated under `k_prior`" in every other block above, so writing it
+  # here would mislead. `AnalysisSetting.dispersion()` returns `None` for exactly this shape.
+  #
+  # `evidence` applies and `dispersion` does not. The two models share the `R` priors, so the
+  # Bayes factor is well defined; with two free scalars and no latent block it is also the
+  # cheapest evidence in the project. There is no `k` posterior to summarise, so no rule asks
+  # for a `dispersion_posteriors.json` (`estimates_dispersion` in the Snakefile).
+  #
+  # `target_accept: 0.9`, not the 0.95 the estimated-`k` analyses use: 0.95 is there for the
+  # hard `k`/latent geometry, and these posteriors — two free scalars, no latents, no `k` — are
+  # the easiest in the project. No `thin:`, so the saved fit stays unthinned and
+  # `reuses_final_day_fit` holds, which is what keeps the curve's last day and the evidence file
+  # on one posterior. The ERT-arrival switchpoint stays: this analysis is about anchoring, not
+  # about the switch, which the two variants below are for.
+  onset_models_no_superspreading:
+    models: [cori, cori_so]
+    run_script: scripts/run_onset_models_no_superspreading.py
+    sampler: {draws: 2000, tune: 2000, chains: 4, target_accept: 0.9, seed: 20260921}
+
+  # Exploratory, and deliberately out of IMPLEMENTED_ANALYSES: no report figure, no report
   # number. They ask how much of the naive/onset gap in Analysis 3 is the switchpoint, by
   # removing it. `switch_day: 111` is past the end of the 111-day window, so `switch_index`
   # leaves R_pre in force on every day, in each model's own time index.
