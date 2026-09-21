@@ -772,3 +772,45 @@ def test_a_latent_free_fixed_k_curve_stops_moving_after_the_switch(model):
     # Two independent estimates, so their difference carries √2 standard errors.
     scale = np.sqrt(2.0) * np.maximum(refit_error, reference_error)
     np.testing.assert_array_less(np.abs(refit_curve - reference_curve), 4.0 * scale)
+
+
+def _estimate(values: np.ndarray, *, day: int, n_chains: int) -> rac.DailyRiskEstimate:
+    """A one-day estimate whose log-probabilities are ``values``, one row per draw."""
+    column = np.asarray(values, dtype=np.float64).reshape(-1, 1)
+    return rac.DailyRiskEstimate(
+        days=np.array([day], dtype=np.int64),
+        log_no_further_cases=column,
+        log_no_further_transmission=column,
+        n_chains=n_chains,
+    )
+
+
+def test_a_day_with_nothing_left_to_sample_joins_a_sampled_curve():
+    """An early day can have its whole latent block marginalised away, leaving a point mass.
+
+    `no_switch_fixed_R` fixes every parameter, so on day 1 of SSI-SO there is nothing left to
+    sample at all and the fit collapses to one draw per chain — while later days sample
+    `Y_uniform` and carry 8000. Refusing the mixture stopped the analysis. Such a day is
+    *exact*, not under-sampled, so repeating its value is the honest way to line the arrays up.
+    """
+    exact = _estimate(np.full(4, -0.5), day=1, n_chains=4)
+    sampled = _estimate(np.linspace(-0.9, -0.1, 8000), day=2, n_chains=4)
+    curve = rac.DailyRiskEstimate.concatenate([exact, sampled])
+
+    assert curve.n_draws == 8000
+    np.testing.assert_array_equal(curve.days, [1, 2])
+    # Repetition must not move the posterior mean of the exact day.
+    np.testing.assert_allclose(curve.risk_of_additional_cases().risk[0], 1.0 - np.exp(-0.5))
+    np.testing.assert_allclose(
+        curve.risk_of_additional_cases().risk[1], 1.0 - np.exp(sampled.log_no_further_cases).mean()
+    )
+    # And an exact day has no Monte-Carlo error, before or after being repeated.
+    assert curve.standard_errors()[0][0] == 0.0
+
+
+def test_a_short_part_that_actually_varies_is_still_refused():
+    """The guard's real job: a day fitted at different sampler settings is not repeatable."""
+    varying = _estimate(np.array([-0.4, -0.6, -0.5, -0.5]), day=1, n_chains=4)
+    sampled = _estimate(np.linspace(-0.9, -0.1, 8000), day=2, n_chains=4)
+    with pytest.raises(ValueError, match="disagree on the draw count"):
+        rac.DailyRiskEstimate.concatenate([varying, sampled])

@@ -95,7 +95,7 @@ offspring families and therefore define RST; DLO's fresh day-level incidence dis
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 import numpy as np
@@ -213,6 +213,46 @@ class DailyRiskEstimate:
             monte_carlo_standard_error(self.log_no_further_transmission, n_chains=self.n_chains),
         )
 
+    def _repeated_to(self, n_draws: int) -> DailyRiskEstimate:
+        """This estimate repeated to ``n_draws`` rows. Only an exact one may be repeated.
+
+        A conditioning day can legitimately have nothing left to sample: under a marginalised
+        parameterisation, an early day whose latent block is entirely marginalised away leaves
+        a model with no free variables, so its fit is a point mass of one draw per chain and
+        its risk is *exact* rather than estimated. It still has to sit in the same array as the
+        days that were sampled.
+
+        Repeating an exact value changes no posterior mean and leaves its Monte-Carlo error at
+        zero, which is the truth about that day. A part that actually varies across draws is a
+        different matter entirely --- a day genuinely fitted at other sampler settings --- and
+        still raises.
+        """
+        if self.n_draws == n_draws:
+            return self
+        arrays = [self.log_no_further_cases, self.log_no_further_transmission]
+        if self.log_no_sustained_transmission is not None:
+            arrays.append(self.log_no_sustained_transmission)
+        varies = any(bool(np.ptp(values, axis=0).any()) for values in arrays)
+        if varies or n_draws % self.n_draws:
+            raise ValueError(
+                f"the per-day estimates disagree on the draw count: {self.n_draws} against "
+                f"{n_draws}, and the shorter one varies across its draws. Every conditioning "
+                "day must be fitted at the same sampler settings, or the curve would carry a "
+                "different Monte-Carlo error on different days"
+            )
+        # Chain-major, so each chain's value is repeated as a block.
+        repeat = n_draws // self.n_draws
+        return replace(
+            self,
+            log_no_further_cases=np.repeat(self.log_no_further_cases, repeat, axis=0),
+            log_no_further_transmission=np.repeat(self.log_no_further_transmission, repeat, axis=0),
+            log_no_sustained_transmission=(
+                None
+                if self.log_no_sustained_transmission is None
+                else np.repeat(self.log_no_sustained_transmission, repeat, axis=0)
+            ),
+        )
+
     @classmethod
     def concatenate(cls, parts: list[DailyRiskEstimate]) -> DailyRiskEstimate:
         """Join per-day estimates into one curve. Every part must share a chain count."""
@@ -223,11 +263,9 @@ class DailyRiskEstimate:
             raise ValueError(f"the per-day estimates disagree on the chain count: {sorted(chains)}")
         draws = {part.n_draws for part in parts}
         if len(draws) != 1:
-            raise ValueError(
-                f"the per-day estimates disagree on the draw count: {sorted(draws)}. Every "
-                "conditioning day must be fitted at the same sampler settings, or the curve "
-                "would carry a different Monte-Carlo error on different days"
-            )
+            # Days with nothing left to sample are exact and may be repeated up to the common
+            # count; anything else still raises. See `_repeated_to`.
+            parts = [part._repeated_to(max(draws)) for part in parts]
         sustained = [part.log_no_sustained_transmission for part in parts]
         if any(values is None for values in sustained) and not all(
             values is None for values in sustained
