@@ -1,0 +1,24 @@
+{
+  "analysis": "onset_models_no_superspreading",
+  "models": [
+    "cori",
+    "cori_so"
+  ],
+  "estimator": "bridge_sampling",
+  "log_evidence": {
+    "cori": -91.75706147476228,
+    "cori_so": -82.61663877683155
+  },
+  "log_evidence_standard_error": {
+    "cori": 0.000950357039504557,
+    "cori_so": 0.00145909789680639
+  },
+  "n_draws": {
+    "cori": 12000,
+    "cori_so": 12000
+  },
+  "posterior_model_probability": {
+    "cori": 0.000107230489351928,
+    "cori_so": 0.9998927695106534
+  }
+}
