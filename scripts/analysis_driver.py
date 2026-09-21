@@ -279,66 +279,6 @@ def command_fit(args: argparse.Namespace) -> None:
 # ---------------------------------------------------------------------------------------
 
 
-def command_rac(args: argparse.Namespace) -> None:
-    """Estimate the RAC (and, for the onset models, RAT) curve.
-
-    Under ``refit_daily`` this is a **tier-1** step: the estimand conditions on the record
-    through day ``t``, so it fits the model once per conditioning day. The alternative reuses a
-    single full-record fit and filters the latents, which is faster and approximate.
-
-    The curves and their Monte-Carlo standard errors come from a single evaluation of the
-    per-draw log-probabilities: RAC(t) is a posterior *average*, so it carries Monte-Carlo
-    error, and a curve published without it cannot be compared with another one.
-    """
-    setting = setting_from_arguments(args)
-    model = setting.require_model(args.model)
-    data = setting.data
-    method = setting.rac_method(args.method)
-    first_day = int(setting.rac["first_day"])
-    days = refit_risk.conditioning_days(data.onsets.size, first_day=first_day)
-    if method == REFIT_DAILY and args.diagnostics is None:
-        raise ValueError(
-            f"{method} runs one fit per conditioning day, so --diagnostics is required: a "
-            "curve built from 110 fits nobody has looked at is not a result"
-        )
-    setting.rac_method(args.method)  # reject an unknown --method before hours of sampling
-
-    if method == REFIT_DAILY:
-        estimate, diagnostics = _rac_by_refitting(
-            setting, model, days=days, posterior=args.posterior, jobs=int(args.jobs)
-        )
-    else:
-        estimate, diagnostics = _rac_by_filtering(
-            setting, model, days=days, posterior=args.posterior
-        )
-
-    cases = estimate.risk_of_additional_cases()
-    transmission = estimate.risk_of_additional_transmission()
-    case_error, transmission_error = estimate.standard_errors()
-    columns: dict[str, Any] = {
-        "date": [data.date_of(int(day)) for day in estimate.days],
-        "day": estimate.days,
-        "model": model,
-        "risk_of_additional_cases": cases.risk,
-        "monte_carlo_standard_error": case_error,
-    }
-    if model.endswith("_so"):
-        # RAC and RAT coincide under every infection-anchored model, so writing both columns
-        # there would suggest a comparison the models cannot make.
-        columns["risk_of_additional_transmission"] = transmission.risk
-        columns["transmission_monte_carlo_standard_error"] = transmission_error
-    pd.DataFrame(columns).to_csv(configuration.ensure_parent(args.output), index=False)
-    if args.diagnostics is not None:
-        diagnostics.insert(0, "method", method)
-        diagnostics.to_csv(configuration.ensure_parent(args.diagnostics), index=False)
-
-    print(
-        f"{model}: RAC over days {int(estimate.days[0])}–{int(estimate.days[-1])} by {method}; "
-        f"written to {args.output}"
-    )
-    _report_convergence(setting, model, diagnostics, path=args.diagnostics)
-
-
 def _report_convergence(
     setting: AnalysisSetting, model: str, diagnostics: pd.DataFrame, *, path: Path | None
 ) -> None:
@@ -425,8 +365,8 @@ def _rac_by_refitting(
             "n_sampled_variables": [day.n_sampled_variables for day in result.diagnostics],
         }
     )
-    # Carried on the frame rather than raised here, so that `command_rac` writes the curve and
-    # the table before anything decides whether to stop the build.
+    # Carried on the frame rather than raised here, so that `run_risk_curves.py` writes the
+    # curve and the table before anything decides whether to stop the build.
     criteria = setting.rac.get("convergence", {})
     diagnostics.attrs["suspect"] = result.suspect_days(
         max_r_hat=float(criteria.get("max_r_hat", 1.02)),
@@ -657,30 +597,6 @@ def parse_arguments(analysis: str, argv: list[str] | None = None) -> argparse.Na
     fit.add_argument("--model", required=True)
     fit.add_argument("--progressbar", action="store_true")
     fit.set_defaults(handler=command_fit)
-
-    risk = common(
-        subcommands.add_parser("rac", help="risk of additional cases (tier 1 under refit_daily)")
-    )
-    risk.add_argument("--model", required=True)
-    risk.add_argument(
-        "--posterior",
-        type=Path,
-        required=True,
-        help="the full-record fit: the whole state under single_fit_filtered, and the last "
-        "conditioning day's fit under refit_daily",
-    )
-    risk.add_argument(
-        "--diagnostics",
-        type=Path,
-        help="where to write the per-day sampler diagnostics (refit_daily only)",
-    )
-    risk.add_argument(
-        "--method",
-        choices=RAC_METHODS,
-        help="override config's rac.method; the default refits per conditioning day",
-    )
-    add_jobs_argument(risk)
-    risk.set_defaults(handler=command_rac)
 
     evidence = common(subcommands.add_parser("evidence", help="model evidence (tier 2)"))
     evidence.add_argument("--posteriors", type=Path, nargs="+", required=True)
