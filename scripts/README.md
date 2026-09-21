@@ -25,6 +25,8 @@ see `validation/` for benchmarks and cross-checks, whose subject is the implemen
 | `plot_underreporting.py` | 3 | `figures/underreporting/*` — the reporting sweep, naive and onset-anchored |
 | `run_no_switch_fixed_R.py`, `run_no_switch_single_R.py` | 1 | the exploratory variants' tier-1 outputs, with the `R` switchpoint removed |
 | `plot_no_switch.py` | 3 | `figures/no_switch_*/*` — both variants, from one script taking `--analysis` |
+| `run_onset_models_no_superspreading.py` | 1 and 2 | `cori` vs `cori_so`: curves and evidence, and no `k` summary, because these models have no `k` |
+| `plot_no_superspreading.py` | 3 | `figures/onset_models_no_superspreading/*` — one analysis, so it is hard-coded and there is no `--analysis` |
 | `plot_model_schematic.py` | 3 | The infection- vs onset-anchored schematic. Draws no data, so it takes no input but the house style |
 | `plot_delay_distributions.py` | 3 | Supplement: incubation, TOST and serial-interval distributions |
 | `plot_sustained_transmission.py` | 3 | Main text (fixed `k`) and supplement (estimated `k`): RAC/RAT, then RST, for all four models |
@@ -52,6 +54,16 @@ does not yet ask. It has evidence and a `k` summary, so its figure is Analysis 4
 but `rule figure` does not pass `--analysis`, and the script needs it to read the right `k`
 prior, so `rule uninformative_k_figure` draws it instead. `uninformative_k_results` is the
 cluster half.
+
+**`onset_models_no_superspreading` is kept out the same way**, and needs its own figure rule for
+a third reason: an *absence*. `rule figure` asks `dispersion_summary_of` for a `k` summary, and
+`cori`/`cori_so` have no `k` for one to be about — so `rule no_superspreading_figure` declares no
+`dispersion=` input at all, which is the analysis stated as a dependency list. Its figure is the
+fixed-`k` four-panel layout minus the `k`, and it overrides the palette locally
+(`utils.model_colour`'s `overrides`) so that the two Poisson limits read as the naive/onset pair
+they are here rather than as the two neutral greys they are everywhere else.
+`no_superspreading_results` is the cluster half, though 220 latent-free fits are affordable
+locally and the quick route cannot test the convergence gate.
 
 Conventions, all of them load-bearing:
 

@@ -8,6 +8,7 @@ wrong model, so they are pinned here against the committed config rather than a 
 
 from __future__ import annotations
 
+import argparse
 import importlib.util
 import sys
 from pathlib import Path
@@ -69,6 +70,9 @@ def test_the_reporting_sweeps_are_thinned_and_the_report_analyses_are_not(settin
         "naive_models_estimated_k",
         "onset_models_fixed_k",
         "onset_models_estimated_k",
+        # Computes evidence too, and its curve's last day has to be the posterior that evidence
+        # was computed from, which is exactly what `reuses_final_day_fit` guarantees.
+        "onset_models_no_superspreading",
     ):
         sampler = fitting.SamplerSettings.from_config(setting_of(analysis).block["sampler"])
         assert sampler.thin == 1, analysis
@@ -93,6 +97,47 @@ def test_the_priors_stay_available_even_where_R_is_fixed(setting_of):
     """The figures draw the prior behind a posterior, so the two accessors are not the same."""
     R_pre_prior, _ = setting_of("no_switch_fixed_R").reproduction_number_priors()
     assert isinstance(R_pre_prior, LogNormalPrior)
+
+
+# --- no dispersion at all ----------------------------------------------------------------
+
+
+def test_a_fixed_k_analysis_resolves_k_to_a_float(setting_of):
+    """The contrast the two tests below are against."""
+    assert setting_of("onset_models_fixed_k").dispersion() == 0.18
+
+
+def test_the_poisson_limits_have_no_dispersion_parameter_to_resolve(setting_of):
+    """`None`, and not by a default: the block gives neither ``fixed_k`` nor ``k_prior``.
+
+    Which is what stops someone "helpfully" adding a ``fixed_k: 0.18`` here to match the blocks
+    around it. ``pymc_models._validate_dispersion`` refuses a ``k`` for a model whose
+    specification has none, so that edit would look harmless in review and fail at the first
+    MCMC fit -- twenty minutes into a run, or on the cluster.
+    """
+    setting = setting_of("onset_models_no_superspreading")
+    assert setting.models == ["cori", "cori_so"]
+    assert setting.dispersion() is None
+    assert "fixed_k" not in setting.block
+    assert "k_prior" not in setting.block
+
+
+def test_the_dispersion_subcommand_refuses_an_analysis_with_no_k(setting_of, tmp_path):
+    """A `ValueError` that says so, not a `TypeError` from formatting `None` as a float.
+
+    ``command_dispersion`` used to reach ``f"{prior:g}"`` for anything that was not a
+    ``LogNormalPrior``, which for ``None`` is a crash about format specifiers rather than a
+    sentence about the analysis.
+    """
+    arguments = argparse.Namespace(
+        analysis="onset_models_no_superspreading",
+        config=configuration.DEFAULT_CONFIG_FILE,
+        data=outbreak_data.DEFAULT_DATA_FILE,
+        posteriors=[],
+        output=tmp_path / "dispersion_posteriors.json",
+    )
+    with pytest.raises(ValueError, match="no dispersion parameter"):
+        analysis_driver.command_dispersion(arguments)
 
 
 # --- the switch day ---------------------------------------------------------------------

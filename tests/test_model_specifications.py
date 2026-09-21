@@ -124,6 +124,21 @@ def test_cori_is_the_dispersion_free_limit_and_is_not_a_compared_model():
     assert ms.CORI not in ms.NAIVE_MODELS
 
 
+def test_cori_so_is_the_onset_anchored_limit_with_neither_dispersion_nor_latents():
+    """Both absences matter to `onset_models_no_superspreading`.
+
+    No dispersion is why that analysis's block gives neither `fixed_k` nor `k_prior`; no latent
+    block is why it needs no `latent_parameterisation` of its own and why its ~220 fits are a
+    laptop job. `cori_so` is the only onset-anchored model with no latent block, so nothing
+    else in the project pins this.
+    """
+    assert ms.CORI_SO.overdispersion_level == "none"
+    assert not ms.CORI_SO.has_dispersion
+    assert not ms.CORI_SO.has_latents
+    assert ms.CORI_SO.anchoring == "onsets"
+    assert ms.CORI_SO not in ms.ONSET_ANCHORED_MODELS
+
+
 # --- TransmissionParameters --------------------------------------------------------------
 
 

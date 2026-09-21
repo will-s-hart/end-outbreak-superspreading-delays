@@ -22,7 +22,9 @@ Five models are compared, all driven by the same onset-to-onset serial interval:
 | `ssi_so` | symptom onsets | the individual | `Y_t` |
 
 `cori` and `cori_so` are also built, as the `k → ∞` Poisson limits — **validation targets, not
-compared models**, and they stay out of the four analyses. Four analyses, configured in
+compared models**, and they stay out of the four analyses — though the exploratory
+`onset_models_no_superspreading` below does compare them with *each other*, which is a different
+use of them and not a promotion. Four analyses, configured in
 `config/config.yaml`: the naive models at a transplanted `k` and at an estimated `k`, then the
 naive and onset-anchored models likewise.
 
@@ -42,6 +44,15 @@ or the prior. `uninformative_k_results` is its cluster half (4 fits, 4 curves, e
 `k` summary); `pipeline-uninformative-k` and `pipeline-uninformative-k-present` mirror the
 no-switch tasks. The report itself carries that analysis's estimated-`k` figure in the supplement
 (`SUPPLEMENTARY_ANALYSES` in the `Snakefile`), not the main text.
+
+`onset_models_no_superspreading` is the third one kept out, and asks the complement of the
+no-switch question: every measurement of the naive/onset difference elsewhere is made in models
+that also carry superspreading, so this removes superspreading entirely and compares `cori` with
+`cori_so`. It is the only analysis whose models have **no `k` at all**, which is why its config
+block gives neither `fixed_k` nor `k_prior` and `AnalysisSetting.dispersion()` can return `None`.
+It takes `evidence` — the two share the `R` priors — but no `dispersion` summary, and its figure
+is `scripts/plot_no_superspreading.py`. At 220 fits with no latent block it is a laptop job
+rather than a cluster one; `no_superspreading_results` exists for the cluster anyway.
 
 The output quantity is the **risk of additional cases (RAC)**, a real-time reset posterior
 predictive: fit parameters *and* latents to the record through day `t` alone, reset `R` to
@@ -72,6 +83,8 @@ The environment is managed by **pixi**. All commands run through `pixi run`:
 | `pixi run pipeline-no-switch-present` | their figures only, after pulling a cluster run of `no_switch_results` |
 | `pixi run pipeline-uninformative-k` | the vague-`k` repeat of the onset analysis; in no other target |
 | `pixi run pipeline-uninformative-k-present` | its figure only, after pulling a cluster run of `uninformative_k_results` |
+| `pixi run pipeline-no-superspreading` | the `cori` vs `cori_so` comparison; in no other target |
+| `pixi run pipeline-no-superspreading-present` | its figure only, after pulling `no_superspreading_results` |
 
 **Run `pixi run check` and fix every issue before committing.** No exceptions — a failing lint,
 type or test check is not "pre-existing", it is the current state of the tree.
@@ -392,6 +405,13 @@ committed measurement.
   that stay near 0.18 and narrow mean they do. Its model probabilities are not comparable with the
   report analysis's, since a wider prior is charged for in the evidence. It is also the first
   piece of the prior-sensitivity analysis listed above.
+- **The superspreading-free anchoring comparison is implemented but not run.**
+  `onset_models_no_superspreading` puts `cori` against `cori_so`, so the naive/onset difference
+  is measured with nothing else varying — every other measurement of it is confounded with the
+  superspreading mechanism carried alongside. It is 220 fits and the models have no latent
+  block, so it is affordable locally and **should be run with `refit_daily`, not the quick
+  route**: `single_fit_filtered` writes no `R̂` column, so it cannot exercise the convergence
+  gate. Nothing is written up until such a run exists.
 - **The reset-convention follow-up remains declined** unless asked for. RST is now a reported
   estimand rather than an optional follow-up.
 - **Per-fit process spawn dominates the cheap models' cost.** Each conditioning-day fit starts

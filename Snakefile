@@ -202,6 +202,19 @@ NO_SWITCH_ANALYSES = [
 UNINFORMATIVE_K_ANALYSES = [
     "onset_models_uninformative_k",
 ]
+# The naive/onset comparison with superspreading removed: `cori` against `cori_so`, the
+# k -> infinity Poisson limits of the two mechanisms. Every other measurement of the anchoring
+# difference is made in models that also carry superspreading, so this asks whether the
+# difference survives without it. It takes evidence -- the two models share the R priors, and
+# with two free scalars and no latent block it is the cheapest evidence in the project -- but
+# no dispersion summary, because these models have no k at all:
+#
+#     pixi run pipeline-no-superspreading           # everything, locally (~220 fits)
+#     hpc run no_superspreading_results             # the 2 fits, 2 curves and the evidence
+#     pixi run pipeline-no-superspreading-present   # the figure, from pulled results
+NO_SUPERSPREADING_ANALYSES = [
+    "onset_models_no_superspreading",
+]
 
 
 # Everything a rule's result depends on must appear in its `params:`. Note what that is and is
@@ -272,8 +285,18 @@ def models_of(analysis):
 
 
 def estimates_dispersion(analysis):
-    """Whether this analysis gives `k` a prior rather than holding it at a literature value."""
-    return ANALYSES[analysis].get("fixed_k") is None
+    """Whether this analysis gives `k` a prior rather than holding it at a literature value.
+
+    Both halves are needed. "No `fixed_k`" alone also answers True for an analysis whose models
+    have no `k` at all -- `onset_models_no_superspreading` compares the k -> infinity Poisson
+    limits, and its block gives neither key -- which would put a `dispersion_posteriors.json`
+    on a dependency list for a summary that cannot exist. Inert for every other analysis:
+    each one without a `fixed_k` (`naive_models_estimated_k`, `onset_models_estimated_k`,
+    `onset_models_uninformative_k`) carries a `k_prior`, so the second clause changes no
+    answer. It is defence for whoever next reuses `dispersion_summary_of`.
+    """
+    block = ANALYSES[analysis]
+    return block.get("fixed_k") is None and block.get("k_prior") is not None
 
 
 def dispersion_summary_of(wildcards):
@@ -674,6 +697,39 @@ rule uninformative_k_figure:
         " --output-png {output.png}"
 
 
+# The same output-pattern collision again, settled the same way. This one needs its own rule
+# because of an *absence*: `rule figure` asks `dispersion_summary_of` for a `k` summary, and
+# these two models have no `k` for one to be about. There is deliberately no `dispersion=`
+# input below at all -- that explicit absence is what the analysis is, so it is stated here
+# rather than arranged for by a helper that happens to return an empty list.
+ruleorder: no_superspreading_figure > figure
+
+
+rule no_superspreading_figure:
+    wildcard_constraints:
+        analysis="|".join(NO_SUPERSPREADING_ANALYSES),
+    input:
+        racs=racs_of,
+        posteriors=posteriors_of,
+        evidence="results/{analysis}/model_evidence.json",
+        data=ONSETS_CSV,
+        config=CONFIG_FILE,
+        script="scripts/plot_no_superspreading.py",
+        code=PLOT_CORE,
+    output:
+        pdf="figures/{analysis}/{analysis}.pdf",
+        png="figures/{analysis}/{analysis}.png",
+    params:
+        shared=SHARED_PARAMS,
+    shell:
+        "python {input.script}"
+        " --results-dir results/{wildcards.analysis}"
+        " --data {input.data}"
+        " --config {input.config}"
+        " --output-pdf {output.pdf}"
+        " --output-png {output.png}"
+
+
 rule underreporting_figure:
     input:
         racs=[
@@ -839,6 +895,30 @@ rule uninformative_k:
         [
             f"figures/{analysis}/{analysis}.{extension}"
             for analysis in UNINFORMATIVE_K_ANALYSES
+            for extension in ("pdf", "png")
+        ],
+
+
+# Superspreading removed: the anchoring comparison at the k -> infinity Poisson limits. Split
+# like the families above -- the fits and curves are the expensive half, the figure is seconds.
+# Evidence rides with the curves, as it does for `uninformative_k_results`. No
+# `dispersion_posteriors.json`: there is no `k` to summarise.
+rule no_superspreading_results:
+    input:
+        [
+            f"results/{analysis}/{model}_rac.csv"
+            for analysis in NO_SUPERSPREADING_ANALYSES
+            for model in models_of(analysis)
+        ],
+        [f"results/{analysis}/model_evidence.json" for analysis in NO_SUPERSPREADING_ANALYSES],
+
+
+rule no_superspreading:
+    input:
+        rules.no_superspreading_results.input,
+        [
+            f"figures/{analysis}/{analysis}.{extension}"
+            for analysis in NO_SUPERSPREADING_ANALYSES
             for extension in ("pdf", "png")
         ],
 

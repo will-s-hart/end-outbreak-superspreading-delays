@@ -178,17 +178,29 @@ class AnalysisSetting:
         override = self.block.get("switch_day")
         return self.data.ert_arrival_day if override is None else int(override)
 
-    def dispersion(self) -> float | LogNormalPrior:
+    def dispersion(self) -> float | LogNormalPrior | None:
         """``k`` as the builders take it: a float where fixed, a prior where estimated.
 
         A fixed ``k`` becomes a constant in the PyMC graph rather than a random variable, which
         is why it has to be handed back to the RAC calculators explicitly later — it is nowhere
         in the draws.
+
+        ``None`` is the third case, and it does not mean "estimated under some default": it is
+        an analysis whose models have no dispersion parameter at all, the ``k → ∞`` Poisson
+        limits ``cori`` and ``cori_so``. Such a block gives *neither* ``fixed_k`` nor
+        ``k_prior``, and the distinction is not cosmetic —
+        :func:`end_of_outbreak.pymc_models._validate_dispersion` refuses a ``k`` for a model
+        whose specification has none, so a block offering either key would fail at the first
+        fit. ``fixed_k: null`` is therefore *not* this case: in every other block it means
+        "estimated under ``k_prior``".
         """
         fixed = self.block.get("fixed_k")
         if fixed is not None:
             return float(fixed)
-        return LogNormalPrior.from_config(self.block["k_prior"])
+        prior = self.block.get("k_prior")
+        if prior is None:
+            return None
+        return LogNormalPrior.from_config(prior)
 
     def require_model(self, model: str) -> str:
         """Reject a model that is not part of this analysis, rather than fitting it anyway."""
@@ -566,6 +578,15 @@ def command_dispersion(args: argparse.Namespace) -> None:
     """
     setting = setting_from_arguments(args)
     prior = setting.dispersion()
+    # `None` first: it would reach the `{prior:g}` below as a TypeError, and it is a different
+    # mistake anyway. A fixed-k analysis has a k that this subcommand cannot summarise; these
+    # models have no k to summarise, so no config change could make the question meaningful.
+    if prior is None:
+        raise ValueError(
+            f"{setting.name} compares models with no dispersion parameter at all — they are "
+            "the k → ∞ Poisson limits — so there is nothing for this subcommand to summarise. "
+            "No rule should be asking it for a dispersion_posteriors.json."
+        )
     if not isinstance(prior, LogNormalPrior):
         raise ValueError(
             f"{setting.name} holds k fixed at {prior:g}, so there is no k posterior to "
