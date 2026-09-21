@@ -19,6 +19,8 @@ be to notice:
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import numpy as np
 import pytest
 
@@ -482,6 +484,50 @@ def test_the_free_variables_survive_saving(tmp_path):
     reloaded = fitting.load_fit(fitting.save_fit(idata, tmp_path / "free.nc"))
     assert "Y_uniform" in reloaded.posterior.data_vars
     assert "Y" in reloaded.posterior.data_vars
+
+
+def test_a_fit_that_sampled_nothing_passes_the_acceptance_gate():
+    """``no_switch_fixed_R`` fixes every parameter, so SSE's posterior is empty and R-hat nan.
+
+    That nan is not a failure: there is no sampling to diagnose. Treating it as one stopped the
+    analysis's first cluster run outright, reporting 110 of 110 conditioning days as failing a
+    criterion none of them could ever meet. The two readings of a non-finite R-hat are opposite
+    and are told apart by ``n_sampled_variables``, so both are pinned here.
+    """
+    nothing_sampled = refit_risk.DayDiagnostics(
+        day=7,
+        divergences=0,
+        max_r_hat=float("nan"),
+        min_ess_bulk=float("nan"),
+        seconds=0.0,
+        n_sampled_variables=0,
+    )
+    assert not nothing_sampled.is_suspect(max_r_hat=1.02, divergence_fraction=0.01, n_draws=100)
+
+    # Sampled something, yet no R-hat could be computed: exactly what the gate is for.
+    undiagnosable = replace(nothing_sampled, n_sampled_variables=3)
+    assert undiagnosable.is_suspect(max_r_hat=1.02, divergence_fraction=0.01, n_draws=100)
+
+    # Divergences still count against a fit that sampled nothing, if one ever managed them.
+    diverged = replace(nothing_sampled, divergences=50)
+    assert diverged.is_suspect(max_r_hat=1.02, divergence_fraction=0.01, n_draws=100)
+
+
+def test_the_fixed_R_curve_reports_no_suspect_days_end_to_end():
+    """The gate as `analysis_driver` applies it, over a real fixed-`R` run rather than a stub."""
+    result = refit_risk.risk_by_refitting(
+        "sse",
+        COUNTS,
+        delays=SHORT_DELAYS,
+        switch_day=SWITCH_DAY,
+        R_pre=0.95,
+        R_post=0.95,
+        k=K,
+        days=np.array([COUNTS.size - 3, COUNTS.size - 1]),
+        sampler=FAST,
+    )
+    assert all(day.n_sampled_variables == 0 for day in result.diagnostics)
+    assert result.suspect_days(max_r_hat=1.02, divergence_fraction=0.01) == []
 
 
 def test_a_fixed_R_curve_is_deterministic_and_carries_no_monte_carlo_error():

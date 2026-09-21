@@ -420,6 +420,9 @@ def _rac_by_refitting(
             "max_r_hat": [day.max_r_hat for day in result.diagnostics],
             "min_ess_bulk": [day.min_ess_bulk for day in result.diagnostics],
             "seconds": [day.seconds for day in result.diagnostics],
+            # So a reader of the table can tell an `R̂` of `nan` that means "nothing was
+            # sampled" from one that means "the diagnostic could not be computed".
+            "n_sampled_variables": [day.n_sampled_variables for day in result.diagnostics],
         }
     )
     # Carried on the frame rather than raised here, so that `command_rac` writes the curve and

@@ -85,14 +85,28 @@ class DayDiagnostics:
     max_r_hat: float
     min_ess_bulk: float
     seconds: float
+    n_sampled_variables: int = -1
+    """How many variables the fit actually sampled; ``-1`` when it was not recorded.
+
+    Recorded so that a non-finite ``R̂`` can be read correctly. There are two ways to get one
+    and they mean opposite things: a fit that sampled nothing has no convergence to report,
+    while a fit that sampled something and still has no defined ``R̂`` is exactly what the
+    acceptance criteria exist to catch.
+    """
 
     def is_suspect(self, *, max_r_hat: float, divergence_fraction: float, n_draws: int) -> bool:
-        """Whether this day's fit fails the acceptance thresholds."""
-        return (
-            not np.isfinite(self.max_r_hat)
-            or self.max_r_hat > max_r_hat
-            or self.divergences > divergence_fraction * n_draws
-        )
+        """Whether this day's fit fails the acceptance thresholds.
+
+        A fit that sampled nothing passes. ``no_switch_fixed_R`` fixes every parameter, so for
+        a model with no latent block the posterior is empty, every draw is the same point, and
+        ``R̂`` is ``nan`` because there is no sampling to diagnose --- not because the sampling
+        went wrong. Failing it here stopped that analysis's whole curve on its first cluster
+        run, with 110 of 110 days "failing" a criterion none of them could ever have met.
+        """
+        diverged = self.divergences > divergence_fraction * n_draws
+        if self.n_sampled_variables == 0:
+            return diverged
+        return not np.isfinite(self.max_r_hat) or self.max_r_hat > max_r_hat or diverged
 
 
 @dataclass(frozen=True)
@@ -430,17 +444,20 @@ def summarise_fit(idata: Any, *, day: int, seconds: float) -> DayDiagnostics:
     divergences = 0
     if "sample_stats" in idata and "diverging" in idata.sample_stats:
         divergences = int(np.asarray(idata.sample_stats["diverging"]).sum())
-    if not idata.posterior.data_vars:
+    n_sampled = len(idata.posterior.data_vars)
+    if not n_sampled:
         # A fit with every parameter fixed and no latent block sampled nothing, so there is no
         # convergence to report. `az.rhat` raises on an empty posterior rather than returning
-        # an empty result, so this is a guard and not merely a shortcut. `nan` compares false
-        # against every threshold, which is what lets the acceptance gate pass it unremarked.
+        # an empty result, so this is a guard and not merely a shortcut. The `nan` is carried
+        # alongside `n_sampled_variables=0`, which is what tells `is_suspect` that it means
+        # "nothing to diagnose" rather than "the diagnostic failed".
         return DayDiagnostics(
             day=int(day),
             divergences=divergences,
             max_r_hat=float("nan"),
             min_ess_bulk=float("nan"),
             seconds=float(seconds),
+            n_sampled_variables=0,
         )
     return DayDiagnostics(
         day=int(day),
@@ -448,6 +465,7 @@ def summarise_fit(idata: Any, *, day: int, seconds: float) -> DayDiagnostics:
         max_r_hat=_worst(az.rhat(idata.posterior), np.nanmax),
         min_ess_bulk=_worst(az.ess(idata.posterior, method="bulk"), np.nanmin),
         seconds=float(seconds),
+        n_sampled_variables=n_sampled,
     )
 
 
