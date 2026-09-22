@@ -54,13 +54,30 @@ analyses:
     plot_script: scripts/plot_naive_models_fixed_k.py
     sampler: {draws: 2000, tune: 2000, chains: 4, target_accept: 0.9, seed: 20260805}
 
+  # The `k` prior is centred on the literature value but a decade wide on each side of it, and
+  # it is the same prior in both estimated-`k` analyses. An earlier, informative prior (95%
+  # interval 0.09-0.36) left the onset-anchored `k` posteriors sitting on its median, which
+  # could have been the data or the prior; at this width a posterior that merely tracks the
+  # prior shows itself by being as wide as it is. The narrower prior is not kept anywhere.
+  #
+  # `target_accept` is 0.99 in both, against 0.9-0.95 elsewhere, and the raise is forced by the
+  # prior rather than chosen. Widening `k` puts real prior mass at small `k`, where the
+  # offspring distribution is heavy-tailed and the latent block's geometry is awkward; `k` is
+  # Slice-sampled (see AGENTS.md on the compound sampler), so the prior reaches NUTS only
+  # through which `k` it visits. At 0.95 the onset analysis's conditioning-day refits diverged
+  # badly enough to fail `rac.convergence`: 649/937/2611 divergences for ssi/ssi_so/sse_so, with
+  # six days over the 1% gate. At 0.99, ssi fell to 14 divergences and passed, for 28% more
+  # time. Measured 2026-09-21, not assumed. Naive SSI is the same model as the onset analysis's
+  # SSI, so the naive analysis takes the same setting rather than rediscovering the failure. A
+  # gamma prior was tried as an alternative and is worse: its lower tail goes as `k**shape`,
+  # heavier in log space than the log-normal's, so it puts *more* mass where the trouble is.
   naive_models_estimated_k:
     models: [dlo, sse, ssi]
     fixed_k: null
-    k_prior: {distribution: lognormal, median: 0.18, quantile_025: 0.09, quantile_975: 0.36}
+    k_prior: {distribution: lognormal, median: 0.18, quantile_025: 0.018, quantile_975: 1.8}
     run_script: scripts/run_naive_models_estimated_k.py
     plot_script: scripts/plot_naive_models_estimated_k.py
-    sampler: {draws: 2000, tune: 2000, chains: 4, target_accept: 0.9, seed: 20260806}
+    sampler: {draws: 2000, tune: 2000, chains: 4, target_accept: 0.99, seed: 20260806}
 
   onset_models_fixed_k:
     models: [sse, ssi, sse_so, ssi_so]
@@ -69,39 +86,15 @@ analyses:
     plot_script: scripts/plot_onset_models_fixed_k.py
     sampler: {draws: 2000, tune: 2000, chains: 4, target_accept: 0.9, seed: 20260807}
 
+  # The same wide `k` prior and the same `target_accept` as `naive_models_estimated_k`, for the
+  # reasons given there.
   onset_models_estimated_k:
     models: [sse, ssi, sse_so, ssi_so]
     fixed_k: null
-    k_prior: {distribution: lognormal, median: 0.18, quantile_025: 0.09, quantile_975: 0.36}
+    k_prior: {distribution: lognormal, median: 0.18, quantile_025: 0.018, quantile_975: 1.8}
     run_script: scripts/run_onset_models_estimated_k.py
     plot_script: scripts/plot_onset_models_estimated_k.py
-    sampler: {draws: 2000, tune: 2000, chains: 4, target_accept: 0.95, seed: 20260808}
-
-  # Supplementary, and deliberately out of IMPLEMENTED_ANALYSES: wired into the workflow, but no
-  # report figure and no report number until it is promoted. Under the prior above, the
-  # onset-anchored k posteriors sit on its median, which could be the data or the prior. This
-  # asks which: the same analysis, with the prior a decade wider on each side of the same median,
-  # so width is the only thing that changes. A posterior that merely widens with it was the prior.
-  onset_models_uninformative_k:
-    models: [sse, ssi, sse_so, ssi_so]
-    fixed_k: null
-    k_prior: {distribution: lognormal, median: 0.18, quantile_025: 0.018, quantile_975: 1.8}
-    run_script: scripts/run_onset_models_uninformative_k.py
-    # `target_accept` is 0.99 here against 0.95 everywhere else, and the raise is forced by the
-    # prior rather than chosen. Widening `k` a decade each side puts real prior mass at small
-    # `k`, where the offspring distribution is heavy-tailed and the latent block's geometry is
-    # awkward; `k` is Slice-sampled (see AGENTS.md on the compound sampler), so the prior reaches
-    # NUTS only through which `k` it visits. At 0.95 the conditioning-day refits diverged badly
-    # enough to fail `rac.convergence`: 649/937/2611 divergences for ssi/ssi_so/sse_so, with six
-    # days over the 1% gate. At 0.99, ssi falls to 14 divergences and passes, for 28% more time.
-    # Measured 2026-09-21, not assumed. A gamma prior was tried as an alternative and is worse:
-    # its lower tail goes as `k**shape`, heavier in log space than the log-normal's, so it puts
-    # *more* mass where the trouble is.
-    #
-    # This is a sampling cost of the wide prior, not a finding in itself -- the finding is that
-    # the onset-anchored `k` posteriors track the prior. Worth one sentence wherever this
-    # analysis is eventually written up.
-    sampler: {draws: 2000, tune: 2000, chains: 4, target_accept: 0.99, seed: 20260918}
+    sampler: {draws: 2000, tune: 2000, chains: 4, target_accept: 0.99, seed: 20260808}
 
   # Exploratory, and deliberately out of IMPLEMENTED_ANALYSES: no report figure, no report
   # number. Every measurement of the naive-versus-onset-anchored difference elsewhere is made

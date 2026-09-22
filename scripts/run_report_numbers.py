@@ -319,16 +319,29 @@ def add_priors(numbers: NumberFile, config: dict[str, Any], analyses: list[str])
     numbers.set("priors.R.quantilelower", fixed(float(R_prior.frozen().ppf(0.025)), 1))
     numbers.set("priors.R.quantileupper", fixed(float(R_prior.frozen().ppf(0.975)), 1))
 
-    k_blocks = [
-        config["analyses"][analysis]["k_prior"]
+    # One `k` prior for the whole report, so every analysis that estimates `k` must use the same
+    # one. The report states it once, and two analyses quietly disagreeing would leave one of
+    # them described by numbers that are not its own. Analyses whose models have no `k` at all
+    # give no `k_prior` and are not asked for one.
+    k_blocks = {
+        analysis: config["analyses"][analysis]["k_prior"]
         for analysis in analyses
-        if config["analyses"][analysis].get("fixed_k") is None
-    ]
-    if k_blocks:
-        k_prior = LogNormalPrior.from_config(k_blocks[0])
-        numbers.set("priors.k.median", fixed(k_prior.median, 2))
-        numbers.set("priors.k.quantilelower", fixed(float(k_prior.frozen().ppf(0.025)), 2))
-        numbers.set("priors.k.quantileupper", fixed(float(k_prior.frozen().ppf(0.975)), 2))
+        if config["analyses"][analysis].get("k_prior") is not None
+    }
+    k_priors = {analysis: LogNormalPrior.from_config(block) for analysis, block in k_blocks.items()}
+    if len(set(k_priors.values())) > 1:
+        listed = "; ".join(f"{analysis}: {prior}" for analysis, prior in k_priors.items())
+        raise ValueError(
+            "the analyses that estimate k do not share one prior, but the report states it once "
+            f"as `priors.k.*`: {listed}"
+        )
+    if k_priors:
+        k_prior = next(iter(k_priors.values()))
+        # Trimmed to three decimals rather than fixed at two: the interval runs a decade either
+        # side of 0.18, and two decimals would print its lower end, 0.018, as 0.02.
+        numbers.set("priors.k.median", trimmed(k_prior.median, 3))
+        numbers.set("priors.k.quantilelower", trimmed(float(k_prior.frozen().ppf(0.025)), 3))
+        numbers.set("priors.k.quantileupper", trimmed(float(k_prior.frozen().ppf(0.975)), 3))
 
 
 def add_sampler(

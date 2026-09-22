@@ -66,7 +66,7 @@ class LogNormalPrior:
     Construct with :meth:`from_median_and_quantile` (or :meth:`from_config`) rather than
     directly: the project specifies priors by a median and a tail quantile, e.g. ``R_pre``
     with median 1 and 2.5th percentile 0.2, and ``k`` with median 0.18 and 95% interval
-    ``(0.09, 0.36)``.
+    ``(0.018, 1.8)``.
     """
 
     median: float

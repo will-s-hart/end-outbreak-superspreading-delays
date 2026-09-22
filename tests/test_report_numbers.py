@@ -382,3 +382,39 @@ def test_a_parameter_missing_for_no_recorded_reason_stops_the_build():
             parameterless_posterior(fixed_k=0.18),
             "prefix",
         )
+
+
+def k_prior_config(**analyses) -> dict:
+    """The real shared priors, with analyses that each give a `k_prior`, a `fixed_k` or neither."""
+    from end_of_outbreak import configuration
+
+    return {
+        "shared": configuration.load_config()["shared"],
+        "analyses": analyses,
+    }
+
+
+WIDE_K_PRIOR = {"distribution": "lognormal", "median": 0.18, "quantile_025": 0.018}
+
+
+def test_the_k_prior_is_quoted_once_and_to_the_precision_its_width_needs():
+    """0.018 at two decimals would print as 0.02: a decade below the median, rounded away."""
+    numbers = report_numbers.NumberFile()
+    config = k_prior_config(
+        estimated={"k_prior": WIDE_K_PRIOR},
+        fixed={"fixed_k": 0.18},
+        poisson={},
+    )
+    report_numbers.add_priors(numbers, config, ["estimated", "fixed", "poisson"])
+    rendered = numbers.render(sources=[])
+    assert "\\defresultnum{priors.k.median}{0.18}" in rendered
+    assert "\\defresultnum{priors.k.quantilelower}{0.018}" in rendered
+    assert "\\defresultnum{priors.k.quantileupper}{1.8}" in rendered
+
+
+def test_two_analyses_estimating_k_under_different_priors_stop_the_build():
+    """The report states the `k` prior once, so it cannot quietly describe one of two."""
+    narrow = {"distribution": "lognormal", "median": 0.18, "quantile_025": 0.09}
+    config = k_prior_config(first={"k_prior": WIDE_K_PRIOR}, second={"k_prior": narrow})
+    with pytest.raises(ValueError, match="do not share one prior"):
+        report_numbers.add_priors(report_numbers.NumberFile(), config, ["first", "second"])

@@ -102,11 +102,6 @@ pipeline-no-switch-dry = "snakemake --profile config/snakemake_profile -n no_swi
 # The allowlist plays the same role as `pipeline-present`'s: pulled curves are immutable
 # inputs, and local provenance would otherwise call them stale and refit them.
 pipeline-no-switch-present = "snakemake --profile config/snakemake_profile -j4 no_switch --allowed-rules no_switch no_switch_results no_switch_figure"
-# The vague-`k` repeat of Analysis 4, likewise outside `rule all`. Its cluster half is
-# `uninformative_k_results`, which carries evidence and the `k` summary as well as the curves.
-pipeline-uninformative-k = "snakemake --profile config/snakemake_profile -j4 uninformative_k"
-pipeline-uninformative-k-dry = "snakemake --profile config/snakemake_profile -n uninformative_k"
-pipeline-uninformative-k-present = "snakemake --profile config/snakemake_profile -j4 uninformative_k --allowed-rules uninformative_k uninformative_k_results uninformative_k_figure"
 # The anchoring comparison with superspreading removed (`cori` vs `cori_so`), likewise outside
 # `rule all`. Its cluster half is `no_superspreading_results`, which carries the evidence as
 # well as the curves -- though at 220 fits with no latent block it is also a laptop job.

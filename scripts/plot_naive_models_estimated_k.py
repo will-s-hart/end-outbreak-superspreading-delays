@@ -115,6 +115,9 @@ def build_figure(
         letter="C",
         labels=figure_panels.credible_interval_labels(dispersion["posterior"]),
         legend=True,
+        # Log, as in the onset figure: the shared prior is a decade wide on each side of its
+        # median, and on a linear axis the posteriors near zero are spikes at the edge.
+        log_scale=True,
     )
     figure_panels.model_probability_panel(
         figure.add_subplot(bottom[0]), evidence, models, letter="D"
