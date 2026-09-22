@@ -50,13 +50,15 @@ MODEL_COLOURS: dict[str, str] = {
     "sse_so": "#CC79A7",
     "ssi_so": "#E69F00",
     # The Poisson limits are greys, so that on the one figure comparing them with SSI and
-    # SSI-SO grey reads as "no superspreading": dark for the naive one, mid for the
-    # onset-anchored one. Chosen with the colour-vision check run over the four together --
-    # both greys stay separable from the green and the orange under deuteranopia and protanopia,
-    # and the worst pair of the four is still the green/orange one the palette already had. A
-    # lighter mid grey sat on SSI's green under deuteranopia.
-    "cori": "#2E2E2E",
-    "cori_so": "#5E5E5E",
+    # SSI-SO grey reads as "no superspreading": near-black for the naive one, light for the
+    # onset-anchored one, as far apart in lightness as the other two colours allow. Neither may
+    # sit near SSI's green in lightness, since under deuteranopia a grey there is the green:
+    # a mid grey (#8C8C8C) failed the colour-vision check for exactly that reason, and a dark
+    # pair (#2E2E2E/#5E5E5E) passed it but was too close to tell apart on the page. This pair
+    # clears the check against both colours; the light grey is below 3:1 against white, as the
+    # orange already was, which the legend and the settling markers answer.
+    "cori": "#262626",
+    "cori_so": "#ABABAB",
 }
 """One colour per model, fixed across every figure in the report: Okabe–Ito for the compared
 models, greys for the Poisson limits."""
