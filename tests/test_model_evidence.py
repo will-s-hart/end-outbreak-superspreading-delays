@@ -326,3 +326,47 @@ def test_the_key_order_is_preserved():
 def test_a_failed_estimate_is_not_silently_compared():
     with pytest.raises(ValueError, match="not be nan"):
         me.posterior_model_probabilities({"a": -1.0, "b": float("nan")})
+
+
+# ---------------------------------------------------------------------------------------
+# A model with nothing to integrate
+# ---------------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("estimator", me.ESTIMATORS)
+def test_a_model_with_no_free_variables_has_the_likelihood_as_its_exact_evidence(estimator):
+    """SSE with ``R`` and ``k`` both fixed: a point-mass posterior, so ``p(D) = p(D | θ)``.
+
+    Checked against the negative-binomial likelihood written out from the renewal sums, not
+    against the model's own compiled density, which is what the function returns.
+    """
+    import scipy.stats
+
+    from end_of_outbreak import renewal
+
+    R_pre, R_post = 0.9, 0.5
+    evidence = me.log_evidence(
+        "sse",
+        None,
+        COUNTS,
+        delays=SHORT_DELAYS,
+        switch_day=SWITCH_DAY,
+        R_pre=R_pre,
+        R_post=R_post,
+        k=FIXED_K,
+        estimator=estimator,
+    )
+    Lambda = renewal.delay_weighted_sum(
+        COUNTS.astype(np.float64), SHORT_DELAYS.serial_interval, first_lag=1
+    )
+    days = renewal.likelihood_days(Lambda, COUNTS)
+    R = renewal.reproduction_number_by_day(
+        R_pre, R_post, n_days=COUNTS.size, switch_day=SWITCH_DAY
+    )[days]
+    size = FIXED_K * Lambda[days]
+    expected = scipy.stats.nbinom.logpmf(COUNTS[days], size, FIXED_K / (FIXED_K + R)).sum()
+
+    assert evidence.estimator == me.EXACT
+    assert evidence.log_evidence == pytest.approx(float(expected), rel=1e-12)
+    assert evidence.standard_error == 0.0
+    assert evidence.n_draws == 0

@@ -155,14 +155,41 @@ SCHEMATIC_FIGURE_CORE = ["scripts/utils.py"]
 ANALYSES = config["analyses"]
 ONSETS_CSV = config["shared"]["data_file"]
 
-# Analyses whose run and plot scripts exist. Keep this explicit rather than deriving it from
-# the config: a configured future analysis must not become a target before its scripts land.
-IMPLEMENTED_ANALYSES = [
+# The four analyses the main text is built on: the naive models, then the naive and
+# onset-anchored models together, each at a transplanted and at an estimated `k`. Their figures,
+# numbers and convergence summaries are "the core" wherever the report says so.
+CORE_ANALYSES = [
     "naive_models_fixed_k",
     "naive_models_estimated_k",
     "onset_models_fixed_k",
     "onset_models_estimated_k",
 ]
+
+# Variants that each remove one ingredient of Analysis 3 to see what it was contributing. Each
+# has a supplementary figure of its own, drawn by its own rule because its inputs differ from
+# `rule figure`'s, and each takes evidence -- but no dispersion summary, since none estimates `k`.
+#
+# The no-switchpoint variants ask how much of the naive/onset gap is the switchpoint, by removing
+# it. Under `no_switch_fixed_R` nothing is estimated but the latents, and SSE has no free
+# variable at all; `model_evidence.log_evidence` returns that model's evidence exactly.
+NO_SWITCH_ANALYSES = [
+    "no_switch_fixed_R",
+    "no_switch_single_R",
+]
+# The naive/onset comparison with superspreading removed: `cori` against `cori_so`, the
+# k -> infinity Poisson limits of the two mechanisms. Every other measurement of the anchoring
+# difference is made in models that also carry superspreading, so this asks whether the
+# difference survives without it. Its figure sets the two beside Analysis 3's SSI and SSI-SO,
+# and so does its evidence, through `rule combined_evidence`.
+NO_SUPERSPREADING_ANALYSES = [
+    "onset_models_no_superspreading",
+]
+VARIANT_ANALYSES = NO_SWITCH_ANALYSES + NO_SUPERSPREADING_ANALYSES
+
+# Analyses whose run and plot scripts exist, and so the ones the figure, evidence and report
+# targets are built from. Keep this explicit rather than deriving it from the config: a
+# configured future analysis must not become a target before its scripts land.
+IMPLEMENTED_ANALYSES = CORE_ANALYSES + VARIANT_ANALYSES
 
 # The reporting sweeps are analyses for `rule fit` and `rule rac`, but not for the tiers above:
 # they have no comparison figure of their own (they share one), no model evidence and no
@@ -173,38 +200,6 @@ RAC_ONLY_ANALYSES = [
     "underreporting_80",
 ]
 SAMPLED_ANALYSES = IMPLEMENTED_ANALYSES + RAC_ONLY_ANALYSES
-
-# Analyses wired into the workflow but not into the report: each family has its own figure rule
-# and its own pair of aggregate targets, and feeds no report figure and no report number, so all
-# of them stay out of both lists above. Nothing builds them unless you name the target.
-# `wildcard_constraints` is built from `ANALYSES`, so the generic rules already reach them.
-# Promoting one to a report analysis means adding it to `IMPLEMENTED_ANALYSES` and giving it a
-# `plot_script`; until then `rule all` cannot see it.
-#
-# The no-switchpoint variants ask how much of the naive/onset gap is the switchpoint, by removing
-# it. They take `rule fit` and `rule rac` only -- `no_switch_fixed_R` fixes every parameter, so
-# there is no evidence to integrate:
-#
-#     pixi run pipeline-no-switch                 # everything, locally
-#     hpc run no_switch_results                   # the 8 fits and 8 curves, on the cluster
-#     pixi run pipeline-no-switch-present         # the figures, from pulled curves
-NO_SWITCH_ANALYSES = [
-    "no_switch_fixed_R",
-    "no_switch_single_R",
-]
-# The naive/onset comparison with superspreading removed: `cori` against `cori_so`, the
-# k -> infinity Poisson limits of the two mechanisms. Every other measurement of the anchoring
-# difference is made in models that also carry superspreading, so this asks whether the
-# difference survives without it. It takes evidence -- the two models share the R priors, and
-# with two free scalars and no latent block it is the cheapest evidence in the project -- but
-# no dispersion summary, because these models have no k at all:
-#
-#     pixi run pipeline-no-superspreading           # everything, locally (~220 fits)
-#     hpc run no_superspreading_results             # the 2 fits, 2 curves and the evidence
-#     pixi run pipeline-no-superspreading-present   # the figure, from pulled results
-NO_SUPERSPREADING_ANALYSES = [
-    "onset_models_no_superspreading",
-]
 
 
 # Everything a rule's result depends on must appear in its `params:`. Note what that is and is
@@ -314,7 +309,7 @@ def racs_of(wildcards):
 # One comparison figure per implemented analysis. Grows with `IMPLEMENTED_ANALYSES`. The report
 # carries some of them in its supplement rather than its main text; they are built identically,
 # and differ only in which of the two target lists below takes them.
-SUPPLEMENTARY_ANALYSES = ["onset_models_estimated_k"]
+SUPPLEMENTARY_ANALYSES = ["onset_models_estimated_k", *VARIANT_ANALYSES]
 ANALYSIS_FIGURE_TARGETS = {
     analysis: [f"figures/{analysis}/{analysis}.{extension}" for extension in ("pdf", "png")]
     for analysis in IMPLEMENTED_ANALYSES
@@ -524,13 +519,15 @@ rule report_numbers:
     output:
         REPORT_NUMBERS,
     params:
-        analyses=IMPLEMENTED_ANALYSES,
+        analyses=CORE_ANALYSES,
+        variants=VARIANT_ANALYSES,
         rac_only=RAC_ONLY_ANALYSES,
         per_analysis={analysis: analysis_params(analysis) for analysis in SAMPLED_ANALYSES},
         shared=SHARED_PARAMS,
     shell:
         "python scripts/run_report_numbers.py"
         " --analyses {params.analyses}"
+        " --variant-analyses {params.variants}"
         " --rac-only-analyses {params.rac_only}"
         " --data {input.data}"
         " --config {input.config}"
@@ -616,9 +613,10 @@ rule sustained_transmission_figure:
 
 # `figures/{analysis}/{analysis}.{pdf,png}` is also `rule figure`'s output pattern, so the two
 # would be ambiguous for these two analyses. The constraint below keeps this rule to them and
-# the `ruleorder` settles which one Snakemake reaches for. This rule exists at all because the
-# variants take no `model_evidence.json`: `no_switch_fixed_R` fixes every parameter, leaving
-# nothing to integrate over, so neither figure draws a posterior-model-probability panel.
+# the `ruleorder` settles which one Snakemake reaches for. This rule exists because the two
+# figures differ from `rule figure`'s and from each other: neither estimates `k`, so there is no
+# dispersion summary, and `no_switch_fixed_R` estimates no parameter at all, so it draws the
+# model probabilities and the curves and nothing else.
 ruleorder: no_switch_figure > figure
 
 
@@ -631,6 +629,7 @@ rule no_switch_figure:
         posteriors=lambda wildcards: (
             posteriors_of(wildcards) if wildcards.analysis == "no_switch_single_R" else []
         ),
+        evidence="results/{analysis}/model_evidence.json",
         data=ONSETS_CSV,
         config=CONFIG_FILE,
         script="scripts/plot_no_switch.py",
@@ -793,29 +792,6 @@ rule results:
         REPORT_NUMBERS,
 
 
-# The analyses outside the report, split the way `results` and `figures` are split: everything
-# expensive is in each family's first target, so the cluster builds that and the figures are drawn
-# locally in seconds. Deliberately not reachable from `rule all` or `rule figures` -- these
-# analyses answer questions about the models that the report does not yet ask.
-rule no_switch_results:
-    input:
-        [
-            f"results/{analysis}/{model}_rac.csv"
-            for analysis in NO_SWITCH_ANALYSES
-            for model in models_of(analysis)
-        ],
-
-
-rule no_switch:
-    input:
-        rules.no_switch_results.input,
-        [
-            f"figures/{analysis}/{analysis}.{extension}"
-            for analysis in NO_SWITCH_ANALYSES
-            for extension in ("pdf", "png")
-        ],
-
-
 # The reporting sweeps, as a target of their own. `results` covers them, but naming them alone
 # is what lets a cluster run rebuild just these -- a config edit marks every fit stale under the
 # content-based `input` trigger, so an untargeted rerun would redo the analyses it did not touch.
@@ -826,30 +802,6 @@ rule underreporting_results:
             f"results/{analysis}/{model}_rac.csv"
             for analysis in RAC_ONLY_ANALYSES
             for model in models_of(analysis)
-        ],
-
-
-# Superspreading removed: the anchoring comparison at the k -> infinity Poisson limits. Split
-# like the families above -- the fits and curves are the expensive half, the figure is seconds.
-# Evidence rides with the curves. No
-# `dispersion_posteriors.json`: there is no `k` to summarise.
-rule no_superspreading_results:
-    input:
-        [
-            f"results/{analysis}/{model}_rac.csv"
-            for analysis in NO_SUPERSPREADING_ANALYSES
-            for model in models_of(analysis)
-        ],
-        [f"results/{analysis}/model_evidence.json" for analysis in NO_SUPERSPREADING_ANALYSES],
-
-
-rule no_superspreading:
-    input:
-        rules.no_superspreading_results.input,
-        [
-            f"figures/{analysis}/{analysis}.{extension}"
-            for analysis in NO_SUPERSPREADING_ANALYSES
-            for extension in ("pdf", "png")
         ],
 
 

@@ -92,22 +92,8 @@ pipeline-dry = "snakemake --profile config/snakemake_profile -n"
 # After pulling the cluster's completed `results` target, render presentation artefacts only.
 # The allowlist is load-bearing: compute rules do not enter the DAG even if local provenance
 # says their existing outputs are stale.
-pipeline-present = "snakemake --profile config/snakemake_profile -j4 figures report/report.pdf --allowed-rules figures schematic_figure delay_figure figure sustained_transmission_figure underreporting_figure report"
-pipeline-present-dry = "snakemake --profile config/snakemake_profile -n figures report/report.pdf --allowed-rules figures schematic_figure delay_figure figure sustained_transmission_figure underreporting_figure report"
-# The exploratory no-switchpoint variants. A separate task because they are not in `rule all`:
-# nothing builds them unless they are named.
-pipeline-no-switch = "snakemake --profile config/snakemake_profile -j4 no_switch"
-pipeline-no-switch-dry = "snakemake --profile config/snakemake_profile -n no_switch"
-# After pulling a cluster run of `no_switch_results`, draw the two figures and nothing else.
-# The allowlist plays the same role as `pipeline-present`'s: pulled curves are immutable
-# inputs, and local provenance would otherwise call them stale and refit them.
-pipeline-no-switch-present = "snakemake --profile config/snakemake_profile -j4 no_switch --allowed-rules no_switch no_switch_results no_switch_figure"
-# The anchoring comparison with superspreading removed (`cori` vs `cori_so`), likewise outside
-# `rule all`. Its cluster half is `no_superspreading_results`, which carries the evidence as
-# well as the curves -- though at 220 fits with no latent block it is also a laptop job.
-pipeline-no-superspreading = "snakemake --profile config/snakemake_profile -j4 no_superspreading"
-pipeline-no-superspreading-dry = "snakemake --profile config/snakemake_profile -n no_superspreading"
-pipeline-no-superspreading-present = "snakemake --profile config/snakemake_profile -j4 no_superspreading --allowed-rules no_superspreading no_superspreading_results no_superspreading_figure"
+pipeline-present = "snakemake --profile config/snakemake_profile -j4 figures report/report.pdf --allowed-rules figures schematic_figure delay_figure figure no_switch_figure no_superspreading_figure sustained_transmission_figure underreporting_figure report"
+pipeline-present-dry = "snakemake --profile config/snakemake_profile -n figures report/report.pdf --allowed-rules figures schematic_figure delay_figure figure no_switch_figure no_superspreading_figure sustained_transmission_figure underreporting_figure report"
 
 # ---------------------------------------------------------------------------
 # ruff

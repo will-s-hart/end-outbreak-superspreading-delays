@@ -96,6 +96,10 @@ IMPORTANCE_SAMPLING = "importance_sampling"
 ESTIMATORS: tuple[str, ...] = (BRIDGE_SAMPLING, PRIOR_MONTE_CARLO, IMPORTANCE_SAMPLING)
 """The estimators :func:`log_evidence` offers, the default first."""
 
+EXACT = "exact"
+"""What :func:`log_evidence` reports for a model with no free variables, whichever estimator
+was asked for: there is nothing to integrate, so the evidence is the likelihood itself."""
+
 _BRIDGE_TOLERANCE = 1e-10
 """Convergence threshold on ``|log r_{t+1} − log r_t|`` for the bridge recursion, in nats."""
 
@@ -121,7 +125,7 @@ class LogEvidence:
     """Specification name, e.g. ``"ssi"``."""
 
     estimator: str
-    """One of :data:`ESTIMATORS`."""
+    """One of :data:`ESTIMATORS`, or :data:`EXACT` where there was nothing to integrate."""
 
     log_evidence: float
     standard_error: float
@@ -783,6 +787,12 @@ def log_evidence(
     Returns
     -------
     :class:`LogEvidence`
+
+    A model with **no free variables** — every parameter fixed and no latent block, as SSE is
+    in ``no_switch_fixed_R`` — is not an estimation problem at all. Its posterior is a point
+    mass, its evidence is the likelihood at that point, and it is returned exactly, with a
+    standard error of zero and :data:`EXACT` as the estimator, whichever one was asked for.
+    The Monte-Carlo estimators would have nothing to draw.
     """
     if estimator not in ESTIMATORS:
         known = ", ".join(ESTIMATORS)
@@ -799,6 +809,14 @@ def log_evidence(
         latent_parameterisation=latent_parameterisation,
         negligible_latent_threshold=negligible_latent_threshold,
     )
+    if not built.value_vars:
+        return LogEvidence(
+            model=specification.name,
+            estimator=EXACT,
+            log_evidence=float(built.compile_logp(jacobian=False)({})),
+            standard_error=0.0,
+            n_draws=0,
+        )
     target = UnconstrainedTarget(built)
     generator = np.random.default_rng() if rng is None else rng
     posterior = idata.posterior

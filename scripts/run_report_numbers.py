@@ -446,7 +446,13 @@ def add_parameters(numbers: NumberFile, posterior: xr.DataTree, prefix: str) -> 
         "R_post": fitted_R_post,
         DISPERSION: fitting.fitted_dispersion(posterior),
     }
-    for name in (*REPRODUCTION_NUMBERS, DISPERSION):
+    # The Poisson limits have no `k` to be fixed or estimated, so its absence from their draws
+    # is the model rather than a broken input. The fit records which model it is.
+    model = posterior.attrs.get(fitting.MODEL_ATTRIBUTE)
+    names = [*REPRODUCTION_NUMBERS]
+    if model is None or specification_of(str(model)).has_dispersion:
+        names.append(DISPERSION)
+    for name in names:
         if name not in posterior.posterior.data_vars:
             # A parameter the analysis fixed is a constant in the graph and so is nowhere in
             # the draws; `add_sampler` has already written the value it was held at. Any other
@@ -688,6 +694,18 @@ def add_diagnostics(numbers: NumberFile, diagnostics: Diagnostics, prefix: str) 
 # --- the cross-analysis subtractions -----------------------------------------------------
 
 
+ONSET_PAIRS: tuple[tuple[str, str], ...] = (
+    ("sse_so", "sse"),
+    ("ssi_so", "ssi"),
+    ("cori_so", "cori"),
+)
+"""Each onset-anchored model with the naive model of the same mechanism.
+
+The Poisson pair is here for the analysis that removes superspreading: the same subtraction,
+with no dispersion mechanism for the anchoring to interact with.
+"""
+
+
 def add_onset_shifts(numbers: NumberFile, analysis: str, curves: dict[str, pd.DataFrame]) -> None:
     """How far onset anchoring moves each threshold crossing, in days.
 
@@ -696,7 +714,7 @@ def add_onset_shifts(numbers: NumberFile, analysis: str, curves: dict[str, pd.Da
     comparison in the analysis that holds the mechanism fixed and varies the anchoring.
     """
     prefix = slug(analysis)
-    for onset_model, naive_model in (("sse_so", "sse"), ("ssi_so", "ssi")):
+    for onset_model, naive_model in ONSET_PAIRS:
         if onset_model not in curves or naive_model not in curves:
             continue
         key = f"{prefix}.{slug(onset_model)}-vs-{slug(naive_model)}"
@@ -769,15 +787,23 @@ def collect(
     config: dict[str, Any],
     data_path: Path,
     results_root: Path,
+    variant_analyses: list[str] | None = None,
     rac_only_analyses: list[str] | None = None,
 ) -> tuple[NumberFile, list[str]]:
     """Every macro the report can use, and the files they came from.
+
+    ``analyses`` are the core four, whose convergence the report summarises as "the core".
+    ``variant_analyses`` are collected in exactly the same way — evidence included, dispersion
+    wherever `k` is estimated — but their convergence is summarised separately, so that a claim
+    about the four main analyses cannot quietly absorb the supplementary ones.
 
     ``rac_only_analyses`` are analyses that produce risk curves but none of the tier-2
     summaries — the under-reporting sweeps have no model evidence and no dispersion posterior,
     because they compare a model with itself under a different assumption. They contribute
     their crossings and their convergence, and are asked for nothing else.
     """
+    variants = list(variant_analyses or [])
+    rac_only_list = list(rac_only_analyses or [])
     numbers = NumberFile()
     data = outbreak_data.load_onset_data(data_path)
     delays = configuration.onset_anchored_delays_from_config(config)
@@ -786,13 +812,13 @@ def collect(
     add_setting(numbers, data)
     add_convergence_settings(numbers, config)
     add_delays(numbers, config)
-    add_priors(numbers, config, analyses)
-    core_overall: Diagnostics | None = None
-    reporting_overall: Diagnostics | None = None
+    add_priors(numbers, config, [*analyses, *variants])
+    buckets: dict[str, Diagnostics] = {}
     overall: Diagnostics | None = None
 
-    for analysis in [*analyses, *(rac_only_analyses or [])]:
-        rac_only = analysis in (rac_only_analyses or [])
+    for analysis in [*analyses, *variants, *rac_only_list]:
+        rac_only = analysis in rac_only_list
+        bucket = "reporting" if rac_only else "variants" if analysis in variants else "core"
         block = configuration.analysis_config(config, analysis)
         models = list(block["models"])
         directory = results_root / analysis
@@ -815,21 +841,16 @@ def collect(
         )
         add_diagnostics(numbers, diagnostics, slug(analysis))
         overall = diagnostics if overall is None else overall.merged_with(diagnostics)
-        if rac_only:
-            reporting_overall = (
-                diagnostics
-                if reporting_overall is None
-                else reporting_overall.merged_with(diagnostics)
-            )
-        else:
-            core_overall = (
-                diagnostics if core_overall is None else core_overall.merged_with(diagnostics)
-            )
+        buckets[bucket] = (
+            diagnostics if bucket not in buckets else buckets[bucket].merged_with(diagnostics)
+        )
         add_onset_shifts(numbers, analysis, curves)
 
         if not rac_only:
             add_evidence(numbers, read_json(directory / "model_evidence.json"), analysis)
-            if block.get("fixed_k") is None:
+            # The same test as the Snakefile's `estimates_dispersion`: no `fixed_k` alone is also
+            # true of the Poisson limits, which have no `k` and so no summary of one.
+            if block.get("fixed_k") is None and block.get("k_prior") is not None:
                 add_dispersion(
                     numbers,
                     read_json(directory / "dispersion_posteriors.json"),
@@ -842,12 +863,10 @@ def collect(
             )
         )
 
-    if core_overall is not None:
-        add_diagnostics(numbers, core_overall, "core")
-    if reporting_overall is not None:
-        add_diagnostics(numbers, reporting_overall, "reporting")
-    # Keep an explicitly all-analysis summary as well: the core and reporting claims should not
-    # accidentally borrow it, but a genuine study-wide statement can.
+    for bucket, diagnostics in buckets.items():
+        add_diagnostics(numbers, diagnostics, bucket)
+    # Keep an explicitly all-analysis summary as well: the core, variant and reporting claims
+    # should not accidentally borrow it, but a genuine study-wide statement can.
     if overall is not None:
         add_diagnostics(numbers, overall, "overall")
     add_evidence_gains(numbers, results_root, analyses, config)
@@ -873,6 +892,7 @@ def main(argv: list[str] | None = None) -> None:
     args = parse_arguments(argv)
     numbers, sources = collect(
         analyses=args.analyses,
+        variant_analyses=args.variant_analyses,
         rac_only_analyses=args.rac_only_analyses,
         config=configuration.load_config(args.config),
         data_path=args.data,
@@ -892,7 +912,13 @@ def parse_arguments(argv: list[str] | None = None) -> argparse.Namespace:
         "--analyses",
         nargs="+",
         required=True,
-        help="the analyses to collect, in report order; the Snakefile passes IMPLEMENTED_ANALYSES",
+        help="the core analyses, in report order; the Snakefile passes CORE_ANALYSES",
+    )
+    parser.add_argument(
+        "--variant-analyses",
+        nargs="*",
+        default=[],
+        help="the supplementary variants, collected alike but summarised apart",
     )
     parser.add_argument(
         "--rac-only-analyses",
