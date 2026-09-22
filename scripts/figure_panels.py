@@ -63,7 +63,6 @@ def parameter_posterior_panel(
     title: str,
     letter: str | None = None,
     labels: dict[str, str] | None = None,
-    colours: dict[str, str] | None = None,
     legend: bool = False,
     log_scale: bool = False,
 ) -> None:
@@ -74,13 +73,11 @@ def parameter_posterior_panel(
     prior — most of all for ``k``, where the prior is deliberately fairly informative and the
     question is whether the data move each model away from it in different directions.
 
-    ``colours`` overrides the palette for this figure only; see :func:`utils.model_colour`.
-
     ``log_scale`` is for a parameter whose posteriors span decades; see
     :func:`utils.plot_parameter_posteriors`.
     """
     utils.plot_parameter_posteriors(
-        ax, draws, prior=prior, xlabel=xlabel, labels=labels, colours=colours, log_scale=log_scale
+        ax, draws, prior=prior, xlabel=xlabel, labels=labels, log_scale=log_scale
     )
     ax.set_title(title)
     if letter is not None:
@@ -95,16 +92,11 @@ def model_probability_panel(
     models: list[str],
     *,
     letter: str,
-    colours: dict[str, str] | None = None,
 ) -> None:
-    """The posterior model probabilities, straight from the evidence file.
-
-    ``colours`` overrides the palette for this figure only; see :func:`utils.model_colour`.
-    """
+    """The posterior model probabilities, straight from the evidence file."""
     utils.plot_model_probability_pie(
         ax,
         {model: float(evidence["posterior_model_probability"][model]) for model in models},
-        colours=colours,
     )
     ax.set_title("Posterior model probability")
     utils.panel_label(ax, letter)
@@ -118,7 +110,6 @@ def risk_curve_panel(
     letter: str | None = None,
     first_day: int | None = None,
     linestyles: dict[str, str] | None = None,
-    colours: dict[str, str] | None = None,
 ) -> None:
     """RAC over the conditioning days, with the onset series behind it.
 
@@ -144,14 +135,12 @@ def risk_curve_panel(
     to draw. Colour alone then cannot separate them. Every model is solid by default, so the
     analysis figures are unaffected. ``letter`` may be ``None`` where the figure is one panel
     and a label would be noise.
-
-    ``colours`` overrides the palette for this figure only; see :func:`utils.model_colour`.
     """
     resolved_linestyles = linestyles or {}
     utils.plot_incidence(ax, data.dates, data.onsets)
     utils.mark_thresholds(ax)
     for model, frame in curves.items():
-        colour = utils.model_colour(model, colours)
+        colour = utils.model_colour(model)
         ax.plot(
             frame["date"],
             frame[utils.RISK_COLUMN],

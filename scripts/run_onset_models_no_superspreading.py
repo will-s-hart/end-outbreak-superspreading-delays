@@ -1,4 +1,4 @@
-"""Exploratory: the anchoring comparison with superspreading removed.
+"""Supplementary: the anchoring comparison with superspreading removed.
 
 ``cori`` against ``cori_so`` — the ``k → ∞`` Poisson limits of the two mechanisms. Every
 existing measurement of the naive-versus-onset-anchored difference is made in models that also
@@ -10,7 +10,9 @@ analysis block gives neither ``fixed_k`` nor ``k_prior`` and ``AnalysisSetting.d
 returns ``None`` for it. ``evidence`` still applies — the two share the ``R`` priors, so the
 Bayes factor is well defined — but ``dispersion`` does not, and no rule asks for it.
 
-Exploratory: no report figure and no report number depend on this.
+Its figure, in the report's supplement, sets the two beside Analysis 3's SSI and SSI-SO, which
+are reused from that analysis rather than refitted here (``compared_with`` in the config), with
+the model probabilities normalised over all four by ``run_combined_evidence.py``.
 """
 
 from __future__ import annotations

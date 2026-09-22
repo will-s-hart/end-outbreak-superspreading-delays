@@ -81,6 +81,9 @@ from below and nothing more — so a lone unsettled curve is written as a bound 
 curves bound nothing about the difference between them, and saying so is the only honest value.
 """
 
+COMBINED_EVIDENCE_FILE = "combined_model_evidence.json"
+"""Probabilities over an analysis's models and those it borrows; ``run_combined_evidence.py``."""
+
 REFERENCE_DAY = 90
 """One mid-descent day the report compares every model on.
 
@@ -713,24 +716,70 @@ def add_onset_shifts(numbers: NumberFile, analysis: str, curves: dict[str, pd.Da
     onset-anchored model with the naive model of the same mechanism, which is the only
     comparison in the analysis that holds the mechanism fixed and varies the anchoring.
     """
-    prefix = slug(analysis)
-    for onset_model, naive_model in ONSET_PAIRS:
-        if onset_model not in curves or naive_model not in curves:
+    add_crossing_shifts(numbers, slug(analysis), ONSET_PAIRS, curves)
+
+
+SUPERSPREADING_PAIRS: tuple[tuple[str, str], ...] = (("ssi", "cori"), ("ssi_so", "cori_so"))
+"""Each individual-level superspreading model with its Poisson limit, anchoring held fixed.
+
+The complement of :data:`ONSET_PAIRS`: there the mechanism is held and the anchoring varies,
+here the anchoring is held and superspreading is switched on.
+"""
+
+
+def add_crossing_shifts(
+    numbers: NumberFile,
+    prefix: str,
+    pairs: tuple[tuple[str, str], ...],
+    curves: dict[str, pd.DataFrame],
+) -> None:
+    """``<prefix>.<first>-vs-<second>.shiftNN``: how many days earlier ``first`` settles.
+
+    Pairs with a model missing from ``curves`` are skipped, since every analysis is offered
+    every pair and most hold only some of the models.
+    """
+    for first, second in pairs:
+        if first not in curves or second not in curves:
             continue
-        key = f"{prefix}.{slug(onset_model)}-vs-{slug(naive_model)}"
+        key = f"{prefix}.{slug(first)}-vs-{slug(second)}"
         for threshold in THRESHOLDS:
-            onset_day, naive_day = (
-                _crossing(curves[model], threshold) for model in (onset_model, naive_model)
+            first_day, second_day = (
+                _crossing(curves[model], threshold) for model in (first, second)
             )
-            name = f"{key}.shift{round(threshold * 100):02d}"
             numbers.set(
-                name,
+                f"{key}.shift{round(threshold * 100):02d}",
                 crossing_difference(
-                    naive_day,
-                    onset_day,
-                    last_day=_shared_last_day(curves[onset_model], curves[naive_model]),
+                    second_day,
+                    first_day,
+                    last_day=_shared_last_day(curves[first], curves[second]),
                 ),
             )
+
+
+def add_combined_evidence(
+    numbers: NumberFile,
+    combined: dict[str, Any],
+    analysis: str,
+    curves: dict[str, pd.DataFrame],
+) -> None:
+    """An analysis set beside models it borrows: probabilities over all of them, and the shifts.
+
+    Keyed under ``<analysis>.combined`` so that they cannot be mistaken for the probabilities
+    the analysis's own evidence file normalises over its own models alone. ``curves`` holds the
+    borrowed models' curves as well as the analysis's own, which is what lets superspreading's
+    shift be read off with the anchoring held fixed.
+    """
+    prefix = f"{slug(analysis)}.combined"
+    for model in combined["models"]:
+        key = f"{prefix}.{slug(model)}"
+        numbers.set(
+            f"{key}.logevidence", math_mode(fixed(float(combined["log_evidence"][model]), 1))
+        )
+        numbers.set(
+            f"{key}.probability",
+            small_probability(float(combined["posterior_model_probability"][model])),
+        )
+    add_crossing_shifts(numbers, prefix, SUPERSPREADING_PAIRS, curves)
 
 
 def _shared_last_day(*frames: pd.DataFrame) -> int:
@@ -856,6 +905,19 @@ def collect(
                     read_json(directory / "dispersion_posteriors.json"),
                     analysis,
                 )
+            borrowed = block.get("compared_with")
+            if borrowed is not None:
+                other = results_root / str(borrowed["analysis"])
+                add_combined_evidence(
+                    numbers,
+                    read_json(directory / COMBINED_EVIDENCE_FILE),
+                    analysis,
+                    curves
+                    | {
+                        model: read_risk_curve(other / f"{model}_rac.csv")
+                        for model in borrowed["models"]
+                    },
+                )
         sources.extend(
             sorted(
                 repository_path(path)
@@ -883,9 +945,9 @@ def _analysis_files(
     if rac_only:
         return
     yield directory / "model_evidence.json"
-    dispersion = directory / "dispersion_posteriors.json"
-    if dispersion.exists():
-        yield dispersion
+    for optional in ("dispersion_posteriors.json", COMBINED_EVIDENCE_FILE):
+        if (directory / optional).exists():
+            yield directory / optional
 
 
 def main(argv: list[str] | None = None) -> None:

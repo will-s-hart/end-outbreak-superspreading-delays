@@ -49,12 +49,17 @@ MODEL_COLOURS: dict[str, str] = {
     "ssi": "#009E73",
     "sse_so": "#CC79A7",
     "ssi_so": "#E69F00",
-    # cori and cori_so are validation targets rather than compared models; they get a neutral
-    # grey on the rare figure that shows the Poisson limit for reference.
-    "cori": "#7F7F7F",
-    "cori_so": "#BFBFBF",
+    # The Poisson limits are greys, so that on the one figure comparing them with SSI and
+    # SSI-SO grey reads as "no superspreading": dark for the naive one, mid for the
+    # onset-anchored one. Chosen with the colour-vision check run over the four together --
+    # both greys stay separable from the green and the orange under deuteranopia and protanopia,
+    # and the worst pair of the four is still the green/orange one the palette already had. A
+    # lighter mid grey sat on SSI's green under deuteranopia.
+    "cori": "#2E2E2E",
+    "cori_so": "#5E5E5E",
 }
-"""Okabe–Ito colours, one per model, fixed across every figure in the report."""
+"""One colour per model, fixed across every figure in the report: Okabe–Ito for the compared
+models, greys for the Poisson limits."""
 
 DECISION_THRESHOLDS: tuple[float, ...] = (0.05, 0.01)
 """The two RAC levels the end-of-outbreak literature declares on; drawn on every RAC panel."""
@@ -101,19 +106,8 @@ def model_label(model: str) -> str:
     return specification_of(model).label
 
 
-def model_colour(model: str, overrides: dict[str, str] | None = None) -> str:
-    """Fixed colour for a model, unless the calling figure overrides it.
-
-    :data:`MODEL_COLOURS` is the report's palette and stays as it is: a model keeps one colour
-    across every figure a reader might compare, which is the whole point of fixing them.
-    ``overrides`` is for a figure outside that set whose meaning the palette does not serve.
-    ``cori`` and ``cori_so`` are neutral greys there because in every report figure they would
-    be reference lines; in an exploratory analysis comparing *only* those two they carry the
-    result instead. Such a figure declares its own mapping locally rather than editing the
-    palette, and reuses colours already in it rather than inventing new ones.
-    """
-    if overrides is not None and model in overrides:
-        return overrides[model]
+def model_colour(model: str) -> str:
+    """Fixed colour for a model: one per model across every figure a reader might compare."""
     return MODEL_COLOURS[model]
 
 
@@ -265,7 +259,6 @@ def plot_parameter_posteriors(
     prior: LogNormalPrior | None = None,
     xlabel: str,
     labels: dict[str, str] | None = None,
-    colours: dict[str, str] | None = None,
     n_grid: int = 400,
     log_scale: bool = False,
 ) -> None:
@@ -279,8 +272,6 @@ def plot_parameter_posteriors(
     figure's ``k`` panel carries each posterior's median and credible interval. Those
     numbers come from the file the ``dispersion`` rule wrote; this module summarises
     nothing itself.
-
-    ``colours`` overrides a model's line colour; see :func:`model_colour`.
 
     ``log_scale`` puts the axis on a log scale, for a parameter whose posteriors span decades —
     ``k`` under a vague prior, where on a linear axis every posterior near zero is a spike at the
@@ -310,7 +301,7 @@ def plot_parameter_posteriors(
         ax.plot(
             grid,
             positive_density(samples, grid=grid) * jacobian,
-            color=model_colour(model, colours),
+            color=model_colour(model),
             label=(labels or {}).get(model, model_label(model)),
             zorder=2,
         )
@@ -330,21 +321,18 @@ def plot_model_probability_pie(
     probabilities: dict[str, float],
     *,
     minimum_label: float = 0.01,
-    colours: dict[str, str] | None = None,
 ) -> None:
     """Posterior model probabilities as a pie, with the small slices labelled honestly.
 
     A slice below ``minimum_label`` is invisible on a pie, so its value goes in the legend
     rather than being silently dropped — the whole point of the model-probability panel is
     that one model is overwhelmingly favoured, and the size of "overwhelmingly" is the result.
-
-    ``colours`` overrides a model's wedge colour; see :func:`model_colour`.
     """
     models = list(probabilities)
     values = [probabilities[model] for model in models]
     wedges = ax.pie(
         values,
-        colors=[model_colour(model, colours) for model in models],
+        colors=[model_colour(model) for model in models],
         radius=0.95,
         startangle=90,
         counterclock=False,

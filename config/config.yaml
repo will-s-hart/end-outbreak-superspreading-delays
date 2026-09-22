@@ -98,12 +98,19 @@ analyses:
     plot_script: scripts/plot_onset_models_estimated_k.py
     sampler: {draws: 2000, tune: 2000, chains: 4, target_accept: 0.99, seed: 20260808}
 
-  # Exploratory, and deliberately out of IMPLEMENTED_ANALYSES: no report figure, no report
-  # number. Every measurement of the naive-versus-onset-anchored difference elsewhere is made
-  # in models that also carry superspreading. This removes superspreading entirely — `cori` and
-  # `cori_so` are the k → ∞ Poisson limits of the two mechanisms — and asks whether the
-  # difference survives. What is left is one anchoring convention against the other, with
-  # nothing else varying.
+  # Supplementary: a variant of Analysis 3 with its own figure. Every measurement of the
+  # naive-versus-onset-anchored difference elsewhere is made in models that also carry
+  # superspreading. This removes superspreading entirely — `cori` and `cori_so` are the k → ∞
+  # Poisson limits of the two mechanisms — and asks whether the difference survives. What is
+  # left is one anchoring convention against the other, with nothing else varying.
+  #
+  # `compared_with` sets Analysis 3's SSI and SSI-SO beside them — the best-supported naive and
+  # onset-anchored models in the main text — in the figure and in one set of model probabilities
+  # (`rule combined_evidence`), which asks whether superspreading is better supported than
+  # Poisson transmission and how its effect on the risk compares with anchoring's. They are
+  # reused rather than refitted here: same data, same `R` priors and switch, so their evidences
+  # normalise with these two, and the curves are the very ones Fig. 4 draws. It changes no fit
+  # in this analysis, and so appears in no `params:`.
   #
   # Keep `cori` *before* `cori_so`. Each model's seed stream is its index in `models`
   # (`AnalysisSetting.model_entropy`), so reordering them would silently change every draw of
@@ -128,12 +135,12 @@ analyses:
   # about the switch, which the two variants below are for.
   onset_models_no_superspreading:
     models: [cori, cori_so]
+    compared_with: {analysis: onset_models_fixed_k, models: [ssi, ssi_so]}
     run_script: scripts/run_onset_models_no_superspreading.py
     sampler: {draws: 2000, tune: 2000, chains: 4, target_accept: 0.9, seed: 20260921}
 
-  # Exploratory, and deliberately out of IMPLEMENTED_ANALYSES: no report figure, no report
-  # number. They ask how much of the naive/onset gap in Analysis 3 is the switchpoint, by
-  # removing it. `switch_day: never` resolves to a day past the end of the window, whatever its
+  # Supplementary: two variants of Analysis 3, each with its own figure. They ask how much of
+  # the naive/onset gap there is the switchpoint, by removing it. `switch_day: never` resolves to a day past the end of the window, whatever its
   # length, so `switch_index` leaves R_pre in force on every day, in each model's own time
   # index. (It used to be written 111, which the longer window would have turned into a switch
   # on day 111; an integer past the window is now refused.)
@@ -143,7 +150,8 @@ analyses:
   # That is the point of the comparison, not an oversight, and the figures say so.
   #
   # Under `no_switch_fixed_R` nothing at all is estimated but the latents, so SSE — fixed k,
-  # fixed R, no latent block — has no free variable and its posterior is a point mass. Under
+  # fixed R, no latent block — has no free variable and its posterior is a point mass, whose
+  # evidence is its likelihood, computed exactly (`model_evidence.EXACT`). Under
   # `no_switch_single_R`, R_post is still declared but reaches no day, so it returns its prior
   # and is never plotted; a single estimated R is exactly R_pre.
   no_switch_fixed_R:

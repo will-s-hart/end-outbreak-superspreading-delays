@@ -186,6 +186,12 @@ NO_SUPERSPREADING_ANALYSES = [
 ]
 VARIANT_ANALYSES = NO_SWITCH_ANALYSES + NO_SUPERSPREADING_ANALYSES
 
+# Analyses that set another analysis's models beside their own (`compared_with` in the config),
+# and so normalise the model probabilities over both.
+COMBINED_EVIDENCE_ANALYSES = [
+    analysis for analysis in VARIANT_ANALYSES if "compared_with" in config["analyses"][analysis]
+]
+
 # Analyses whose run and plot scripts exist, and so the ones the figure, evidence and report
 # targets are built from. Keep this explicit rather than deriving it from the config: a
 # configured future analysis must not become a target before its scripts land.
@@ -300,6 +306,19 @@ def racs_of(wildcards):
         f"results/{wildcards.analysis}/{model}_rac.csv"
         for model in models_of(wildcards.analysis)
     ]
+
+
+def compared_with(analysis):
+    """The analysis whose models `analysis` sets beside its own, and which of them."""
+    block = ANALYSES[analysis]["compared_with"]
+    return block["analysis"], list(block["models"])
+
+
+def compared_files_of(wildcards, kind):
+    """The borrowed models' curves or fits, from the analysis they were fitted in."""
+    other, models = compared_with(wildcards.analysis)
+    suffix = {"rac": "rac.csv", "posterior": "posterior.nc"}[kind]
+    return [f"results/{other}/{model}_{suffix}" for model in models]
 
 
 # ---------------------------------------------------------------------------------------
@@ -492,6 +511,33 @@ rule dispersion:
         " --output {output}"
 
 
+# Posterior model probabilities over an analysis's own models and the ones it borrows. Each
+# analysis's evidence file normalises over its own models only, and a probability is relative to
+# the set it is normalised over; this renormalises the log evidences both files already hold,
+# after checking that the two analyses fitted their models under the same assumptions.
+rule combined_evidence:
+    wildcard_constraints:
+        analysis="|".join(COMBINED_EVIDENCE_ANALYSES),
+    input:
+        evidence="results/{analysis}/model_evidence.json",
+        compared=lambda wildcards: (
+            f"results/{compared_with(wildcards.analysis)[0]}/model_evidence.json"
+        ),
+        config=CONFIG_FILE,
+        script="scripts/run_combined_evidence.py",
+        code=code("configuration", "model_evidence"),
+    output:
+        "results/{analysis}/combined_model_evidence.json",
+    params:
+        compared_with=lambda wildcards: ANALYSES[wildcards.analysis]["compared_with"],
+    shell:
+        "python {input.script}"
+        " --analysis {wildcards.analysis}"
+        " --config {input.config}"
+        " --results-root results"
+        " --output {output}"
+
+
 # Every number the report quotes, in one macro file. It spans the analyses rather than sitting
 # inside one, so it takes the implemented list on the command line: the Snakefile owns that list
 # and the script must not grow a second copy of it.
@@ -508,6 +554,10 @@ rule report_numbers:
             for model in models_of(analysis)
         ],
         evidence=[f"results/{analysis}/model_evidence.json" for analysis in IMPLEMENTED_ANALYSES],
+        combined_evidence=[
+            f"results/{analysis}/combined_model_evidence.json"
+            for analysis in COMBINED_EVIDENCE_ANALYSES
+        ],
         dispersion=[
             f"results/{analysis}/dispersion_posteriors.json"
             for analysis in IMPLEMENTED_ANALYSES
@@ -650,10 +700,12 @@ rule no_switch_figure:
 
 
 # The same output-pattern collision again, settled the same way. This one needs its own rule
-# because of an *absence*: `rule figure` asks `dispersion_summary_of` for a `k` summary, and
-# these two models have no `k` for one to be about. There is deliberately no `dispersion=`
-# input below at all -- that explicit absence is what the analysis is, so it is stated here
-# rather than arranged for by a helper that happens to return an empty list.
+# for two reasons. It draws models from two analyses -- its own Poisson limits and the SSI and
+# SSI-SO it borrows -- with the pie from the evidence normalised over all four. And there is an
+# *absence*: `rule figure` asks `dispersion_summary_of` for a `k` summary, and the Poisson
+# limits have no `k` for one to be about. There is deliberately no `dispersion=` input below --
+# that absence is what the analysis is, so it is stated here rather than arranged for by a
+# helper that happens to return an empty list.
 ruleorder: no_superspreading_figure > figure
 
 
@@ -663,7 +715,9 @@ rule no_superspreading_figure:
     input:
         racs=racs_of,
         posteriors=posteriors_of,
-        evidence="results/{analysis}/model_evidence.json",
+        compared_racs=lambda wildcards: compared_files_of(wildcards, "rac"),
+        compared_posteriors=lambda wildcards: compared_files_of(wildcards, "posterior"),
+        evidence="results/{analysis}/combined_model_evidence.json",
         data=ONSETS_CSV,
         config=CONFIG_FILE,
         script="scripts/plot_no_superspreading.py",
@@ -675,7 +729,7 @@ rule no_superspreading_figure:
         shared=SHARED_PARAMS,
     shell:
         "python {input.script}"
-        " --results-dir results/{wildcards.analysis}"
+        " --results-root results"
         " --data {input.data}"
         " --config {input.config}"
         " --output-pdf {output.pdf}"
@@ -783,6 +837,10 @@ rule results:
             for model in models_of(analysis)
         ],
         [f"results/{analysis}/model_evidence.json" for analysis in IMPLEMENTED_ANALYSES],
+        [
+            f"results/{analysis}/combined_model_evidence.json"
+            for analysis in COMBINED_EVIDENCE_ANALYSES
+        ],
         [
             f"results/{analysis}/dispersion_posteriors.json"
             for analysis in IMPLEMENTED_ANALYSES

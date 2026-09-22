@@ -460,3 +460,28 @@ def test_two_analyses_estimating_k_under_different_priors_stop_the_build():
     config = k_prior_config(first={"k_prior": WIDE_K_PRIOR}, second={"k_prior": narrow})
     with pytest.raises(ValueError, match="do not share one prior"):
         report_numbers.add_priors(report_numbers.NumberFile(), config, ["first", "second"])
+
+
+def test_the_combined_comparison_has_its_own_keys_and_superspreadings_shifts():
+    """Under ``<analysis>.combined``, so they cannot pass for the analysis's own probabilities."""
+    combined = {
+        "models": ["cori", "cori_so", "ssi", "ssi_so"],
+        "log_evidence": {"cori": -91.8, "cori_so": -82.6, "ssi": -84.8, "ssi_so": -81.8},
+        "posterior_model_probability": {"cori": 0.0, "cori_so": 0.3, "ssi": 0.03, "ssi_so": 0.67},
+    }
+    slow = [1.0, 1.0, 0.9, 0.8, 0.6, 0.4, 0.2, 0.08, 0.04, 0.02, 0.008]
+    fast = [1.0, 0.9, 0.6, 0.3, 0.1, 0.04, 0.02, 0.009, 0.005, 0.003, 0.001]
+    curves = {
+        "cori": risk_frame(slow),
+        "ssi": risk_frame(fast),
+        "cori_so": risk_frame(fast),
+        "ssi_so": risk_frame(fast),
+    }
+    numbers = report_numbers.NumberFile()
+    report_numbers.add_combined_evidence(numbers, combined, "the_analysis", curves)
+    rendered = numbers.render(sources=[])
+    assert "\\defresultnum{theanalysis.combined.ssiso.probability}{0.67}" in rendered
+    assert "\\defresultnum{theanalysis.combined.cori.logevidence}{\\ensuremath{-91.8}}" in rendered
+    # Cori settles below 0.05 on day 8 and SSI on day 5: superspreading, three days earlier.
+    assert "\\defresultnum{theanalysis.combined.ssi-vs-cori.shift05}{3}" in rendered
+    assert "\\defresultnum{theanalysis.combined.ssiso-vs-coriso.shift05}{0}" in rendered
