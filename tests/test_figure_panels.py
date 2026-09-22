@@ -98,12 +98,12 @@ def panel(data, curves, **kwargs):
 def test_rac_and_rat_are_one_curve_under_infection_anchoring_and_two_under_onset(data):
     figure, ax = panel(data, all_four(data), metrics=("rac", "rat"))
     assert drawn(ax) == {
-        "SSE RAC/RAT": "--",
-        "SSI RAC/RAT": "--",
-        "SSE-SO RAC": "--",
-        "SSE-SO RAT": "-",
-        "SSI-SO RAC": "--",
-        "SSI-SO RAT": "-",
+        "SSE RAC/RAT": "-",
+        "SSI RAC/RAT": "-",
+        "SSE-SO RAC": "-",
+        "SSE-SO RAT": "--",
+        "SSI-SO RAC": "-",
+        "SSI-SO RAT": "--",
     }
     plt.close(figure)
 
@@ -112,7 +112,7 @@ def test_all_three_estimands_keep_the_default_linestyles(data):
     figure, ax = panel(data, all_four(data))
     lines = drawn(ax)
     assert lines["SSE RST"] == ":" and lines["SSE-SO RST"] == ":"
-    assert "SSE RAT" not in lines and lines["SSE RAC/RAT"] == "--"
+    assert "SSE RAT" not in lines and lines["SSE RAC/RAT"] == "-"
     assert len(lines) == 2 * 2 + 3 * 2
     plt.close(figure)
 
@@ -132,7 +132,7 @@ def test_infection_anchored_rat_alone_is_the_rac_column_in_rat_style(data):
     frame = curve(data, "sse", columns=INFECTION_ANCHORED_COLUMNS)
     figure, ax = panel(data, {"sse": frame}, metrics=("rat",))
     (line,) = [line for line in ax.lines if line.get_label() == "SSE RAT"]
-    assert line.get_linestyle() == "-"
+    assert line.get_linestyle() == "--"
     np.testing.assert_array_equal(line.get_ydata(), frame[utils.RISK_COLUMN])
     plt.close(figure)
 

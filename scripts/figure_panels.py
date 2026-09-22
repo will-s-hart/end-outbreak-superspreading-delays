@@ -46,8 +46,12 @@ METRIC_COLUMNS: dict[RiskMetric, str] = {
     "rst": utils.SUSTAINED_RISK_COLUMN,
 }
 METRIC_LABELS: dict[RiskMetric, str] = {"rac": "RAC", "rat": "RAT", "rst": "RST"}
-METRIC_LINESTYLES: dict[RiskMetric, str] = {"rac": "--", "rat": "-", "rst": ":"}
-"""Where more than one estimand shares a panel, linestyle is the estimand and colour the model."""
+METRIC_LINESTYLES: dict[RiskMetric, str] = {"rac": "-", "rat": "--", "rst": ":"}
+"""Where more than one estimand shares a panel, linestyle is the estimand and colour the model.
+
+RAC is solid because it is the headline, and solid is what every single-estimand RAC panel
+draws: a reader moving between figures keeps one line for it. An infection-anchored model's
+combined "RAC/RAT" curve follows RAC and is solid too."""
 
 
 def parameter_posterior_panel(

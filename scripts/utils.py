@@ -66,7 +66,7 @@ REPORTING_LINESTYLES: dict[float, ReportingLinestyle] = {1.0: "-", 0.8: "--", 0.
 
 The same three linestyles ``figure_panels.METRIC_LINESTYLES`` gives the risk estimands, and in
 both colour is the model and linestyle whatever varies within it. They do not map onto each
-other — dashed is 80% reporting here but RAC there — and the reporting figure uses both, so
+other — dashed is 80% reporting here but RAT there — and the reporting figure uses both, so
 every panel's legend says which one it is using.
 """
 
