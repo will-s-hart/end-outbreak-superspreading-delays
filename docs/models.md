@@ -36,7 +36,7 @@ Before extending any of these:
 - **Days with zero force of infection are dropped from the likelihood**
   (`renewal.likelihood_days`): the observation there is a point mass at 0. A *positive* count on
   such a day raises rather than being dropped silently. Nothing is dropped on the complete record
-  — the index case drives every day at `max_lag = 110`.
+  — the index case drives every day at `max_lag = 130`, which is the window.
 - `pymc_models.compile_joint_logp` evaluates a built model's joint density at named values on
   their **natural** scale — no log transforms, no Jacobian. `compile_observation_logp` gives the
   likelihood term alone, which is the only way to compare two models whose latent blocks differ
@@ -51,8 +51,10 @@ mechanisms, and they compose:
   likelihood only through the `exp(−Σ_j μ_j)` factor, which is linear in the latents and so
   factorises. Its Gamma prior is conjugate to that, giving
   `∫ Gamma(y; k·scale, k)·e^{−cy} dy = (1 + c/k)^{−k·scale}` and a conditional posterior
-  `Gamma(k·scale, k + c)`. On the complete record this removes **52 of SSE-SO's 110** latents —
+  `Gamma(k·scale, k + c)`. On the complete record this removes **72 of SSE-SO's 130** latents —
   exactly the pathological tail, since the last case is on day 58 — and one of SSI's/SSI-SO's 31.
+  (52 of 110 on the 0–110 window the sampler benchmark measured; the twenty case-free days since
+  added past the ERT's withdrawal all land in the tail.)
   **No approximation whatsoever.** Shorter windows remove more.
 - **Inverse-CDF reparameterisation.** Sample `Uniform(0, 1)` and push through the Gamma quantile
   function. PyTensor differentiates the Gamma quantile with respect to the probability
@@ -100,7 +102,7 @@ The comparison is `validation/results/sampler_benchmark.md` (74 MCMC runs).
 
 `fitting.fit_model` samples with `cores=1`: a fit's chains run one after another in the calling
 process. That is not a concession — it is where the parallelism was moved *to*. The expensive
-step in this project is `refit_daily`, which is ~110 independent fits per model, so the days are
+step in this project is `refit_daily`, which is ~130 independent fits per model, so the days are
 the axis worth spreading over, and `refit_risk.risk_by_refitting(n_jobs=…)` does exactly that
 through `end_of_outbreak/parallel.py`. Three things improve at once: the worker pool is built
 once instead of four processes being spawned and torn down per fit; the width is set by the
@@ -128,7 +130,7 @@ The serial path keeps its warm caches unchanged.
 
 ## Model evidence
 
-`model_evidence.py` computes `p(D_{1:110} | model)` with the parameters *and* the latents
+`model_evidence.py` computes `p(D_{1:130} | model)` with the parameters *and* the latents
 integrated out, and turns a set of them into posterior model probabilities under a uniform prior
 over models. It is a property of a model given the **whole record**, so it uses the full-record
 fit and is untouched by the conditioning-day machinery.

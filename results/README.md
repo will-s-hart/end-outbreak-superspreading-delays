@@ -1,6 +1,7 @@
 Committed analysis outputs, one subdirectory per analysis. Everything here is produced by a
-Snakemake rule from a script in `scripts/`, and everything here feeds a figure — all but the
-three directories noted below as outside the report also feed it.
+Snakemake rule from a script in `scripts/`, and everything here feeds a figure and the report.
+Every curve covers the 131-day window, days 0–130, which runs twenty case-free days past the
+ERT's withdrawal.
 
 | Path | What it is |
 | --- | --- |
@@ -9,10 +10,10 @@ three directories noted below as outside the report also feed it.
 | `<analysis>/<model>_rac_diagnostics.csv` | Tier-1 sampler diagnostics for those fits, one row per conditioning day. The per-day posteriors themselves are not kept. |
 | `<analysis>/model_evidence.json` | Tier-2 marginal likelihoods and posterior model probabilities. |
 | `<analysis>/dispersion_posteriors.json` | Tier-2 `k` posterior summaries and their pairwise divergences — only for the analyses that estimate `k`. |
+| `onset_models_no_superspreading/combined_model_evidence.json` | Tier-2 posterior model probabilities over that analysis's `cori`/`cori_so` and Analysis 3's `ssi`/`ssi_so`, normalised together, from the two analyses' own evidence files (`rule combined_evidence`). |
 | `underreporting_60/`, `underreporting_80/` | The reporting sweep, for the naive and the onset-anchored SSE/SSI. Tier-1 files only: comparing a model with itself under a different reporting assumption needs no model evidence and no dispersion summary, so those two are absent by design rather than missing. Their posteriors additionally carry `unreported_incidence` and the `true_incidence` recovered from it, the imputed true onsets — which is what makes these the largest files here. Neither can be dropped to save room: bridge sampling walks the built model's *free* variables and demands each by name, so a thinned fit is unusable for evidence even where evidence is not currently computed. |
-| `no_switch_fixed_R/`, `no_switch_single_R/` | The exploratory no-switchpoint variants: tier-1 files only, and no model evidence (`no_switch_fixed_R` fixes every parameter, so there is nothing to integrate over). They feed their own figures and **nothing in the report** — see `AGENTS.md`. |
-| `onset_models_uninformative_k/` | Analysis 4 under a `k` prior a decade wider on each side: the full tier-1 and tier-2 set, evidence and `k` summary included. It feeds its own figure and **nothing in the report** yet. |
-| `onset_models_no_superspreading/` | The exploratory anchoring comparison with superspreading removed: `cori` against `cori_so`, the `k → ∞` Poisson limits. Tier-1 files plus `model_evidence.json` — the two share the `R` priors, so the Bayes factor is well defined, and with two free scalars and no latent block it is the cheapest evidence here. There is **no `dispersion_posteriors.json`, by design rather than missing**: these are the only models in the project with no dispersion parameter at all, so there is no `k` posterior for one to be about. `estimates_dispersion` in the `Snakefile` requires a `k_prior` and not merely the absence of a `fixed_k`, which is what keeps that file off every dependency list. It feeds its own figure and **nothing in the report**. |
+| `no_switch_fixed_R/`, `no_switch_single_R/` | The no-switchpoint variants of Analysis 3 (supplement): tier-1 files and `model_evidence.json`. Under `no_switch_fixed_R` SSE has no free variable, and its evidence is its likelihood, computed exactly (standard error 0, no draws). |
+| `onset_models_no_superspreading/` | The superspreading-free variant of Analysis 3 (supplement): `cori` against `cori_so`, the `k → ∞` Poisson limits. Tier-1 files, `model_evidence.json` and the combined file above. There is **no `dispersion_posteriors.json`, by design rather than missing**: these are the only models in the project with no dispersion parameter at all. `estimates_dispersion` in the `Snakefile` requires a `k_prior` and not merely the absence of a `fixed_k`, which is what keeps that file off every dependency list. |
 | `delay_distributions.csv` | Tier-2 discrete incubation, TOST, target serial-interval and implied serial-interval distributions for the supplementary delay figure. |
 | `report_numbers.tex` | Tier-2 LaTeX macros: every number `report/report.tex` quotes, collected from the files above. Spans the analyses rather than sitting inside one, which is why it is not in a subdirectory. |
 

@@ -16,7 +16,7 @@ dependencies = [
     "pyyaml>=6.0",
     # The RAC step runs one fit per conditioning day and spreads them over worker processes
     # (end_of_outbreak/parallel.py). joblib's loky backend is what makes that safe: it reuses
-    # its workers across the ~110 fits and can pin each one to a single BLAS thread, which
+    # its workers across the ~130 fits and can pin each one to a single BLAS thread, which
     # `concurrent.futures` cannot do once NumPy is imported.
     "joblib>=1.3",
     "tqdm>=4.66",

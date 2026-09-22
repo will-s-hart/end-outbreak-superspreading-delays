@@ -1,7 +1,7 @@
 # Pipeline scripts
 
-The four report analyses, the analyses wired in beside them but kept out of the report, and
-nothing else. Every
+The four report analyses, the three variants of Analysis 3 in the supplement, and nothing
+else. Every
 script here is invoked by a Snakemake rule and writes to `results/` or `figures/`; if an output
 is neither a report input nor an analysis of the outbreak, it does not belong in this tree —
 see `validation/` for benchmarks and cross-checks, whose subject is the implementation.
@@ -14,19 +14,19 @@ see `validation/` for benchmarks and cross-checks, whose subject is the implemen
 | `run_naive_models_estimated_k.py` | 1 and 2 | the same, plus `results/naive_models_estimated_k/dispersion_posteriors.json` |
 | `run_onset_models_fixed_k.py` | 1 and 2 | the four-model fixed-`k` Analysis 3 outputs, including RST and RAT where applicable |
 | `run_onset_models_estimated_k.py` | 1 and 2 | the four-model estimated-`k` Analysis 4 outputs and dispersion comparisons |
-| `run_onset_models_uninformative_k.py` | 1 and 2 | the same, under a `k` prior a decade wider on each side; out of the report |
 | `run_delay_distributions.py` | 2 | `results/delay_distributions.csv` — the four distributions drawn in the supplementary delay figure |
 | `run_report_numbers.py` | 2 | `results/report_numbers.tex` — every number the report quotes, as LaTeX macros |
 | `plot_naive_models_fixed_k.py` | 3 | `figures/naive_models_fixed_k/*.pdf`, `*.png` |
 | `plot_naive_models_estimated_k.py` | 3 | the same for `naive_models_estimated_k` |
 | `plot_onset_models_fixed_k.py` | 3 | `figures/onset_models_fixed_k/*.pdf`, `*.png` |
-| `plot_onset_models_estimated_k.py` | 3 | the same for `onset_models_estimated_k`, and with `--analysis` for `onset_models_uninformative_k` |
+| `plot_onset_models_estimated_k.py` | 3 | the same for `onset_models_estimated_k` |
 | `run_underreporting_60.py`, `run_underreporting_80.py` | 1 | the same tier-1 outputs, with the onsets read as *reported* counts |
 | `plot_underreporting.py` | 3 | `figures/underreporting/*` — the reporting sweep, naive and onset-anchored |
-| `run_no_switch_fixed_R.py`, `run_no_switch_single_R.py` | 1 | the exploratory variants' tier-1 outputs, with the `R` switchpoint removed |
+| `run_no_switch_fixed_R.py`, `run_no_switch_single_R.py` | 1 and 2 | the variants with the `R` switchpoint removed: curves and evidence |
 | `plot_no_switch.py` | 3 | `figures/no_switch_*/*` — both variants, from one script taking `--analysis` |
 | `run_onset_models_no_superspreading.py` | 1 and 2 | `cori` vs `cori_so`: curves and evidence, and no `k` summary, because these models have no `k` |
-| `plot_no_superspreading.py` | 3 | `figures/onset_models_no_superspreading/*` — one analysis, so it is hard-coded and there is no `--analysis` |
+| `run_combined_evidence.py` | 2 | `combined_model_evidence.json` — model probabilities over an analysis's models and those it borrows (`compared_with`) |
+| `plot_no_superspreading.py` | 3 | `figures/onset_models_no_superspreading/*` — the Poisson limits beside Analysis 3's SSI and SSI-SO, from both analyses' results |
 | `plot_model_schematic.py` | 3 | The infection- vs onset-anchored schematic. Draws no data, so it takes no input but the house style |
 | `plot_delay_distributions.py` | 3 | Supplement: incubation, TOST and serial-interval distributions |
 | `plot_sustained_transmission.py` | 3 | Main text (fixed `k`) and supplement (estimated `k`): RAC/RAT, then RST, for all four models |
@@ -39,31 +39,13 @@ The two onset-anchored analyses supply every curve of the RST figures. That expl
 takes it on the command line rather than growing a second copy of it, because it is the one
 script that spans the analyses.
 
-**The two no-switchpoint variants are exploratory and stay out of the report.** They are in
-`config/config.yaml` but in neither `IMPLEMENTED_ANALYSES` nor `SAMPLED_ANALYSES`, so `rule all`
-and `run_report_numbers.py` never see them and nothing builds them unless the target is named
-(`pixi run pipeline-no-switch`, or `no_switch_results` for the expensive half alone, which is
-what a cluster run should target). They have no `plot_script:` key, because `rule figure` would
-demand a `model_evidence.json` that `no_switch_fixed_R` — every parameter fixed — has nothing to
-compute; `rule no_switch_figure` draws them instead. Promoting one to a report analysis means
-adding it to `IMPLEMENTED_ANALYSES` and giving it a `plot_script`.
-
-**`onset_models_uninformative_k` is kept out the same way**, and for a different reason: it asks
-whether Analysis 4's onset-anchored `k` posteriors are the data or the prior, which the report
-does not yet ask. It has evidence and a `k` summary, so its figure is Analysis 4's own layout —
-but `rule figure` does not pass `--analysis`, and the script needs it to read the right `k`
-prior, so `rule uninformative_k_figure` draws it instead. `uninformative_k_results` is the
-cluster half.
-
-**`onset_models_no_superspreading` is kept out the same way**, and needs its own figure rule for
-a third reason: an *absence*. `rule figure` asks `dispersion_summary_of` for a `k` summary, and
-`cori`/`cori_so` have no `k` for one to be about — so `rule no_superspreading_figure` declares no
-`dispersion=` input at all, which is the analysis stated as a dependency list. Its figure is the
-fixed-`k` four-panel layout minus the `k`, and it overrides the palette locally
-(`utils.model_colour`'s `overrides`) so that the two Poisson limits read as the naive/onset pair
-they are here rather than as the two neutral greys they are everywhere else.
-`no_superspreading_results` is the cluster half, though 220 latent-free fits are affordable
-locally and the quick route cannot test the convergence gate.
+**The three variants of Analysis 3 have figure rules of their own**, each for a reason `rule
+figure` cannot accommodate, and none has a `plot_script:` key. `rule no_switch_figure` draws the
+two no-switch variants, which estimate no `k` and — under `no_switch_fixed_R` — no parameter at
+all. `rule no_superspreading_figure` draws the superspreading comparison, which reads models from
+two analyses, takes its pie from `combined_model_evidence.json`, and declares no `dispersion=`
+input at all because `cori`/`cori_so` have no `k` for a summary to be about. A `ruleorder` over
+`rule figure` settles each collision.
 
 Conventions, all of them load-bearing:
 
@@ -71,7 +53,7 @@ Conventions, all of them load-bearing:
   re-runs MCMC. The run scripts carry one subcommand per pipeline rule (`fit`, `rac`, `evidence`,
   and `dispersion` where `k` is estimated) and each Snakemake rule invokes exactly one of them.
 - **`rac` is a tier-1 step**, not tier 2. RAC, RAT and RST all condition on the record through the
-  conditioning day, so the curve is one MCMC fit per day — about 110 per model — and it writes
+  conditioning day, so the curve is one MCMC fit per day — about 130 per model — and it writes
   `..._rac_diagnostics.csv` beside the curve, one row per day, failing outright if any of those
   fits did not converge. `--method single_fit_filtered` swaps in the fast approximation for
   prototyping; it is not a results path. **`--jobs N` spreads the days over `N` worker
@@ -82,8 +64,9 @@ Conventions, all of them load-bearing:
   follows the layout.** A fixed-`k` figure has two (`R_pre`, `R_post`), so it is four panels with
   the RAC spanning the bottom row; an estimated-`k` figure has three, so it is five, with the pie
   dropping beside the RAC curves. The no-switchpoint variants take the rule to its other end:
-  `no_switch_single_R` has one, so it is two stacked panels, and `no_switch_fixed_R` has none at
-  all, so it is the RAC panel by itself. Where the RAC panel shares its row it starts at the ERT's
+  `no_switch_single_R` has one, which takes the two parameter columns beside the pie, and
+  `no_switch_fixed_R` has none at all, so it is the pie beside the RAC panel. Where the RAC panel
+  shares its row it starts at the ERT's
   arrival (`risk_curve_panel(first_day=...)`). **`first_day` trims the view only** — every curve
   is still drawn over the whole window and the settling markers are untouched, so a trimmed panel
   can never show a different crossing date from an untrimmed one.

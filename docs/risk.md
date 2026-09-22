@@ -12,7 +12,7 @@ The **risk of additional cases (RAC)** is a **real-time reset posterior predicti
 > the posterior probability that this future contains at least one further case.
 
 So `P(· | data up to day t)` is the right reading, and **every conditioning day gets its own
-fit** — about 110 per model. Day 0 is an initial condition in every model and carries no
+fit** — about 130 per model. Day 0 is an initial condition in every model and carries no
 likelihood term, so the curve starts at day 1.
 
 A companion quantity, the **risk of additional transmission (RAT)**, is the probability of at
@@ -211,7 +211,7 @@ sampled and unsampled blocks.
 
 The tier-1 `rac` step then **fails outright** if any day's fit shows `R̂ > 1.02` or divergences
 above 1% of draws — but writes `<model>_rac_diagnostics.csv` first, so a failed run leaves the
-evidence of how it failed behind it. A curve built from 110 fits nobody has looked at is not a
+evidence of how it failed behind it. A curve built from 130 fits nobody has looked at is not a
 result.
 
 ## Incomplete reporting

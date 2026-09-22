@@ -22,42 +22,33 @@ Five models are compared, all driven by the same onset-to-onset serial interval:
 | `ssi_so` | symptom onsets | the individual | `Y_t` |
 
 `cori` and `cori_so` are also built, as the `k → ∞` Poisson limits — **validation targets, not
-compared models**, and they stay out of the four analyses — though the exploratory
-`onset_models_no_superspreading` below does compare them with *each other*, which is a different
-use of them and not a promotion. Four analyses, configured in
+compared models**, and they stay out of the four analyses. Four analyses, configured in
 `config/config.yaml`: the naive models at a transplanted `k` and at an estimated `k`, then the
-naive and onset-anchored models likewise.
+naive and onset-anchored models likewise. Estimated `k` has one prior everywhere, log-normal with
+median 0.18 and 95% interval 0.018–1.8 — a decade each side of the literature value. An earlier,
+narrower prior (0.09–0.36) and the separate `onset_models_uninformative_k` analysis that tested
+it are gone; `run_report_numbers.py` refuses two estimated-`k` analyses that disagree.
 
-`config/config.yaml` also carries two **exploratory** analyses, `no_switch_fixed_R` and
-`no_switch_single_R`, which remove the `R` switchpoint to ask how much of the naive/onset
-difference it accounts for. They are deliberately in neither `IMPLEMENTED_ANALYSES` nor
-`SAMPLED_ANALYSES`: no report figure and no report number depends on them, and nothing builds
-them unless you name the target. `no_switch_results` is the expensive half (8 fits and 8 risk
-curves, so a cluster job: `hpc run no_switch_results`);
-`pixi run pipeline-no-switch` builds the lot locally, and `pipeline-no-switch-present` draws just
-the figures from pulled curves.
+Three **variants of Analysis 3** each remove one ingredient, and each has a supplementary
+figure; together they are `VARIANT_ANALYSES` in the `Snakefile`, and they build with everything
+else:
 
-`onset_models_uninformative_k` is kept out of the report the same way. It repeats the onset
-analysis with estimated `k` under a prior a decade wider on each side of the same median, to ask
-whether that analysis's onset-anchored `k` posteriors — which reproduce their prior — are the data
-or the prior. `uninformative_k_results` is its cluster half (4 fits, 4 curves, evidence and the
-`k` summary); `pipeline-uninformative-k` and `pipeline-uninformative-k-present` mirror the
-no-switch tasks. The report itself carries that analysis's estimated-`k` figure in the supplement
-(`SUPPLEMENTARY_ANALYSES` in the `Snakefile`), not the main text.
-
-`onset_models_no_superspreading` is the third one kept out, and asks the complement of the
-no-switch question: every measurement of the naive/onset difference elsewhere is made in models
-that also carry superspreading, so this removes superspreading entirely and compares `cori` with
-`cori_so`. It is the only analysis whose models have **no `k` at all**, which is why its config
-block gives neither `fixed_k` nor `k_prior` and `AnalysisSetting.dispersion()` can return `None`.
-It takes `evidence` — the two share the `R` priors — but no `dispersion` summary, and its figure
-is `scripts/plot_no_superspreading.py`. At 220 fits with no latent block it is a laptop job
-rather than a cluster one; `no_superspreading_results` exists for the cluster anyway.
+- `no_switch_fixed_R` and `no_switch_single_R` remove the `R` switchpoint (`switch_day: never`)
+  to ask how much of the naive/onset difference it accounts for. Without a switch the reset to
+  `R_pre` is a no-op, so their curves are forward predictives. Under `no_switch_fixed_R`, SSE has
+  no free variable and `model_evidence.log_evidence` returns its evidence exactly.
+- `onset_models_no_superspreading` removes superspreading: `cori` against `cori_so`. It is the
+  only analysis whose models have **no `k` at all**, which is why its config block gives neither
+  `fixed_k` nor `k_prior` and `AnalysisSetting.dispersion()` can return `None`. Its
+  `compared_with` block sets Analysis 3's `ssi` and `ssi_so` beside them — reused, not refitted
+  — and `rule combined_evidence` normalises the four evidences together for the figure's pie.
+  This compares the Poisson limits with the superspreading models, which is a different use of
+  them from validation and not a promotion to the four analyses.
 
 The output quantity is the **risk of additional cases (RAC)**, a real-time reset posterior
 predictive: fit parameters *and* latents to the record through day `t` alone, reset `R` to
 `R_pre`, and ask for the posterior probability of at least one further case. **Every conditioning
-day gets its own fit** — about 110 per model, which is why the pipeline takes hours. The
+day gets its own fit** — about 130 per model, which is why the pipeline takes hours. The
 companion **risk of additional transmission (RAT)** separates from RAC only under the
 onset-anchored models. The **risk of sustained transmission (RST)** is the probability that the
 reset future never becomes extinct; it is computed for SSE/SSI and their onset-anchored forms,
@@ -79,12 +70,6 @@ The environment is managed by **pixi**. All commands run through `pixi run`:
 | `pixi run pipeline-dry` | dry run: what would re-run, and why |
 | `pixi run pipeline-present` | after pulling cluster results, render figures/report only; compute rules are excluded |
 | `pixi run pipeline-present-dry` | dry-run the presentation-only allowlist |
-| `pixi run pipeline-no-switch` | the exploratory no-switchpoint variants; in no other target |
-| `pixi run pipeline-no-switch-present` | their figures only, after pulling a cluster run of `no_switch_results` |
-| `pixi run pipeline-uninformative-k` | the vague-`k` repeat of the onset analysis; in no other target |
-| `pixi run pipeline-uninformative-k-present` | its figure only, after pulling a cluster run of `uninformative_k_results` |
-| `pixi run pipeline-no-superspreading` | the `cori` vs `cori_so` comparison; in no other target |
-| `pixi run pipeline-no-superspreading-present` | its figure only, after pulling `no_superspreading_results` |
 
 **Run `pixi run check` and fix every issue before committing.** No exceptions — a failing lint,
 type or test check is not "pre-existing", it is the current state of the tree.
@@ -130,8 +115,8 @@ stop; do not execute any cluster command on the user's behalf without their expl
 diagnostics with no `R̂` column at all, so every acceptance-criteria bug reaches the cluster
 untested. Two have: an SSE sweep fit at `R̂` 1.047, and a nan `R̂` on `no_switch_fixed_R/sse`
 that stopped the whole analysis. So **run `refit_daily` locally wherever it is affordable** —
-it is not always hours. `no_switch_fixed_R` fixes every parameter, so its SSE curve is 110
-fits that sample nothing and takes 22 seconds on a laptop. Check the per-fit `seconds` column
+it is not always hours. `no_switch_fixed_R` fixes every parameter, so its SSE curve is 130
+fits that sample nothing and take under half a minute on a laptop. Check the per-fit `seconds` column
 of an existing `<analysis>/<model>_rac_diagnostics.csv` before assuming an analysis needs the
 cluster.
 
@@ -139,7 +124,7 @@ Three habits that follow from this, all learned the hard way:
 
 - **Do not edit a rule's inputs while a long run is in flight.** `config/config.yaml` and
   `scripts/analysis_driver.py` are inputs to every `rac` rule, so touching either marks all
-  fourteen curves stale even when the change provably cannot alter a number. Land pipeline
+  thirty-two curves stale even when the change provably cannot alter a number. Land pipeline
   changes *before* starting the run, not during it.
 - **Do not delete a committed result to force a re-run.** If an output is stale, let the rerun
   triggers say so; if they do not, the fix is a missing entry in a rule's `params:`.
@@ -163,9 +148,13 @@ at the cost of verbosity.
 ### Day indexing and the `R` switch
 
 Day 0 is the first observed onset (5 April 2018). The ERT arrived on day 33 and withdrew on day
-110; the analysis window is days 0–110 inclusive (111 rows). Day 0 is an initial condition in
-every model, so likelihoods run over days 1–110 and **risk curves start at day 1** — a "fit to the
-record through day 0" is the prior.
+110; the analysis window is days 0–130 inclusive (131 rows), running twenty case-free days past
+the withdrawal so that every curve settles below both thresholds inside it. The committed CSV
+stops at the withdrawal and `load_onset_data` pads the rest, so the validation studies can still
+load the 0–110 window they ran on (`end_date=ERT_WITHDRAWAL_DATE`). `max_lag` equals the window.
+Day 0 is an initial condition in every model, so likelihoods run over days 1–130 and **risk
+curves start at day 1** — a "fit to the record through day 0" is the prior. A crossing that has
+not happened by day 130 is written "not before" a date, never "never".
 
 `R` switches from `R_pre` to `R_post` on day 33 **in each model's own time index**;
 `renewal.switch_index` is the single home of that convention, so don't re-derive it inline. The
@@ -241,7 +230,8 @@ returns, so listing it would make a scheduling tweak a reason to re-run hours of
 ## Pipeline
 
 `Snakefile` drives everything in three tiers — `fit`/`rac` (MCMC, minutes–hours),
-`evidence`/`dispersion`/`report_numbers` (seconds–minutes), `figure`/`report` (seconds) — so a
+`evidence`/`dispersion`/`combined_evidence`/`report_numbers` (seconds–minutes),
+`figure`/`report` (seconds) — so a
 change at one tier never re-runs the tiers above it. When adding a module, **add it to the right
 dependency list at the top of the `Snakefile`** (`FIT_CORE`, `RAC_CORE`, `EVIDENCE_CORE`,
 `DISPERSION_CORE`, `REPORT_NUMBERS_CORE`, `PLOT_CORE`); Snakemake's `code` trigger hashes only a
@@ -287,7 +277,7 @@ Three more things the pipeline rests on:
 
 ### The convergence gate is a regression test, not a discovery tool
 
-Each risk curve rests on ~110 fits, so every one is checked and
+Each risk curve rests on ~130 fits, so every one is checked and
 `<model>_rac_diagnostics.csv` records the result per day. **The curve and the table are always
 written**, and are identical whatever the criteria say: `rac.convergence` in the config decides
 only whether a shaky-looking set of fits *stops the build*.
@@ -321,8 +311,8 @@ targets only `figures` and `report/report.pdf` and uses `--allowed-rules` to exc
 RAC and tier-2 compute rule. Pulled results are therefore immutable inputs even though the
 cluster's Snakemake provenance database was not pulled.
 
-**Re-run the cheap rules first, though: `evidence`, `dispersion` and `report_numbers`.** None of
-the three is in `pipeline-present`'s allowlist, so a pull leaves whatever the cluster produced,
+**Re-run the cheap rules first, though: `evidence`, `dispersion`, `combined_evidence` and
+`report_numbers`.** None of them is in `pipeline-present`'s allowlist, so a pull leaves whatever the cluster produced,
 and on 2026-09-18 that was a `dispersion_posteriors.json` inconsistent with the
 `ssi_posterior.nc` beside it — `dispersion` is a deterministic read of the stored `k` draws, so
 it could not have come from that file. All three take seconds to minutes and recomputing them is
@@ -391,27 +381,18 @@ committed measurement.
   and no new code — the fourth only since a per-analysis `switch_day` became a setting anything
   reads. The `shared.ert_arrival_day` key that used to look like the switch knob was dead config,
   and is gone; the ERT's dates live in `outbreak_data.py`, where the report reads them from.
-- **The two no-switchpoint variants are implemented but not interpreted.** `no_switch_fixed_R`
-  holds `R` at 0.95 with `k` at 0.18 and estimates nothing but the latents, so any surviving
-  naive/onset gap is retained-state arithmetic alone; `no_switch_single_R` estimates one `R` per
-  model. Both move the switch past the end of the window, which also makes RAC's reset to
-  `R_pre` a no-op — so they report a forward predictive, not the reset predictive the report's
-  analyses do. Nothing is written up until a `refit_daily` run exists; the quick route is never
-  a finding.
-- **The vague-`k` repeat is implemented but not interpreted.** Under the report's `k` prior the
-  onset-anchored posteriors land on its median with almost no evidence gain, which the report now
-  says is ambiguous. `onset_models_uninformative_k` settles it: posteriors that widen roughly in
-  proportion to the prior mean the data say little about `k` under onset anchoring; posteriors
-  that stay near 0.18 and narrow mean they do. Its model probabilities are not comparable with the
-  report analysis's, since a wider prior is charged for in the evidence. It is also the first
-  piece of the prior-sensitivity analysis listed above.
-- **The superspreading-free anchoring comparison is implemented but not run.**
-  `onset_models_no_superspreading` puts `cori` against `cori_so`, so the naive/onset difference
-  is measured with nothing else varying — every other measurement of it is confounded with the
-  superspreading mechanism carried alongside. It is 220 fits and the models have no latent
-  block, so it is affordable locally and **should be run with `refit_daily`, not the quick
-  route**: `single_fit_filtered` writes no `R̂` column, so it cannot exercise the convergence
-  gate. Nothing is written up until such a run exists.
+- **The three variants of Analysis 3 are in the report but not yet interpreted.** Their figures
+  are Figs. S4–S6 and `report.tex` describes what each removes; the findings are written from
+  the first complete `refit_daily` run of the 131-day window, never from the quick route.
+  `no_switch_fixed_R` holds `R` at 0.95 with `k` at 0.18, so any surviving naive/onset gap is
+  retained-state arithmetic alone; `no_switch_single_R` estimates one `R` per model; the
+  superspreading comparison sets `cori`/`cori_so` beside Analysis 3's `ssi`/`ssi_so`.
+- **The wide `k` prior is the only one.** Under the old informative prior the onset-anchored
+  posteriors landed on its median with almost no evidence gain, which could have been the data
+  or the prior. The wide prior settles it: posteriors that widen roughly in proportion to the
+  prior mean the data say little about `k` under onset anchoring. It needs `target_accept: 0.99`
+  (measured, in `config/config.yaml`), and its evidence gains over fixed `k` carry a charge for
+  the prior's width, which the report must say when it quotes them.
 - **The reset-convention follow-up remains declined** unless asked for. RST is now a reported
   estimand rather than an optional follow-up.
 - **Per-fit process spawn dominates the cheap models' cost.** Each conditioning-day fit starts

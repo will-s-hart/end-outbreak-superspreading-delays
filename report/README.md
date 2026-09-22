@@ -44,8 +44,16 @@ reference-day, final-day, threshold-crossing and Monte-Carlo-error keys.
 provide TeX, and the `report` rule says so rather than failing with "command not found".
 
 `tests/test_report_numbers.py` checks the two committed files against each other: every key the
-report uses is defined, every figure it includes exists, and every file the macros were read from
-is still there.
+report uses is defined, every figure it includes exists, every figure under `figures/` is
+included, and every file the macros were read from is still there.
+
+**A crossing the window does not reach is a bound, not "never".** A curve still above a
+threshold on the last day has not settled *yet*: its day key renders as `≥131`, its date key as
+"not before" the day after the window, and a shift involving it as a one-sided bound. Write
+sentences that read correctly either way. The window runs twenty days past the ERT's withdrawal
+for exactly this reason, so on a complete run none of the main analyses' curves should need the
+bound; `.rac.withdrawal` is the risk on the day the ERT actually left, which `.rac.final` no
+longer is.
 
 The exception is the handful of measurements quoted from `validation/results/`. Validation
 outputs deliberately never feed `rule all` (see `AGENTS.md`), so the report cannot depend on them

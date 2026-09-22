@@ -10,8 +10,8 @@ always samples with ``cores=1``. Parallelism is taken one level up, over the day
 Three reasons, in increasing order of how much they cost:
 
 - **Process startup.** ``pm.sample(cores=4)`` spawns four processes per fit and each imports
-  PyMC and PyTensor and unpickles the compiled log-density. A refit curve is 110 fits, so that
-  is 440 process starts to do 110 fits' worth of work. Here the pool is built once and the
+  PyMC and PyTensor and unpickles the compiled log-density. A refit curve is 130 fits, so that
+  is 520 process starts to do 130 fits' worth of work. Here the pool is built once and the
   workers are reused for the whole curve.
 - **The chain count caps the speedup.** Four chains can use four cores and no more, however
   many the machine has. Days are the abundant axis — 110 of them — so the pool can be sized to

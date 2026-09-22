@@ -58,7 +58,9 @@ def build_fixed_R_figure(
     """
     utils.apply_house_style()
     figure = plt.figure(figsize=(9.4, 4.2))
-    grid = figure.add_gridspec(1, 2, width_ratios=[1.15, 3.0], wspace=0.22)
+    # `top` leaves room for the panel letters under the suptitle: at this height the default
+    # margin puts the two on one line.
+    grid = figure.add_gridspec(1, 2, width_ratios=[1.15, 3.0], wspace=0.22, top=0.80)
     figure_panels.model_probability_panel(
         figure.add_subplot(grid[0, 0]), evidence, list(curves), letter="A"
     )

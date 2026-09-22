@@ -23,7 +23,7 @@ def command_risk(args: argparse.Namespace) -> None:
     if method == analysis_driver.REFIT_DAILY and args.diagnostics is None:
         raise ValueError(
             f"{method} runs one fit per conditioning day, so --diagnostics is required: a "
-            "curve built from 110 fits nobody has looked at is not a result"
+            "curve built from 130 fits nobody has looked at is not a result"
         )
 
     if method == analysis_driver.REFIT_DAILY:

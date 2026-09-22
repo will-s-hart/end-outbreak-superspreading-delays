@@ -245,9 +245,9 @@ rac:
     n_draws: 1000     # parameter draws the filter is run at, thinned within chains
     n_particles: 500  # per draw; the filter is fully adapted, so it needs no tuning
 
-  # Acceptance criteria for the ~110 fits behind each curve. A hundred and ten fits is a hundred
-  # and ten chances for one to go quietly wrong, so every one is checked -- but note that the
-  # thresholds are applied to a *maximum* over roughly 110 fits x 60 variables, which is a far
+  # Acceptance criteria for the ~130 fits behind each curve. A hundred and thirty fits is a hundred
+  # and thirty chances for one to go quietly wrong, so every one is checked -- but note that the
+  # thresholds are applied to a *maximum* over roughly 130 fits x 60 variables, which is a far
   # stronger demand than the same number applied to a single fit.
   #
   # `on_failure` is the knob that matters in practice:

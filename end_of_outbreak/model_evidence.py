@@ -1,6 +1,6 @@
 """Marginal likelihoods and posterior model probabilities (§6.5).
 
-Panels 1C and 3C compare the models by ``p(D_{1:110} | model)`` — the observed series with
+Panels 1C and 3C compare the models by ``p(D_{1:130} | model)`` — the observed series with
 **everything** integrated out: the parameters, and for the latent models the latents too. This
 module computes that number, and turns a set of them into posterior model probabilities under
 the uniform prior over models of §6.2.
@@ -119,7 +119,7 @@ _IMPORTANCE_SAMPLING_ESS_WARNING = 0.01
 
 @dataclass(frozen=True)
 class LogEvidence:
-    """One estimate of ``log p(D_{1:110} | model)``, with the error it was measured to."""
+    """One estimate of ``log p(D_{1:130} | model)``, with the error it was measured to."""
 
     model: str
     """Specification name, e.g. ``"ssi"``."""

@@ -9,13 +9,14 @@
 #   1. fit        results/<analysis>/<model>_posterior.nc         seconds-minutes (MCMC)
 #      rac        results/<analysis>/<model>_rac.csv              minutes-hours (MCMC)
 #   2. evidence   results/<analysis>/model_evidence.json          seconds-minutes
+#      combined_evidence  .../combined_model_evidence.json        (analyses borrowing models)
 #      dispersion results/<analysis>/dispersion_posteriors.json   (analyses that estimate k)
 #      report_numbers  results/report_numbers.tex                 seconds (spans the analyses)
 #   3. figure     figures/<analysis>/*.pdf, *.png                 seconds
 #      report     report/report.pdf                               seconds (needs latexmk)
 #
 # `rac` sits in tier 1, not tier 2, and that is not an oversight. RAC(t) conditions on the
-# record through day t, so the estimator fits the model once per conditioning day -- about 110
+# record through day t, so the estimator fits the model once per conditioning day -- about 130
 # fits per model. The tier split still holds where it can: `fit`, `evidence` and `dispersion`
 # describe the model given the whole record, and restyling a figure re-runs no MCMC. What it
 # cannot hold for is a quantity whose definition *is* a fit per day. Selecting
