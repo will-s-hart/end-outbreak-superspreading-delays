@@ -1403,7 +1403,8 @@ where they are furthest apart.
     \resultnum{onsetmodelsestimatedk.sseso-vs-sse.shift01} days earlier for \sseso{} against
     \sse{}, and \resultnum{onsetmodelsestimatedk.ssiso-vs-ssi.shift05} and
     \resultnum{onsetmodelsestimatedk.ssiso-vs-ssi.shift01} days for \ssiso{} against \ssi{};
-    the $\Rpost$ contrast and the model ordering are unchanged
+    the $\Rpost$ contrast and the model ordering --- the onset-anchored pair together, well ahead
+    of \ssi{} and then \sse{} --- are unchanged
     (\resultnum{onsetmodelsestimatedk.sseso.probability},
     \resultnum{onsetmodelsestimatedk.ssiso.probability},
     \resultnum{onsetmodelsestimatedk.ssi.probability},
@@ -1634,11 +1635,13 @@ convergence summaries alone.
     reporting, \resultnum{underreporting80.sseso-vs-sse.shift05} days ahead at
     \resultnum{underreporting80.reportingpercent}\% reporting and
     \resultnum{underreporting60.sseso-vs-sse.shift05} days ahead at
-    \resultnum{underreporting60.reportingpercent}\%. For \ssiso{} against \ssi{} the three gaps
-    are \resultnum{onsetmodelsfixedk.ssiso-vs-ssi.shift05},
-    \resultnum{underreporting80.ssiso-vs-ssi.shift05} and
-    \resultnum{underreporting60.ssiso-vs-ssi.shift05} days; the last is a lower bound, because
-    \ssi{} only crosses on the final day of the record. Panels~C and~D show the same thing
+    \resultnum{underreporting60.reportingpercent}\%. For \ssiso{} against \ssi{} the gaps are
+    \resultnum{onsetmodelsfixedk.ssiso-vs-ssi.shift05} and
+    \resultnum{underreporting80.ssiso-vs-ssi.shift05} days at complete and
+    \resultnum{underreporting80.reportingpercent}\% reporting. At
+    \resultnum{underreporting60.reportingpercent}\% there is no gap to subtract: \ssiso{} crosses
+    on day \resultnum{underreporting60.ssiso.rac05.day}, while \ssi{} reaches 0.05 only as the
+    window closes, so the onset-anchored model leads by at least the remainder of the record. Panels~C and~D show the same thing
     without the subtraction: at either reduced reporting level both onset-anchored models lie to
     the left of both infection-anchored ones throughout. Weakening the assumption moves every
     curve later without closing the gap between the two conventions.
@@ -1675,10 +1678,12 @@ convergence summaries alone.
     lose more: \sse{} goes from \resultnum{onsetmodelsfixedk.sse.rac05.date} to
     \resultnum{underreporting80.sse.rac05.date} and \resultnum{underreporting60.sse.rac05.date},
     and \ssi{} from \resultnum{onsetmodelsfixedk.ssi.rac05.date} to
-    \resultnum{underreporting80.ssi.rac05.date} and \resultnum{underreporting60.ssi.rac05.date}
-    --- the last being \resultnum{data.withdrawaldate}, the day the ERT actually withdrew, so at
-    \resultnum{underreporting60.reportingpercent}\% reporting \ssi{} clears 0.05 only as the
-    window closes.
+    \resultnum{underreporting80.ssi.rac05.date}. At
+    \resultnum{underreporting60.reportingpercent}\% reporting \ssi{} reaches the threshold only
+    as the window closes: it ends at \resultnum{underreporting60.ssi.rac.final} on
+    \resultnum{data.withdrawaldate}, the day the ERT actually withdrew --- on the line itself and
+    inside its Monte-Carlo error, so whether it formally clears 0.05 within the window is not
+    something the run can resolve.
   \item \textbf{The stricter threshold is not reached at all under the weakest assumption.} At
     0.01, \sseso{} settles on \resultnum{onsetmodelsfixedk.sseso.rac01.date} under complete
     reporting and \resultnum{underreporting80.sseso.rac01.date} at
@@ -1697,9 +1702,9 @@ convergence summaries alone.
     weak, on a record of this length.
   \item \textbf{Three things move the declaration, and they are of very different sizes.} The
     choice between the two superspreading mechanisms is the smallest: \sse{} and \ssi{} cross
-    0.05 on days \resultnum{underreporting60.sse.rac05.day} and
-    \resultnum{underreporting60.ssi.rac05.day} at
-    \resultnum{underreporting60.reportingpercent}\% reporting, and the onset-anchored pair are
+    0.05 on days \resultnum{underreporting80.sse.rac05.day} and
+    \resultnum{underreporting80.ssi.rac05.day} at
+    \resultnum{underreporting80.reportingpercent}\% reporting, and the onset-anchored pair are
     closer still. The anchoring convention is worth about a week at every reporting level, as
     above. Weakening the reporting assumption from complete to
     \resultnum{underreporting60.reportingpercent}\% is worth a comparable amount --- \sseso{}
