@@ -116,6 +116,31 @@ def test_every_included_figure_exists():
         assert (REPORT_TEX.parent / relative).exists(), f"missing figure {relative}"
 
 
+def test_every_figure_the_pipeline_draws_is_in_the_report():
+    """The converse of the test above: a figure built and never shown is a finding left out.
+
+    Every committed figure is one directory under ``figures/``, holding a PDF of its own name,
+    and the report includes that PDF. A figure made for a question the report no longer asks
+    should be deleted, not left behind.
+    """
+    included = {
+        (REPORT_TEX.parent / relative).resolve()
+        for relative in re.findall(r"\\includegraphics\[[^\]]*\]\{([^}]*)\}", report_body())
+    }
+    drawn = sorted(
+        directory
+        for directory in (REPO_ROOT / "figures").iterdir()
+        if directory.is_dir() and (directory / f"{directory.name}.pdf").exists()
+    )
+    assert drawn, "no figures found"
+    missing = [
+        directory.name
+        for directory in drawn
+        if (directory / f"{directory.name}.pdf").resolve() not in included
+    ]
+    assert not missing, f"figures the report does not include: {missing}"
+
+
 def test_every_source_the_numbers_were_read_from_still_exists():
     sources = re.findall(r"^%   (\S+)$", NUMBERS_TEX.read_text(), flags=re.MULTILINE)
     assert sources, "the macro file records no provenance"

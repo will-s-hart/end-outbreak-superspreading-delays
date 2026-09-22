@@ -1023,10 +1023,12 @@ and posterior model probabilities are well defined.
   \item $\Rpre$ and $\Rpost$: independent log-normals with median
     \resultnum{priors.R.median} and 95\% interval
     $(\resultnum{priors.R.quantilelower},\ \resultnum{priors.R.quantileupper})$.
-  \item $k$, where estimated: an informative log-normal with median
-    \resultnum{priors.k.median} and 95\% interval
+  \item $k$, where estimated: a log-normal centred on the literature value and a decade wide on
+    each side of it, with median \resultnum{priors.k.median} and 95\% interval
     $(\resultnum{priors.k.quantilelower},\ \resultnum{priors.k.quantileupper})$, identical in
-    every model.
+    every model. The width is deliberate: under a prior only a factor of two wide on each side,
+    a posterior that reproduced its prior could not be told apart from one the data had
+    confirmed.
   \item Prior model probabilities: uniform over the models in each analysis, i.e.\
     $1/\resultnum{naivemodelsfixedk.nmodels}$ in Analyses~1--2 and
     $1/\resultnum{onsetmodelsfixedk.nmodels}$ in Analyses~3--4.
@@ -1163,7 +1165,8 @@ time-indexing convention.
 Four analyses are reported. Analyses~1 and~2 compare the three infection-anchored models, with
 $k$ held at the literature value \resultnum{naivemodelsfixedk.fixedk} and then estimated;
 Analyses~3 and~4 add the onset-anchored models to \sse{} and \ssi{}, again fixed and then
-estimated. Throughout, ``the crossing'' means the first day on which a curve falls below a
+estimated. Three variants of Analysis~3, each removing one of its ingredients, are reported in
+Section~\ref{sec:results-variants} and the supplement. Throughout, ``the crossing'' means the first day on which a curve falls below a
 threshold \emph{and stays there}. Values quoted at day~\resultnum{data.referenceday}
 (\resultnum{data.referencedate}) are read from the fitted curves partway down their descent,
 where they are furthest apart.
@@ -1742,6 +1745,42 @@ right-truncate recent days automatically, one conditioning day at a time. It is 
 the \'Equateur line list gives onset dates rather than reporting dates, so there is nothing to
 estimate the delay from.
 
+% ---------------------------------------------------------------------------------------------
+\subsection{What the switchpoint and superspreading contribute}
+\label{sec:results-variants}
+
+Every measurement of the naive/onset difference above is made in models that also carry
+superspreading and an $R$ switchpoint dated in each model's own time index
+(Section~\ref{sec:switch}). Three variants of Analysis~3 remove one of those ingredients at a
+time. Each is fitted and evaluated exactly as the main analyses are --- a fit per conditioning
+day, model evidence by bridge sampling --- and each has a supplementary figure.
+
+\begin{itemize}
+  \item \textbf{Superspreading removed} (Fig.~\ref{fig:no-superspreading}). \cori{} and
+    \coriso{}, the $k \to \infty$ Poisson limits of the two anchoring conventions, are set beside
+    Analysis~3's \ssi{} and \ssiso{}, the best-supported infection- and onset-anchored models in
+    the main text. The four form a two-by-two comparison: anchoring varies with the mechanism
+    held fixed, and superspreading is switched on with the anchoring held fixed. \ssi{} and
+    \ssiso{} are Analysis~3's own fits, and because the two analyses share the data, the $R$
+    priors and the switch, their evidences and those of \cori{} and \coriso{} are normalised
+    together into one set of posterior model probabilities. That asks whether superspreading is
+    better supported than Poisson transmission at all.
+  \item \textbf{No switchpoint, $R$ and $k$ fixed} (Fig.~\ref{fig:no-switch-fixed}). The four
+    models of Analysis~3 with $R$ held at a single value throughout and $k$ at the literature
+    value. Nothing is estimated but the latent states, so any naive/onset difference that
+    survives is the arithmetic of the retained state alone, with both conventions handed
+    identical parameters. \sse{}, which has no latent state, has no free variable at all; its
+    evidence is its likelihood, computed exactly.
+  \item \textbf{No switchpoint, one $R$ estimated} (Fig.~\ref{fig:no-switch-single}). As above,
+    but each model infers a single reproduction number for the whole outbreak. Against the
+    previous variant this adds back one thing: what the two conventions conclude $R$ was.
+\end{itemize}
+
+With the switchpoint removed, the reset to $\Rpre$ in the definition of $\RAC$ is a no-op: the
+curves in Figs.~\ref{fig:no-switch-fixed} and~\ref{fig:no-switch-single} are forward posterior
+predictives rather than the reset predictive of the main analyses, and are to be compared with
+each other rather than with Fig.~\ref{fig:onset-fixed}.
+
 % =============================================================================================
 \section{Planned sensitivity analyses}
 \label{sec:sensitivity}
@@ -1776,8 +1815,9 @@ The following analyses remain to be completed before drawing conclusions about r
     drawn from $\finc$, and measure the effect on $\Rpre$ and the risk curve. This assesses
     sensitivity to whether the first observed case is the epidemiological index case
     (Section~\ref{sec:outbreak}).
-  \item \textbf{Prior sensitivity}, particularly for the informative prior on $k$, whose
-    interpretation differs between models.
+  \item \textbf{Prior sensitivity}, particularly for the prior on $k$, whose interpretation
+    differs between models. Its width is already a decade on each side of the literature value
+    (Section~\ref{sec:priors}); its location, and the priors on $R$, are untested.
 \end{enumerate}
 
 % =============================================================================================
@@ -1920,6 +1960,48 @@ through the same configuration and is used only for the comparison reported ther
     extinction probability under the reset to $\Rpre$; they are zero for subcritical reset
     draws.}
   \label{fig:sustained-estimated}
+\end{figure}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\textwidth]{../figures/onset_models_no_superspreading/onset_models_no_superspreading.pdf}
+  \caption{\textbf{Superspreading and onset anchoring, each with the other held fixed.} The
+    Poisson limits \cori{} and \coriso{} (greys) beside \ssi{} and \ssiso{} of
+    Fig.~\ref{fig:onset-fixed}, which are that analysis's own fits with $k$ held at
+    \resultnum{onsetmodelsfixedk.fixedk}. \textbf{A}, \textbf{B}: posteriors of $\Rpre$ and
+    $\Rpost$ over their shared priors (dashed). \textbf{C}: posterior model probabilities under a
+    uniform prior over the four models, normalised together from the two analyses' evidences.
+    \textbf{D}: $\RAC$, with filled circles where each curve settles below 0.05. Reading
+    \cori{} against \coriso{}, or \ssi{} against \ssiso{}, varies the anchoring with the mechanism
+    fixed; reading \cori{} against \ssi{}, or \coriso{} against \ssiso{}, switches superspreading
+    on with the anchoring fixed.}
+  \label{fig:no-superspreading}
+\end{figure}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\textwidth]{../figures/no_switch_fixed_R/no_switch_fixed_R.pdf}
+  \caption{\textbf{No switchpoint, with $R$ and $k$ fixed.} The four models of
+    Fig.~\ref{fig:onset-fixed} with $R$ held at one value throughout and $k$ at its literature
+    value, so that only the latent states are estimated. \textbf{A}: posterior model
+    probabilities under a uniform prior over the four models; \sse{}, with nothing to integrate
+    over, contributes its likelihood exactly. \textbf{B}: $\RAC$, with filled circles where each
+    curve settles below 0.05. The onset-anchored models are dash-dotted because, with the switch
+    removed, their curves lie close enough to the infection-anchored ones to hide them. With $R$
+    constant the reset to $\Rpre$ is a no-op, so these are forward posterior predictives
+    (Section~\ref{sec:results-variants}).}
+  \label{fig:no-switch-fixed}
+\end{figure}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\textwidth]{../figures/no_switch_single_R/no_switch_single_R.pdf}
+  \caption{\textbf{No switchpoint, with one $R$ estimated per model.} As
+    Fig.~\ref{fig:no-switch-fixed}, but each model infers a single reproduction number for the
+    whole outbreak, with $k$ still fixed. \textbf{A}: its posterior, over the prior on $\Rpre$
+    (dashed). \textbf{B}: posterior model probabilities under a uniform prior over the four
+    models. \textbf{C}: $\RAC$, drawn as in Fig.~\ref{fig:no-switch-fixed}.}
+  \label{fig:no-switch-single}
 \end{figure}
 
 \end{document}
