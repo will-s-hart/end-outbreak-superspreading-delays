@@ -72,8 +72,14 @@ THRESHOLDS: tuple[float, ...] = (0.05, 0.01)
 REPRODUCTION_NUMBERS: tuple[str, ...] = ("R_pre", "R_post")
 DISPERSION = "k"
 
-NEVER = "never"
-"""What a threshold crossing renders as when the curve never settles below it in the window."""
+UNDETERMINED = "undetermined"
+"""A difference between two crossings when neither curve settles inside the window.
+
+A curve still above a threshold on the last day has not settled *yet*, which bounds its crossing
+from below and nothing more — so a lone unsettled curve is written as a bound (see
+:func:`crossing_day_text`), and a difference involving one as a one-sided bound. Two unsettled
+curves bound nothing about the difference between them, and saying so is the only honest value.
+"""
 
 REFERENCE_DAY = 90
 """One mid-descent day the report compares every model on.
@@ -171,6 +177,47 @@ def interval(summary: pc.PosteriorSummary, decimals: int) -> str:
 def date_text(date: datetime.date) -> str:
     """``5 April 2018`` — no leading zero, since these are read as prose."""
     return f"{date.day} {date:%B} {date.year}"
+
+
+def date_of_day(data: outbreak_data.OutbreakData, day: int) -> datetime.date:
+    """The calendar date of a day index, including one just past the end of the window."""
+    return data.date_of(0) + datetime.timedelta(days=int(day))
+
+
+# --- threshold crossings -----------------------------------------------------------------
+#
+# A crossing that has not happened by the last day of the window is not "never": the curve is
+# still falling, and all the window says is that it settles later than that. So it is written as
+# the bound it is -- a day of at least one past the end, a date of "not before" the day after --
+# and a difference between two crossings inherits a one-sided bound from it.
+
+
+def crossing_day_text(day: int | None, *, last_day: int) -> str:
+    """A crossing day, or ``≥ last_day + 1`` for a curve that had not settled by the end."""
+    return str(day) if day is not None else math_mode(f"\\geq {last_day + 1}")
+
+
+def crossing_date_text(day: int | None, data: outbreak_data.OutbreakData, *, last_day: int) -> str:
+    """A crossing date, or ``not before`` the day after the window for an unsettled curve."""
+    if day is not None:
+        return date_text(date_of_day(data, day))
+    return f"not before {date_text(date_of_day(data, last_day + 1))}"
+
+
+def crossing_difference(later: int | None, earlier: int | None, *, last_day: int) -> str:
+    """``later - earlier`` in days, where ``None`` is a curve still above on ``last_day``.
+
+    An unsettled curve crosses on day ``last_day + 1`` at the earliest, which turns the
+    difference into a bound on one side: at least so many days if ``later`` is the unsettled
+    one, at most so many if ``earlier`` is. If both are, nothing is bounded.
+    """
+    if later is not None and earlier is not None:
+        return str(later - earlier)
+    if later is None and earlier is not None:
+        return math_mode(f"\\geq {last_day + 1 - earlier}")
+    if later is not None and earlier is None:
+        return math_mode(f"\\leq {later - (last_day + 1)}")
+    return UNDETERMINED
 
 
 def small_probability(probability: float) -> str:
@@ -278,6 +325,11 @@ def add_setting(numbers: NumberFile, data: outbreak_data.OutbreakData) -> None:
     numbers.set("data.lastonsetdate", date_text(data.date_of(last_onset_day)))
     numbers.set("data.withdrawalday", str(data.ert_withdrawal_day))
     numbers.set("data.withdrawaldate", date_text(data.date_of(data.ert_withdrawal_day)))
+    # The window runs past the withdrawal, so its end is a number of its own. It is also the
+    # number of conditioning days, and so of fits, behind every curve that starts on day 1.
+    numbers.set("data.lastday", str(data.last_day))
+    numbers.set("data.lastdate", date_text(data.date_of(data.last_day)))
+    numbers.set("data.extradays", str(data.last_day - data.ert_withdrawal_day))
     numbers.set("data.referenceday", str(REFERENCE_DAY))
     numbers.set("data.referencedate", date_text(data.date_of(REFERENCE_DAY)))
 
@@ -345,7 +397,7 @@ def add_priors(numbers: NumberFile, config: dict[str, Any], analyses: list[str])
 
 
 def add_sampler(
-    numbers: NumberFile, block: dict[str, Any], prefix: str, *, default_switch_day: int
+    numbers: NumberFile, block: dict[str, Any], prefix: str, *, data: outbreak_data.OutbreakData
 ) -> None:
     """What the sampler was asked for, so the methods can state it per analysis."""
     sampler = block["sampler"]
@@ -365,12 +417,13 @@ def add_sampler(
         )
     # The day R actually switched on: the ERT arrival day unless the analysis moved it, which
     # is the whole content of a shifted-switch or no-switch variant. Resolved here rather than
-    # left as an override, so the macro reads the same whether or not one was given.
-    switch_day = block.get("switch_day")
-    numbers.set(
-        f"{prefix}.switchday",
-        str(default_switch_day if switch_day is None else int(switch_day)),
+    # left as an override, so the macro reads the same whether or not one was given -- and
+    # through the same function the fits used, so it cannot disagree with them. An analysis
+    # with no switch reads "none" rather than a day past the end of the window.
+    switch_day = configuration.switch_day_from_config(
+        block, ert_arrival_day=data.ert_arrival_day, n_days=data.n_days
     )
+    numbers.set(f"{prefix}.switchday", "none" if switch_day >= data.n_days else str(switch_day))
     # The number of models is the denominator of the uniform prior over models (§6.2), which the
     # posterior model probabilities are not interpretable without.
     numbers.set(f"{prefix}.nmodels", str(len(block["models"])))
@@ -488,6 +541,13 @@ def add_risk_curve(
             )
         )
     days = np.asarray(frame["day"], dtype=np.int64)
+    last_day = int(days[-1])
+    withdrawal_day = data.ert_withdrawal_day
+    if withdrawal_day not in set(days.tolist()):
+        raise ValueError(
+            f"the ERT's withdrawal, day {withdrawal_day}, is not in this curve, which runs from "
+            f"{int(days[0])} to {last_day}. The report quotes every model's risk on that day."
+        )
     # Two Monte-Carlo error summaries, because the honest maximum and the useful one differ. The
     # error is largest while the curve is near 1 and every draw is contributing, which is a
     # region no comparison is made in; the decision-relevant figure is the largest error over the
@@ -500,9 +560,15 @@ def add_risk_curve(
         for threshold in THRESHOLDS:
             day = curve.first_day_below(threshold)
             key = f"{prefix}.{name}{round(threshold * 100):02d}"
-            numbers.set(f"{key}.day", NEVER if day is None else str(day))
-            numbers.set(f"{key}.date", NEVER if day is None else date_text(data.date_of(day)))
+            numbers.set(f"{key}.day", crossing_day_text(day, last_day=last_day))
+            numbers.set(f"{key}.date", crossing_date_text(day, data, last_day=last_day))
         numbers.set(f"{prefix}.{name}.final", fixed(float(curve.risk[-1]), 3))
+        # The risk on the day the ERT actually left. Once the same as `.final`; now twenty days
+        # before it, and the number to quote wherever the sentence is about the real decision.
+        numbers.set(
+            f"{prefix}.{name}.withdrawal",
+            fixed(float(curve.risk[days == withdrawal_day][0]), 3),
+        )
         numbers.set(
             f"{prefix}.{name}.reference",
             fixed(float(curve.risk[days == reference_day][0]), 3),
@@ -532,9 +598,7 @@ def add_risk_curve(
             case_day, transmission_day = crossings
             numbers.set(
                 f"{prefix}.gap.shift{label}",
-                NEVER
-                if case_day is None or transmission_day is None
-                else str(case_day - transmission_day),
+                crossing_difference(case_day, transmission_day, last_day=last_day),
             )
 
 
@@ -641,10 +705,22 @@ def add_onset_shifts(numbers: NumberFile, analysis: str, curves: dict[str, pd.Da
                 _crossing(curves[model], threshold) for model in (onset_model, naive_model)
             )
             name = f"{key}.shift{round(threshold * 100):02d}"
-            if onset_day is None or naive_day is None:
-                numbers.set(name, NEVER)
-            else:
-                numbers.set(name, str(naive_day - onset_day))
+            numbers.set(
+                name,
+                crossing_difference(
+                    naive_day,
+                    onset_day,
+                    last_day=_shared_last_day(curves[onset_model], curves[naive_model]),
+                ),
+            )
+
+
+def _shared_last_day(*frames: pd.DataFrame) -> int:
+    """The last conditioning day of curves that are being differenced, which must agree."""
+    last_days = {int(frame["day"].max()) for frame in frames}
+    if len(last_days) != 1:
+        raise ValueError(f"curves compared day by day must share a window; they end on {last_days}")
+    return last_days.pop()
 
 
 def _crossing(frame: pd.DataFrame, threshold: float) -> int | None:
@@ -720,7 +796,7 @@ def collect(
         block = configuration.analysis_config(config, analysis)
         models = list(block["models"])
         directory = results_root / analysis
-        add_sampler(numbers, block, slug(analysis), default_switch_day=data.ert_arrival_day)
+        add_sampler(numbers, block, slug(analysis), data=data)
 
         posteriors = {
             model: open_posterior(directory / f"{model}_posterior.nc") for model in models

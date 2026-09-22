@@ -7,7 +7,12 @@ deliberately agnostic between the two readings — it exposes the counts and the
 each model decides what they mean.
 
 Day 0 is the date of the first observed onset (5 April 2018) and is an initial condition in
-every model; likelihoods run over days ``1, ..., 110``.
+every model; likelihoods run over days ``1, ..., 130``.
+
+The window runs past the ERT's withdrawal (day 110) to 13 August 2018 (day 130). No further case
+occurred, so the extra days are zero counts, and they are there so that every risk curve the
+report draws settles below both decision thresholds inside the window rather than being cut off
+still above one.
 """
 
 from __future__ import annotations
@@ -33,13 +38,23 @@ LAST_OBSERVED_ONSET_DATE = datetime.date(2018, 6, 2)
 """Onset date of the final observed case."""
 
 ERT_WITHDRAWAL_DATE = datetime.date(2018, 7, 24)
-"""Actual withdrawal of the Ebola Response Team; the last day of the analysis window."""
+"""Actual withdrawal of the Ebola Response Team, and the day the outbreak was declared over."""
+
+ANALYSIS_END_DATE = datetime.date(2018, 8, 13)
+"""Last day of the analysis window: twenty case-free days after the ERT's withdrawal.
+
+A choice rather than a fact about the outbreak, and made for one reason. Ending the window at
+the withdrawal left several curves — DLO, the Poisson limit, and most of the under-reporting
+sweep — still above 0.01 on its last day, so the report could only say that they had not yet
+settled. Their late decline is close to exponential at about 0.1–0.15 per day, which puts the
+slowest of them (SSI at 60% reporting) below 0.01 by about day 125; twenty days leaves a margin.
+"""
 
 TOTAL_CASES = 54
 """Total number of cases in the outbreak, used as a load-time consistency check."""
 
 DEFAULT_DATA_FILE = Path(__file__).resolve().parents[1] / "data" / "equateur_2018_onsets.csv"
-"""Committed, already-padded onset series (see ``data/README.md``)."""
+"""Committed onset series, padded with zeros to the ERT's withdrawal (see ``data/README.md``)."""
 
 
 def day_index_of(date: datetime.date, *, origin: datetime.date = FIRST_ONSET_DATE) -> int:
@@ -61,7 +76,8 @@ class OutbreakData:
         Day index on which ``R`` switches from ``R_pre`` to ``R_post`` (§5.7 of the plan:
         the switch happens on this day in *each model's own* time index).
     ert_withdrawal_day
-        Day index of the final row, i.e. the end of the analysis window.
+        Day index of the ERT's withdrawal. Inside the window rather than its end: the window
+        runs on past it (see :data:`ANALYSIS_END_DATE`), so it is a date to mark, not a bound.
     """
 
     dates: pd.DatetimeIndex
@@ -76,15 +92,20 @@ class OutbreakData:
             raise ValueError("dates and onsets must have the same length")
         if not 0 <= self.ert_arrival_day < self.onsets.size:
             raise ValueError("ert_arrival_day lies outside the series")
-        if self.ert_withdrawal_day != self.onsets.size - 1:
-            raise ValueError("ert_withdrawal_day must index the final row of the series")
+        if not self.ert_arrival_day <= self.ert_withdrawal_day < self.onsets.size:
+            raise ValueError("ert_withdrawal_day must lie between the ERT's arrival and the end")
 
     # --- shape and totals ---
 
     @property
     def n_days(self) -> int:
-        """Number of days in the analysis window (111 for the full Équateur series)."""
+        """Number of days in the analysis window (131 for the full Équateur series)."""
         return self.onsets.size
+
+    @property
+    def last_day(self) -> int:
+        """Day index of the window's final row (130 for the full Équateur series)."""
+        return self.n_days - 1
 
     @property
     def total_cases(self) -> int:
@@ -105,7 +126,7 @@ class OutbreakData:
 
     @property
     def post_ert_mask(self) -> NDArray[np.bool_]:
-        """True from the day the ERT arrived onwards (days 33–110)."""
+        """True from the day the ERT arrived onwards (days 33–130)."""
         return ~self.pre_ert_mask
 
     @property
@@ -136,7 +157,7 @@ def pad_to(
     """Reindex ``frame`` onto a contiguous daily calendar ending at ``end_date``.
 
     Missing days — including the long case-free tail between the last observed onset and the
-    ERT withdrawal — are filled with zero counts. Idempotent: a frame that already covers the
+    end of the window — are filled with zero counts. Idempotent: a frame that already covers the
     window is returned unchanged (up to sorting).
     """
     dates = pd.to_datetime(frame[date_column])
@@ -159,23 +180,28 @@ def pad_to(
 def load_onset_data(
     path: str | Path = DEFAULT_DATA_FILE,
     *,
-    end_date: datetime.date = ERT_WITHDRAWAL_DATE,
+    end_date: datetime.date = ANALYSIS_END_DATE,
     ert_arrival_date: datetime.date = ERT_ARRIVAL_DATE,
+    ert_withdrawal_date: datetime.date = ERT_WITHDRAWAL_DATE,
     expected_total: int | None = TOTAL_CASES,
 ) -> OutbreakData:
     """Load the daily onset series, padding it out to ``end_date`` with zero counts.
 
-    The committed CSV is already padded, so the padding step is normally a no-op; it is
-    applied anyway so that the raw (unpadded) series loads correctly too.
+    The committed CSV is padded to the ERT's withdrawal, and this pads the twenty further
+    case-free days to :data:`ANALYSIS_END_DATE`. The file stops at the withdrawal so that a
+    caller can still load the window it once was — the validation studies pass
+    ``end_date=ERT_WITHDRAWAL_DATE`` — since padding can lengthen a series but never shorten it.
 
     Parameters
     ----------
     path
         CSV with a ``date`` column and a count column named ``onsets`` or ``incidence``.
     end_date
-        Last day of the analysis window; defaults to the actual ERT withdrawal date.
+        Last day of the analysis window; defaults to :data:`ANALYSIS_END_DATE`.
     ert_arrival_date
         Date on which ``R`` switches from ``R_pre`` to ``R_post``.
+    ert_withdrawal_date
+        Date the ERT left, which must fall inside the window.
     expected_total
         If given, the total case count is checked against it and a mismatch raises. Pass
         ``None`` to skip (e.g. when loading a synthetic or subset series).
@@ -201,5 +227,5 @@ def load_onset_data(
         dates=dates,
         onsets=onsets,
         ert_arrival_day=day_index_of(ert_arrival_date, origin=origin),
-        ert_withdrawal_day=day_index_of(end_date, origin=origin),
+        ert_withdrawal_day=day_index_of(ert_withdrawal_date, origin=origin),
     )

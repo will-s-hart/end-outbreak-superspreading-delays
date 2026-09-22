@@ -114,7 +114,10 @@ def _simulate_comparable_history(
 
 def build_datasets(seed: int) -> list[Dataset]:
     """The real series, a truncated version of it, and a synthetic SSI history."""
-    data = outbreak_data.load_onset_data()
+    # Days 0-110, the window these checks were run and committed on. The pipeline's window
+    # now runs to 13 August; nothing here tests the extra case-free days, and pinning the end
+    # keeps the committed outputs reproducible.
+    data = outbreak_data.load_onset_data(end_date=outbreak_data.ERT_WITHDRAWAL_DATE)
     delays = dd.build_onset_anchored_delays()
 
     # Truncating just past the last observed onset removes the long case-free tail, and with

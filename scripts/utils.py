@@ -399,8 +399,9 @@ def mark_intervention_dates(
 ) -> None:
     """Vertical rules at the ERT's arrival and withdrawal, annotated.
 
-    The withdrawal label goes to the *left* of its rule: withdrawal is the last day of the
-    analysis window, so a right-hand label would hang off the axes.
+    The withdrawal label goes to the *left* of its rule. The window runs twenty days past the
+    withdrawal, which is too narrow a strip for the label on the trimmed views, and the curves
+    to the left of the rule have fallen to the thresholds by then, leaving the top clear.
     """
     for date, text, side in (
         (arrival, "ERT arrives", "left"),

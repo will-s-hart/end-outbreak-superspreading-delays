@@ -282,13 +282,55 @@ def test_crossings_are_the_settling_definition_the_figures_use():
     assert "\\defresultnum{x.rac.reference}{0.100}" in rendered
 
 
-def test_a_curve_that_never_settles_says_so_rather_than_inventing_a_day():
+def test_a_curve_still_above_at_the_end_is_bounded_rather_than_said_never_to_settle():
+    """It has not settled *yet*: the window bounds its crossing from below, and that is all."""
     data = synthetic_outbreak()
     numbers = report_numbers.NumberFile()
     report_numbers.add_risk_curve(numbers, risk_frame([0.9] * 11), data, "x", reference_day=6)
     rendered = numbers.render(sources=[])
-    assert "\\defresultnum{x.rac05.day}{never}" in rendered
-    assert "\\defresultnum{x.rac05.date}{never}" in rendered
+    assert "never" not in rendered
+    assert "\\defresultnum{x.rac05.day}{\\ensuremath{\\geq 11}}" in rendered
+    assert "\\defresultnum{x.rac05.date}{not before 16 April 2018}" in rendered
+
+
+def test_the_risk_on_the_withdrawal_day_is_its_own_key_once_the_window_runs_past_it():
+    data = synthetic_outbreak()
+    moved = type(data)(
+        dates=data.dates, onsets=data.onsets, ert_arrival_day=3, ert_withdrawal_day=8
+    )
+    risk = [1.0, 1.0, 0.9, 0.5, 0.30, 0.20, 0.10, 0.04, 0.03, 0.02, 0.005]
+    numbers = report_numbers.NumberFile()
+    report_numbers.add_risk_curve(numbers, risk_frame(risk), moved, "x", reference_day=6)
+    rendered = numbers.render(sources=[])
+    assert "\\defresultnum{x.rac.withdrawal}{0.030}" in rendered
+    assert "\\defresultnum{x.rac.final}{0.005}" in rendered
+
+
+@pytest.mark.parametrize(
+    ("later", "earlier", "expected"),
+    [
+        (9, 7, "2"),
+        (None, 7, "\\ensuremath{\\geq 4}"),
+        (9, None, "\\ensuremath{\\leq -2}"),
+        (None, None, "undetermined"),
+    ],
+)
+def test_a_difference_involving_an_unsettled_curve_is_a_one_sided_bound(later, earlier, expected):
+    """The window ends on day 10, so an unsettled curve crosses on day 11 at the earliest."""
+    assert report_numbers.crossing_difference(later, earlier, last_day=10) == expected
+
+
+def test_an_onset_shift_against_an_unsettled_naive_curve_is_a_lower_bound():
+    numbers = report_numbers.NumberFile()
+    settled = [1.0, 0.9, 0.5, 0.3, 0.1, 0.04, 0.02, 0.009, 0.005, 0.003, 0.001]
+    report_numbers.add_onset_shifts(
+        numbers,
+        "analysis",
+        {"sse_so": risk_frame(settled), "sse": risk_frame([0.9] * 11)},
+    )
+    rendered = numbers.render(sources=[])
+    assert "\\defresultnum{analysis.sseso-vs-sse.shift05}{\\ensuremath{\\geq 6}}" in rendered
+    assert "\\defresultnum{analysis.sseso-vs-sse.shift01}{\\ensuremath{\\geq 4}}" in rendered
 
 
 def test_the_rat_keys_appear_only_where_the_rat_column_does():

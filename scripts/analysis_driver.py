@@ -171,12 +171,12 @@ class AnalysisSetting:
         """The day ``R`` switches on, in each model's own time index.
 
         The ERT arrival day unless the analysis overrides it. An override is how a sensitivity
-        analysis shifts the switch, and how the no-switchpoint variants disable it altogether:
-        a day at or past the end of the window leaves ``R_pre`` in force throughout
-        (:func:`end_of_outbreak.renewal.switch_index`).
+        analysis shifts the switch, and how the no-switchpoint variants disable it altogether
+        with ``switch_day: never``; see :func:`configuration.switch_day_from_config`.
         """
-        override = self.block.get("switch_day")
-        return self.data.ert_arrival_day if override is None else int(override)
+        return configuration.switch_day_from_config(
+            self.block, ert_arrival_day=self.data.ert_arrival_day, n_days=self.data.n_days
+        )
 
     def dispersion(self) -> float | LogNormalPrior | None:
         """``k`` as the builders take it: a float where fixed, a prior where estimated.

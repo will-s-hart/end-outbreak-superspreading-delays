@@ -57,7 +57,12 @@ CLOSED_FORM_MODELS = ("dlo", "sse")
 
 
 def _setting(analysis: dict[str, Any]) -> tuple[outbreak_data.OutbreakData, OnsetAnchoredDelays]:
-    data = outbreak_data.load_onset_data(analysis["shared"]["data_file"])
+    # Days 0-110, the window these checks were run and committed on. The pipeline's window
+    # now runs to 13 August; nothing here tests the extra case-free days, and pinning the end
+    # keeps the committed outputs reproducible.
+    data = outbreak_data.load_onset_data(
+        analysis["shared"]["data_file"], end_date=outbreak_data.ERT_WITHDRAWAL_DATE
+    )
     return data, configuration.onset_anchored_delays_from_config({"shared": analysis["shared"]})
 
 

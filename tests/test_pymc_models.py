@@ -184,7 +184,7 @@ def test_the_equateur_series_gives_ssi_thirty_one_latents():
     assert pymc_models.model_days(model, pymc_models.COHORT_DAY_DIMENSION).size == 31
     np.testing.assert_array_equal(
         pymc_models.model_days(model, pymc_models.LIKELIHOOD_DAY_DIMENSION),
-        np.arange(1, 111),
+        np.arange(1, data.n_days),
     )
 
 

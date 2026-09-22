@@ -67,11 +67,11 @@ INCUBATION_FIRST_LAG = 1
 TOST_FIRST_LAG = 0
 """``f_tost`` may place mass at lag 0: a case can transmit on its own onset day."""
 
-DEFAULT_MAX_LAG = 110
+DEFAULT_MAX_LAG = 130
 """Largest lag with its own probability mass. Residual tail mass is folded into it.
 
-Set to the length of the analysis window (days 0–110), so that no transmission is truncated
-*within* the window: the renewal sum on the final day, ``Σ_{s=1}^{110} w_s I_{110-s}``, reaches
+Set to the length of the analysis window (days 0–130), so that no transmission is truncated
+*within* the window: the renewal sum on the final day, ``Σ_{s=1}^{130} w_s I_{130-s}``, reaches
 all the way back to the index case. The generic EVD serial interval carries about 0.1% of its
 mass beyond lag 60, which is small but not negligible against a risk that falls below 0.01.
 """

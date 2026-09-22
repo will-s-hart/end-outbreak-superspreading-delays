@@ -739,8 +739,11 @@ def test_the_replicated_curve_stays_high_until_late_june(real_series):
     assert curve.risk[mid_june] > 0.98
     assert curve.first_day_below(0.05) is not None
     assert data.date_of(curve.first_day_below(0.05)).month == 7
-    assert curve.first_day_below(0.01) is None  # still above 1% when the ERT actually left
-    assert 0.02 < curve.risk[-1] < 0.05
+    # Still above 1% when the ERT actually left, and settling below it only afterwards, inside
+    # the twenty days the window now runs past the withdrawal.
+    assert 0.02 < curve.risk[data.ert_withdrawal_day] < 0.05
+    settled = curve.first_day_below(0.01)
+    assert settled is not None and data.ert_withdrawal_day < settled <= data.last_day
 
 
 # --- validation ------------------------------------------------------------------------------

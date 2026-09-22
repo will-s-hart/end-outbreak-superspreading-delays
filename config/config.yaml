@@ -7,11 +7,13 @@
 shared:
   data_file: data/equateur_2018_onsets.csv
 
-  # The analysis window and the ERT's arrival and withdrawal dates are facts about the
-  # outbreak, not settings: they live beside the onset dates in `end_of_outbreak/outbreak_data`
-  # (days 33 and 110, i.e. 8 May and 24 July 2018), which is also where the report reads them
-  # from. The day a model *switches* R is the modelling choice, and defaults to the arrival
-  # day; override it per analysis with `switch_day` (§5.7 of the implementation plan).
+  # The ERT's arrival and withdrawal dates are facts about the outbreak, not settings: they
+  # live beside the onset dates in `end_of_outbreak/outbreak_data` (days 33 and 110, i.e. 8 May
+  # and 24 July 2018), which is also where the report reads them from. So does the end of the
+  # analysis window, day 130 (13 August 2018): twenty case-free days past the withdrawal, so that
+  # every curve settles below both thresholds inside it. The day a model *switches* R is the
+  # modelling choice, and defaults to the arrival day; override it per analysis with
+  # `switch_day`, a day index or `never` (§5.7 of the implementation plan).
 
   # Delay distributions. `serial_interval` drives all five models; `incubation_period` and
   # the residual TOST drive the two onset-anchored ones.
@@ -29,7 +31,7 @@ shared:
     name: who_ert_2014
     mean: 11.4
     sd: 8.1
-  max_lag: 110  # = the analysis window, so nothing is truncated within it
+  max_lag: 130  # = the analysis window, so nothing is truncated within it
   serial_interval_tolerance: 0.02  # max TV distance of f_tost * f_inc from w
 
   # Alternative serial interval for the sensitivity analysis (§2, Stage 10). Not admissible
@@ -131,8 +133,10 @@ analyses:
 
   # Exploratory, and deliberately out of IMPLEMENTED_ANALYSES: no report figure, no report
   # number. They ask how much of the naive/onset gap in Analysis 3 is the switchpoint, by
-  # removing it. `switch_day: 111` is past the end of the 111-day window, so `switch_index`
-  # leaves R_pre in force on every day, in each model's own time index.
+  # removing it. `switch_day: never` resolves to a day past the end of the window, whatever its
+  # length, so `switch_index` leaves R_pre in force on every day, in each model's own time
+  # index. (It used to be written 111, which the longer window would have turned into a switch
+  # on day 111; an integer past the window is now refused.)
   #
   # Both therefore drop the reset counterfactual too: with R constant, RAC's reset to R_pre is
   # a no-op and the estimand is a plain forward predictive rather than a reset predictive.
@@ -147,14 +151,14 @@ analyses:
     fixed_k: 0.18
     fixed_R_pre: 0.95
     fixed_R_post: 0.95
-    switch_day: 111
+    switch_day: never
     run_script: scripts/run_no_switch_fixed_R.py
     sampler: {draws: 2000, tune: 2000, chains: 4, target_accept: 0.9, seed: 20260916}
 
   no_switch_single_R:
     models: [sse, ssi, sse_so, ssi_so]
     fixed_k: 0.18
-    switch_day: 111
+    switch_day: never
     run_script: scripts/run_no_switch_single_R.py
     sampler: {draws: 2000, tune: 2000, chains: 4, target_accept: 0.9, seed: 20260917}
 

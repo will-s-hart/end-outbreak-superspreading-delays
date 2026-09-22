@@ -351,7 +351,9 @@ def test_the_reconstruction_covers_exactly_the_days_the_model_dropped(real_serie
         "sse_so", data.onsets, delays=delays, switch_day=data.ert_arrival_day
     )
     np.testing.assert_array_equal(np.union1d(sampled, rebuilt), structure.days)
-    assert rebuilt.size == 52
+    # Every day from the last onset (58) to the day before the window ends (129): 52 on the
+    # 111-day window, and the twenty days added past the ERT's withdrawal join the tail.
+    assert rebuilt.size == 72
     # Conditioning tightens each latent: the rate rises above the prior's k by the coupling.
     assert (rate > 0.18).all()
     np.testing.assert_allclose(shape, 0.18 * structure.scale[rebuilt])
@@ -457,14 +459,16 @@ def test_the_untouched_sse_so_block_is_as_pathological_as_the_plan_says(real_ser
     days = pymc_models.model_days(model, pymc_models.TRANSMISSION_DAY_DIMENSION)
     shapes = 0.18 * tost_sum[days]
 
-    # 110 latents, as §6.3 measured. The smallest shape is 2.67e-6 rather than the 2.2e-6
-    # quoted there because that figure is day 110's, and day 110 carries no latent here: its
-    # infections could only produce onsets after the window closes, so it is unidentified.
-    assert days.size == 110
-    np.testing.assert_array_equal(days, np.arange(110))
+    # 130 latents, one per day but the last: day 130's infections could only produce onsets
+    # after the window closes, so it carries none. §6.3 measured this block on the 111-day
+    # window -- 110 latents, the smallest shape 2.67e-6, [43, 31, 19] below the bounds -- and
+    # the twenty case-free days since added past the ERT's withdrawal land entirely in the
+    # pathological tail, which is why marginalising it matters more now, not less.
+    assert days.size == 130
+    np.testing.assert_array_equal(days, np.arange(130))
     assert shapes.max() == pytest.approx(0.383, abs=5e-4)
-    assert shapes.min() == pytest.approx(2.67e-6, rel=0.02)
-    assert [int((shapes < bound).sum()) for bound in (1e-2, 1e-3, 1e-4)] == [43, 31, 19]
+    assert shapes.min() == pytest.approx(5.88e-8, rel=0.02)
+    assert [int((shapes < bound).sum()) for bound in (1e-2, 1e-3, 1e-4)] == [63, 51, 39]
 
 
 def test_marginalisation_removes_exactly_the_pathological_tail(real_series):

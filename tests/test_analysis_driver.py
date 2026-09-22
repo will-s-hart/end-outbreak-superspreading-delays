@@ -153,3 +153,28 @@ def test_the_no_switchpoint_variants_move_the_switch_past_the_window(analysis, s
     """Which is what leaves ``R_pre`` in force on every day, in each model's own time index."""
     setting = setting_of(analysis)
     assert setting.switch_day() >= setting.data.n_days
+
+
+@pytest.mark.parametrize("analysis", ["no_switch_fixed_R", "no_switch_single_R"])
+def test_the_no_switchpoint_variants_say_never_rather_than_a_day_past_the_end(analysis, setting_of):
+    """A number past the end stops meaning "no switch" as soon as the window grows."""
+    assert setting_of(analysis).block["switch_day"] == configuration.NO_SWITCH
+
+
+@pytest.mark.parametrize("configured", [0, 131, 200])
+def test_an_integer_switch_day_outside_the_window_is_refused(configured):
+    with pytest.raises(ValueError, match="switch_day: never"):
+        configuration.switch_day_from_config(
+            {"switch_day": configured}, ert_arrival_day=33, n_days=131
+        )
+
+
+@pytest.mark.parametrize(("configured", "expected"), [(None, 33), (60, 60), ("never", 131)])
+def test_the_switch_day_resolves_to_arrival_a_day_or_past_the_end(configured, expected):
+    block = {} if configured is None else {"switch_day": configured}
+    assert configuration.switch_day_from_config(block, ert_arrival_day=33, n_days=131) == expected
+
+
+def test_a_switch_day_that_is_neither_a_day_nor_never_is_refused():
+    with pytest.raises(ValueError, match="a day index or 'never'"):
+        configuration.switch_day_from_config({"switch_day": "none"}, ert_arrival_day=33, n_days=131)
