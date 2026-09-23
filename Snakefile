@@ -607,6 +607,15 @@ rule delay_distributions:
 
 
 rule figure:
+    # Only the analyses with a `plot_script`. The variants have bespoke figure rules and no such
+    # key, and a `ruleorder` alone is not enough: Snakemake evaluates this rule's input functions
+    # while resolving the ambiguity, so the missing key surfaced as an InputFunctionException
+    # traceback on every dry run -- noise that would hide a real one. The `ruleorder` lines below
+    # stay, to settle the collision if a variant is ever given a `plot_script` of its own.
+    wildcard_constraints:
+        analysis="|".join(
+            analysis for analysis in ANALYSES if "plot_script" in ANALYSES[analysis]
+        ),
     input:
         racs=racs_of,
         posteriors=posteriors_of,
