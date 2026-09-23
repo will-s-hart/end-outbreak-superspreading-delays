@@ -244,12 +244,65 @@ def test_the_configured_convergence_threshold_is_generated_not_typed_into_the_re
 
 
 def test_diagnostic_groups_merge_without_conflating_core_and_reporting_analyses():
-    core = report_numbers.Diagnostics(fits=10, max_rhat=1.01, min_bulk_ess=300, divergences=0)
-    reporting = report_numbers.Diagnostics(fits=4, max_rhat=1.015, min_bulk_ess=120, divergences=2)
+    core = report_numbers.Diagnostics(
+        fits=10, sampled_fits=10, max_rhat=1.01, min_bulk_ess=300, divergences=0
+    )
+    reporting = report_numbers.Diagnostics(
+        fits=4, sampled_fits=3, max_rhat=1.015, min_bulk_ess=120, divergences=2
+    )
     all_analyses = core.merged_with(reporting)
     assert all_analyses == report_numbers.Diagnostics(
-        fits=14, max_rhat=1.015, min_bulk_ess=120, divergences=2
+        fits=14, sampled_fits=13, max_rhat=1.015, min_bulk_ess=120, divergences=2
     )
+
+
+def diagnostics_table(max_rhat, min_ess, *, divergences=0, n_sampled=1) -> pd.DataFrame:
+    """One curve's per-day diagnostics, with nan rows where a fit sampled nothing."""
+    return pd.DataFrame(
+        {
+            "day": np.arange(1, len(max_rhat) + 1),
+            "divergences": np.full(len(max_rhat), divergences),
+            "max_r_hat": np.asarray(max_rhat, dtype=np.float64),
+            "min_ess_bulk": np.asarray(min_ess, dtype=np.float64),
+            "seconds": np.full(len(max_rhat), 0.1),
+            "n_sampled_variables": np.full(len(max_rhat), n_sampled),
+        }
+    )
+
+
+def test_fits_that_sampled_nothing_are_counted_but_not_summarised():
+    """`no_switch_fixed_R`'s SSE fixes everything, so every one of its fits is a point mass.
+
+    Its nan rows used to make the whole analysis's minimum ESS nan, which stopped the step --
+    and the maximum R-hat nan, which would have been *printed* as "nan" in the report.
+    """
+    nothing_sampled = diagnostics_table([np.nan] * 4, [np.nan] * 4, n_sampled=0)
+    sampled = diagnostics_table([1.01, 1.004, 1.02, 1.003], [420.0, 900.0, 550.0, 880.0])
+    measured = report_numbers.measure_diagnostics({"sse": nothing_sampled, "ssi": sampled})
+    assert measured == report_numbers.Diagnostics(
+        fits=8, sampled_fits=4, max_rhat=1.02, min_bulk_ess=420.0, divergences=0
+    )
+    numbers = report_numbers.NumberFile()
+    report_numbers.add_diagnostics(numbers, measured, "x")
+    rendered = numbers.render(sources=[])
+    assert "nan" not in rendered
+    assert "\\defresultnum{x.diagnostics.fits}{8}" in rendered
+    assert "\\defresultnum{x.diagnostics.sampledfits}{4}" in rendered
+    assert "\\defresultnum{x.diagnostics.maxrhat}{1.020}" in rendered
+    assert "\\defresultnum{x.diagnostics.minbulkess}{420}" in rendered
+
+
+def test_an_analysis_where_nothing_sampled_at_all_is_refused():
+    table = diagnostics_table([np.nan] * 3, [np.nan] * 3, n_sampled=0)
+    with pytest.raises(ValueError, match="no fit of sse sampled any variable"):
+        report_numbers.measure_diagnostics({"sse": table})
+
+
+def test_a_sampled_fit_with_no_diagnostic_is_refused_rather_than_skipped():
+    """Nothing to sample is a property of the model; a missing R-hat is a broken diagnostic."""
+    table = diagnostics_table([1.01, np.nan], [400.0, 500.0])
+    with pytest.raises(ValueError, match="days 2 sampled variables"):
+        report_numbers.measure_diagnostics({"ssi": table})
 
 
 # ---------------------------------------------------------------------------------------

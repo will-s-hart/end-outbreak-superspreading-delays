@@ -6,19 +6,19 @@
   ],
   "estimator": "bridge_sampling",
   "log_evidence": {
-    "cori": -91.75706147476228,
-    "cori_so": -82.61663877683155
+    "cori": -91.76440560070476,
+    "cori_so": -82.61607508834189
   },
   "log_evidence_standard_error": {
-    "cori": 0.0009503570395045563,
-    "cori_so": 0.0014590978968063812
+    "cori": 0.0009906183199782236,
+    "cori_so": 0.0015185016151034944
   },
   "n_draws": {
     "cori": 12000,
     "cori_so": 12000
   },
   "posterior_model_probability": {
-    "cori": 0.000107230489351928,
-    "cori_so": 0.9998927695106534
+    "cori": 0.00010638596432609661,
+    "cori_so": 0.9998936140356709
   }
 }

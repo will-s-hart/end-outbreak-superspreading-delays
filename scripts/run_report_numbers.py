@@ -655,6 +655,18 @@ class Diagnostics:
     """
 
     fits: int
+    """Every conditioning-day fit behind these curves, including any that sampled nothing."""
+
+    sampled_fits: int
+    """Those of them with a variable to sample, which is what ``R̂`` and the ESS describe.
+
+    The two differ wherever a fit had nothing to sample: ``no_switch_fixed_R``'s SSE fixes every
+    parameter and has no latent block, so all of its fits are point masses, and the first days of
+    the latent models' curves have an empty latent block. Such a fit has no convergence to
+    report — ``R̂`` and the ESS are nan in its row — and averaging it in as though it had is
+    how a nan reached a macro the report quotes.
+    """
+
     max_rhat: float
     min_bulk_ess: float
     divergences: int
@@ -662,6 +674,7 @@ class Diagnostics:
     def merged_with(self, other: Diagnostics) -> Diagnostics:
         return Diagnostics(
             fits=self.fits + other.fits,
+            sampled_fits=self.sampled_fits + other.sampled_fits,
             max_rhat=max(self.max_rhat, other.max_rhat),
             min_bulk_ess=min(self.min_bulk_ess, other.min_bulk_ess),
             divergences=self.divergences + other.divergences,
@@ -675,18 +688,64 @@ def measure_diagnostics(tables: dict[str, pd.DataFrame]) -> Diagnostics:
     the report quotes are the ones the pipeline's own acceptance gate applied. Those cover every
     sampled variable, latent block included — which is a stronger claim than the reported
     scalars alone, and the one the gate enforces.
+
+    Fits that sampled nothing are counted and then set aside: they have no ``R̂`` and no ESS, so
+    including their nan rows would make the maximum and the minimum nan too, exactly as the gate
+    itself had to learn (``refit_risk.DayDiagnostics``). A nan that reaches the macro file is
+    worse than an error, because ``\resultnum`` would print it: the crossing macros show a
+    missing value loudly, but a nan reads as a number. A *sampled* fit whose ``R̂`` is nan is a
+    different thing — a diagnostic that could not be computed — and raises here rather than
+    being dropped.
     """
+    fits = sampled_fits = divergences = 0
+    rhats: list[float] = []
+    ess: list[float] = []
+    for model, table in tables.items():
+        fits += len(table)
+        divergences += int(table["divergences"].sum())
+        sampled = table[sampled_mask(table)]
+        sampled_fits += len(sampled)
+        unusable = sampled[sampled["max_r_hat"].isna() | sampled["min_ess_bulk"].isna()]
+        if not unusable.empty:
+            days = ", ".join(str(int(day)) for day in unusable["day"])
+            raise ValueError(
+                f"{model}: days {days} sampled variables but have no R-hat or ESS. A "
+                "diagnostic that could not be computed is not a diagnostic that passed."
+            )
+        if not sampled.empty:
+            rhats.append(float(sampled["max_r_hat"].max()))
+            ess.append(float(sampled["min_ess_bulk"].min()))
+    if not rhats:
+        models = ", ".join(tables)
+        raise ValueError(
+            f"no fit of {models} sampled any variable, so there is no convergence to summarise"
+        )
     return Diagnostics(
-        fits=sum(len(table) for table in tables.values()),
-        max_rhat=max(float(table["max_r_hat"].max()) for table in tables.values()),
-        min_bulk_ess=min(float(table["min_ess_bulk"].min()) for table in tables.values()),
-        divergences=sum(int(table["divergences"].sum()) for table in tables.values()),
+        fits=fits,
+        sampled_fits=sampled_fits,
+        max_rhat=max(rhats),
+        min_bulk_ess=min(ess),
+        divergences=divergences,
     )
+
+
+def sampled_mask(table: pd.DataFrame) -> pd.Series:
+    """Which rows of a diagnostics table describe a fit that had something to sample.
+
+    ``n_sampled_variables`` is the column that says so, and is what the acceptance gate reads.
+    Older tables, written before it existed, are judged by whether an ``R̂`` was recorded.
+    """
+    if "n_sampled_variables" in table:
+        return table["n_sampled_variables"] > 0
+    return table["max_r_hat"].notna()
 
 
 def add_diagnostics(numbers: NumberFile, diagnostics: Diagnostics, prefix: str) -> None:
     """Write one set of convergence figures under ``<prefix>.diagnostics``."""
     numbers.set(f"{prefix}.diagnostics.fits", str(diagnostics.fits))
+    # The two counts are equal for every analysis whose models all sample something, and a
+    # sentence claiming convergence "over all N fits" should quote whichever it means.
+    numbers.set(f"{prefix}.diagnostics.sampledfits", str(diagnostics.sampled_fits))
     # Three decimals, not two: the acceptance gate is close to one, and "1.00" would not let a
     # reader tell a comfortable pass from a marginal one.
     numbers.set(f"{prefix}.diagnostics.maxrhat", fixed(diagnostics.max_rhat, 3))

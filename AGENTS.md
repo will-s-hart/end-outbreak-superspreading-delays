@@ -381,18 +381,23 @@ committed measurement.
   and no new code — the fourth only since a per-analysis `switch_day` became a setting anything
   reads. The `shared.ert_arrival_day` key that used to look like the switch knob was dead config,
   and is gone; the ERT's dates live in `outbreak_data.py`, where the report reads them from.
-- **The three variants of Analysis 3 are in the report but not yet interpreted.** Their figures
-  are Figs. S4–S6 and `report.tex` describes what each removes; the findings are written from
-  the first complete `refit_daily` run of the 131-day window, never from the quick route.
-  `no_switch_fixed_R` holds `R` at 0.95 with `k` at 0.18, so any surviving naive/onset gap is
-  retained-state arithmetic alone; `no_switch_single_R` estimates one `R` per model; the
-  superspreading comparison sets `cori`/`cori_so` beside Analysis 3's `ssi`/`ssi_so`.
-- **The wide `k` prior is the only one.** Under the old informative prior the onset-anchored
-  posteriors landed on its median with almost no evidence gain, which could have been the data
-  or the prior. The wide prior settles it: posteriors that widen roughly in proportion to the
-  prior mean the data say little about `k` under onset anchoring. It needs `target_accept: 0.99`
-  (measured, in `config/config.yaml`), and its evidence gains over fixed `k` carry a charge for
-  the prior's width, which the report must say when it quotes them.
+- **Two results the 2026-09-23 run settled, both written up in `docs/findings.md`.** The
+  onset-anchored `k` posteriors reproduce the decade-wide prior and gain nothing from being
+  released, so **under onset anchoring these data do not locate `k`** — which also means the
+  attenuation prediction cannot be tested on that side of the series, and the old write-up of it
+  rested on prior-dominated posteriors. And most of the anchoring advance is the `R` switchpoint:
+  remove it and the advance falls from 7–8 days to 3 and 0, while the RAC/RAT gap survives
+  intact.
+- **The onset-anchored pair are tied.** In `onset_models_fixed_k` SSE-SO and SSI-SO are 0.048
+  nats apart against a combined standard error of 0.042, so which ranks first is not resolved;
+  the earlier "real at 2.4 standard errors" claim is gone. Raising `n_proposal_draws` in the
+  evidence step is the lever if the ranking ever needs to be quotable.
+- **The last twenty days of the window are modelled under `R_post` although the response had
+  ended.** Flagged as a limitation in the report's Section 2.1 rather than corrected: refitting
+  the fixed-`k` analysis to the withdrawal day moves every `R_post` median by under 0.005 and
+  every log evidence by less than its standard error. Correcting it would mean a second
+  "summary" fit per model, since the curve's last conditioning day and the tier-2 summaries are
+  deliberately one posterior.
 - **The reset-convention follow-up remains declined** unless asked for. RST is now a reported
   estimand rather than an optional follow-up.
 - **Per-fit process spawn dominates the cheap models' cost.** Each conditioning-day fit starts

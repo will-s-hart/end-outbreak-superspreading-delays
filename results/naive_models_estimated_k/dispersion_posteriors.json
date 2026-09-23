@@ -7,51 +7,51 @@
   ],
   "prior": {
     "median": 0.18,
-    "sigma_log": 0.35365301915106706,
-    "interval_lower": 0.08999999999999997,
-    "interval_upper": 0.36
+    "sigma_log": 1.1748099001596677,
+    "interval_lower": 0.017999999999999995,
+    "interval_upper": 1.7999999999999996
   },
   "posterior": {
     "dlo": {
-      "median": 0.3778759867798728,
-      "mean": 0.39156884259876373,
-      "interval_lower": 0.23049936933008597,
-      "interval_upper": 0.6285851595290679,
+      "median": 0.9053398694403602,
+      "mean": 1.0414609336606355,
+      "interval_lower": 0.3992205263823689,
+      "interval_upper": 2.504381525770543,
       "interval_probability": 0.95,
       "n_draws": 8000
     },
     "sse": {
-      "median": 0.5020591243090724,
-      "mean": 0.5208133688489076,
-      "interval_lower": 0.30650077779997514,
-      "interval_upper": 0.8525479966286448,
+      "median": 1.8843665897491855,
+      "mean": 2.234348043885615,
+      "interval_lower": 0.7794593460532722,
+      "interval_upper": 5.741058712803923,
       "interval_probability": 0.95,
       "n_draws": 8000
     },
     "ssi": {
-      "median": 0.141118331140685,
-      "mean": 0.1495969666778326,
-      "interval_lower": 0.07482656860438677,
-      "interval_upper": 0.27337799981195204,
+      "median": 0.05377952519972994,
+      "mean": 0.07091602025220337,
+      "interval_lower": 0.013165997376650074,
+      "interval_upper": 0.2328899972222599,
       "interval_probability": 0.95,
       "n_draws": 8000
     }
   },
   "divergence": {
     "dlo_vs_sse": {
-      "median_ratio": 0.752652364001752,
-      "overlap": 0.5889856642468572,
-      "probability_greater": 0.219347734375
+      "median_ratio": 0.48044784617034814,
+      "overlap": 0.44799360371765606,
+      "probability_greater": 0.1403451875
     },
     "dlo_vs_ssi": {
-      "median_ratio": 2.677724316362253,
-      "overlap": 0.09529249292707637,
-      "probability_greater": 0.99022440625
+      "median_ratio": 16.834285280095898,
+      "overlap": 0.0163368653406527,
+      "probability_greater": 0.9992737968750001
     },
     "sse_vs_ssi": {
-      "median_ratio": 3.557717273516755,
-      "overlap": 0.032453453329724914,
-      "probability_greater": 0.9986396562500001
+      "median_ratio": 35.03873607568867,
+      "overlap": 0.003955672770568491,
+      "probability_greater": 0.9999443437500001
     }
   }
 }

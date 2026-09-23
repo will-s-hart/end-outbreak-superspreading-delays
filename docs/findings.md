@@ -27,31 +27,37 @@ the probability of any further case is genuinely well below one —
 those weeks is the estimand too, not the sampler: each day is a separate posterior conditioned on
 a separate record.
 
-**Convergence in the four core analyses, over 1540 fits** (14 model/analysis pairs × 110 days,
-`<model>_rac_diagnostics.csv`): worst `R̂` over every sampled variable is **1.0140**; 37 days
-exceed 1.005; 144 divergences in 12.3M draws, worst single day 10; minimum bulk ESS 1002.
-**SSE-SO is the outlier by a wide margin** — 15–22 of its days are above 1.005 against none for
-every other model, and its minimum ESS is a third of theirs. It is the model whose geometry
-needed `target_accept: 0.95`, and it is the one to watch. The estimated-`k` inverse-CDF models use
-the benchmarked compound sampler (Slice for `k`, NUTS for the `R` parameters and latent
-uniforms); in the seven retained final-day estimated-`k` posteriors, `R̂_k` is 1.0001–1.0010,
-bulk ESS for `k` is 4075–7956, and there are no divergences.
+**Convergence in the four core analyses, over 1820 fits** (14 model/analysis pairs × 130 days,
+`<model>_rac_diagnostics.csv`): worst `R̂` over every sampled variable is **1.0124**; 108 days
+exceed 1.005; 157 divergences in 14.6M draws, worst single day 38; minimum bulk ESS 356.
+**The onset-anchored models under the wide `k` prior are the hard cases**: 51 of SSE-SO's
+estimated-`k` days and 13 of SSI-SO's are above 1.005, against 26 for SSE-SO at fixed `k` and
+none at all for the infection-anchored models bar 18 days split between the two SSI fits. The
+worst single fit anywhere is SSI-SO's day 106 under estimated `k` — `R̂` 1.0123, ESS 356, 38
+divergences, which is 0.5% of its draws against a 1% gate. That is the wide prior's sampling
+cost, and it is why both estimated-`k` analyses run at `target_accept: 0.99`: at 0.95 the same
+fits failed the gate outright (`config/config.yaml` records the measurement). The estimated-`k`
+inverse-CDF models use the benchmarked compound sampler (Slice for `k`, NUTS for the `R`
+parameters and latent uniforms).
 
 ## What did incomplete reporting change?
 
 In the authoritative 60%/80% sweeps, assuming cases went unreported delayed the 0.05 crossing
 by nine to thirteen days at 60% reporting, and moved it much further than choosing SSE versus SSI
-did. At 60% reporting, no model reached 0.01 inside the analysis window, and the
-infection-anchored models failed to reach it at 80% either
-(`results/underreporting_*/<model>_rac.csv`).
+did. **Every curve now reaches 0.01 as well**, which the 0–110 window could not show: at 60%
+reporting the four crossings are days 112 (SSE-SO and SSI-SO), 121 (SSE) and 125 (SSI), all of
+them *after* the ERT actually withdrew on day 110 (`results/underreporting_*/<model>_rac.csv`).
+A declaration criterion at 0.01 is therefore not robust to a reporting assumption this weak —
+the same conclusion as before, now stated as located crossings rather than as four curves left
+above the line.
 
 **Onset anchoring's advance is the part the reporting assumption does not touch.** SSE-SO crosses
 0.05 seven days before SSE under complete reporting, seven days before it at 80% and eight at
-60%; SSI-SO leads SSI by eight, nine and eleven days. The last is a lower bound, since SSI first
-falls below 0.05 only on the final day of the record. The RAC-to-RAT gap inside the onset-anchored
-models is similarly fixed — six days for SSE-SO at all three levels, six/five/five for SSI-SO. So
-the two things the anchoring convention buys survive a reporting assumption strong enough to move
-every curve by more than a week.
+60%; SSI-SO leads SSI by eight, nine and twelve days — the one place the advance *widens* as the
+assumption weakens, because SSI loses more to it than SSI-SO does. The RAC-to-RAT gap inside the
+onset-anchored models is similarly fixed — six days for SSE-SO at all three levels, six/five/four
+for SSI-SO. So the two things the anchoring convention buys survive a reporting assumption strong
+enough to move every curve by more than a week.
 
 The fitted curves were empirically ordered `RAC(60%) ≥ RAC(80%) ≥ RAC(100%)` at every day.
 Do not present that as a theorem: adding a hidden case conditionally raises risk, but these are
@@ -75,11 +81,14 @@ outstanding. The scientific findings above are unchanged across both.
 
 ## How far can the model probabilities be trusted?
 
-**Not to the second decimal place.** In `onset_models_fixed_k` the two onset-anchored models are
-separated by 0.096 nats of log evidence, against bridge-sampling standard errors of 0.036
-(SSE-SO) and 0.019 (SSI-SO) — a combined 0.040, so the gap is 2.4 standard errors. The
-probabilities that follow (SSE-SO 0.511, SSI-SO 0.464) are therefore uncertain in the second
-decimal: the ranking is real but its margin is not quotable to that precision. Raising
+**Not to the second decimal place, and between the onset-anchored pair not at all.** In
+`onset_models_fixed_k` the two are separated by 0.048 nats of log evidence, against
+bridge-sampling standard errors of 0.037 (SSE-SO) and 0.019 (SSI-SO) — a combined 0.042, so the
+gap is 1.1 standard errors. The probabilities that follow (SSE-SO 0.499, SSI-SO 0.476) are a
+tie: **which of the two ranks first is not resolved by this run**, and the earlier statement
+that the ranking was real at 2.4 standard errors no longer holds. Under estimated `k` they are
+equally close (0.46 and 0.48). What is resolved is the pair against the infection-anchored
+models, which are three nats and more away. Raising
 `n_proposal_draws` in the evidence step would shrink the error as `1/sqrt(n)`, and the step is
 tier-2 — seconds to minutes, not a refit.
 
@@ -131,18 +140,25 @@ difference flips the ordering alone.
 
 ## What happens when `k` is estimated rather than transplanted?
 
-On the real series, under the shared `LogNormal(0.18)` prior
+On the real series, under the shared `LogNormal` prior with median 0.18 and 95% interval
+0.018–1.8 — a decade on each side of the literature value
 (`results/naive_models_estimated_k/dispersion_posteriors.json`):
 
 | | DLO | SSE | SSI |
 | --- | --- | --- | --- |
-| posterior median `k` (95% CrI) | 0.38 (0.23–0.63) | 0.50 (0.31–0.85) | 0.14 (0.07–0.27) |
-| log evidence, `k` fixed → estimated | −97.1 → −93.2 | −106.8 → −99.4 | −84.8 → −84.5 |
+| posterior median `k` (95% CrI) | 0.91 (0.40–2.50) | 1.88 (0.78–5.74) | 0.054 (0.013–0.233) |
+| log evidence, `k` fixed → estimated | −97.1 → −89.8 | −106.8 → −91.8 | −84.7 → −83.8 |
 
-- **The divergence is real but it is not DLO against the rest.** DLO vs SSI: overlap 0.094, median
-  ratio 2.7, `P(k_DLO > k_SSI) = 0.99`. SSE vs SSI: overlap 0.032, ratio 3.6, 0.999. But **DLO vs
-  SSE: overlap 0.59** and `P(k_DLO > k_SSE) = 0.22` — barely distinguishable. Do not write this up
-  as "DLO's `k` is the odd one out"; SSI's is, and DLO and SSE agree.
+These are the numbers under the **wide** prior, which is now the only one. Under an earlier prior
+only a factor of two wide on each side, the same three medians were 0.38, 0.50 and 0.14 and the
+gains 3.9, 7.4 and 0.26 nats: the ordering and every qualitative statement below held, but the
+posteriors were compressed towards the prior and the gains understated, which is why the narrow
+prior was dropped rather than kept as a sensitivity.
+
+- **The divergence is real but it is not DLO against the rest.** DLO vs SSI: overlap 0.016, median
+  ratio 16.8, `P(k_DLO > k_SSI) = 0.999`. SSE vs SSI: overlap 0.004, ratio 35.0, 0.99994. But
+  **DLO vs SSE: overlap 0.45** and `P(k_DLO > k_SSE) = 0.14` — barely distinguishable. Do not
+  write this up as "DLO's `k` is the odd one out"; SSI's is, and DLO and SSE agree.
 - **The split is day-level against individual-level, which is where onset-as-infection bites
   hardest.** DLO and SSE both attach their excess variance to a **day** — DLO to aggregate
   incidence, SSE to the day's pooled transmission through a freshly drawn `λ_t` — while SSI
@@ -153,10 +169,16 @@ On the real series, under the shared `LogNormal(0.18)` prior
   conflation itself.** SSI is close to invariant to it, because the convolution *regroups*
   individuals across days and the aggregate infectivity of `n` i.i.d. individuals is `Gamma(kn, k)`
   whichever `n` they are: regrouping moves the cohorts, not the variance.
-- **Only SSI's posterior is compatible with the literature `k = 0.18`.** DLO's and SSE's both sit
-  above the prior's own 97.5th percentile (0.36) despite it being deliberately informative. The
-  evidence gains say it more sharply: letting `k` move is worth **7.4 nats to SSE and 3.9 to DLO
-  but only 0.26 to SSI**. Analysis 1 was charging DLO and SSE for a value that was never theirs.
+- **Only SSI's posterior is compatible with the literature `k = 0.18`.** DLO's and SSE's sit an
+  order of magnitude above it, and SSE's median is above even the 97.5th percentile of its own
+  prior (1.8) — under a prior this wide, that is the data's answer and not the prior's. The
+  evidence gains say it more sharply: letting `k` move is worth **15.0 nats to SSE and 7.3 to DLO
+  but only 0.9 to SSI**, each net of the marginal-likelihood cost of the prior's width. Analysis 1
+  was charging DLO and SSE for a value that was never theirs.
+- **Estimating `k` redraws the risk gap rather than closing it.** The 0.05 crossings move from
+  107/95/97 (DLO/SSE/SSI) at fixed `k` to 107/103/92 estimated: SSI's `k` falls, so it settles
+  five days earlier, and SSE's rises, so it moves back eight days towards DLO and the Poisson
+  limit.
 
 ## What does onset anchoring do?
 
@@ -164,8 +186,8 @@ Analyses 3 and 4 compare `sse`, `ssi`, `sse_so` and `ssi_so`. Under estimated `k
 
 | | SSE | SSI | SSE-SO | SSI-SO |
 | --- | ---: | ---: | ---: | ---: |
-| posterior median `k` | 0.501 | 0.140 | 0.178 | 0.175 |
-| posterior median `R_post` | 0.634 | 0.731 | 0.279 | 0.255 |
+| posterior median `k` | 1.856 | 0.052 | 0.169 | 0.160 |
+| posterior median `R_post` | 0.612 | 0.803 | 0.283 | 0.267 |
 
 - **Why onset anchoring makes the risk settle earlier.** The total onset-to-onset serial interval
   is shared, so this is not a shorter generation interval. The decomposition changes which side of
@@ -177,13 +199,80 @@ Analyses 3 and 4 compare `sse`, `ssi`, `sse_so` and `ssi_so`. Under estimated `k
   applies the ERT effect to onsets rather than transmissions, explaining why naive `R_post` is much
   higher: post-arrival onsets that arose from pre-arrival infections are otherwise charged to the
   controlled period.
-- **The attenuation prediction passes.** SSE-SO's `k` moves below SSE's towards 0.18 (median ratio
-  2.81, overlap 0.089, `P(k_SSE > k_SSE-SO) = 0.992`), whereas SSI changes much less (overlap
-  0.750). Incubation convolution attenuates day-level dispersion when onsets are treated as
-  infections; individual-level dispersion is comparatively stable to regrouping.
+- **The onset-anchored `k` posteriors are their prior, and that is now a finding rather than an
+  ambiguity.** SSE-SO's is 0.169 (0.025–1.488) and SSI-SO's 0.160 (0.020–1.615) against a prior
+  of 0.18 (0.018–1.8), and releasing `k` is worth −0.11 and −0.02 nats. A posterior that
+  reproduces an *informative* prior is ambiguous — it looks the same whether the data agree or say
+  nothing — and that ambiguity is what the decade-wide prior was introduced to settle. It settles
+  it the second way: **under onset anchoring these data do not locate `k` at all.**
+- **So the attenuation prediction cannot be tested on the onset-anchored side of this series.**
+  SSE's `k` does sit an order of magnitude above SSE-SO's (median ratio 11.0, overlap 0.126,
+  `P(k_SSE > k_SSE-SO) = 0.976`), but by the bullet above that comparison holds an identified
+  posterior against a prior, so **do not quote it as attenuation measured** — the earlier write-up
+  did, on narrow-prior posteriors that were themselves prior-dominated. SSI and SSI-SO overlap
+  0.52 and are not separated at all. What survives as evidence for attenuation is Analysis 2's
+  day-level/individual-level split, where every posterior compared is identified.
+- **The anchoring advance becomes mechanism-dependent when `k` is estimated.** SSE-SO leads SSE by
+  15 days at both thresholds, SSI-SO leads SSI by 4, against 7 and 8 at fixed `k`. The asymmetry
+  is on the infection-anchored side: releasing `k` moves SSE and SSI in opposite directions, so
+  the gap each has to close differs while the onset-anchored curves barely move.
 - **Do not universalise the direction.** It is measured under this reset convention, switch
   convention, outbreak history and posterior. The incubation-scale explanation is the mechanism for
   this result, not a theorem for arbitrary time series or interventions.
+
+## What did extending the window change?
+
+The window now runs to day 130 (13 August 2018), twenty case-free days past the ERT's withdrawal,
+because ending it at the withdrawal left curves above 0.01 on the last day with no crossing to
+report. Three things are worth recording.
+
+- **Every curve in the study now settles below both thresholds inside the window.** The last to
+  do so are 60% under-reporting SSI (0.01 on day 125), DLO (118), the Poisson limit Cori (117) and
+  wide-prior SSE (114). No macro in `results/report_numbers.tex` is a bound, so the "not before
+  ⟨date⟩" wording the generator can emit is currently unused — and that is the check that the
+  twenty days were enough.
+- **The first 110 days did not move.** At fixed `k`, DLO's and SSI's curves reproduce the
+  pre-extension run to four decimal places on every shared day; SSE-SO's differ by at most 0.0041
+  overall and 0.0019 after the last onset, because `max_lag` follows the window and the delay
+  weights were rediscretised with it. **No threshold crossing moved.** The per-day fits cannot
+  change: each conditions on `counts[:t+1]`, which the extension does not touch.
+- **The parameter panels, evidences and `k` summaries are conditioned twenty days past the
+  withdrawal, and those days are counterfactual in one respect** — `R_post` applies to them,
+  though the response had ended. The report says so in Section 2.1. Refitting the fixed-`k`
+  analysis to day 110 instead moves every `R_post` median by under 0.005 and every log evidence
+  by less than its bridge-sampling standard error, so nothing quoted depends on the choice; it is
+  flagged as a limitation rather than corrected, because the alternative would break the
+  guarantee that the curve's last conditioning day and the tier-2 summaries rest on one posterior.
+
+## What do the switchpoint and superspreading contribute?
+
+The three variants of Analysis 3 (report Figs. S4–S6) each remove one ingredient. All are at
+fixed `k = 0.18`.
+
+- **Most of the anchoring advance is the switchpoint, not the retained state.** Remove the switch
+  and SSE-SO leads SSE by 3 days at both thresholds while SSI-SO leads SSI by 0, against 7 and 8
+  days with the switch in place. Estimating one `R` per model instead of fixing it at 0.95 changes
+  nothing: all four posteriors are 1.00 (0.54–2.03) and every crossing falls on the same day as
+  under the fixed `R`. So what the advance mostly measures is the ~11-day displacement of the
+  intervention between the two time indices, which is the mechanism the report already named.
+- **What the retained state contributes on its own is the RAC/RAT gap**, and that survives the
+  switch's removal intact: 8 days for both onset-anchored models, against 6–7 with the switch.
+  The incubation pipeline is a property of the model, not of the intervention.
+- **Superspreading is decisively better supported than Poisson transmission under infection
+  anchoring, and only weakly so under onset anchoring.** SSI beats Cori by 7.0 nats (−84.8 against
+  −91.8); SSI-SO beats Cori-SO by 0.8 (−81.8 against −82.6). Normalised over the four together:
+  SSI-SO 0.67, Cori-SO 0.30, SSI 0.03, Cori 3 × 10⁻⁵. Once incubation is represented explicitly,
+  much of what individual-level dispersion was accounting for is already explained — the same
+  result the unidentified `k` posteriors report from the other direction.
+- **Anchoring moves the declaration further than superspreading does, and the two interact.**
+  With superspreading removed, anchoring alone is worth 16 days at 0.05 (Cori against Cori-SO)
+  against 8 days in the models that carry it (SSI against SSI-SO). Superspreading is worth 10 days
+  under infection anchoring (Cori against SSI) but 2 under onset anchoring (Cori-SO against
+  SSI-SO). Each mechanism brings the declaration forward, and each does so by less in the presence
+  of the other: they act on the same residual risk.
+- **The no-switch curves are forward predictives, not reset predictives.** With `R` constant the
+  reset to `R_pre` is a no-op, so compare those two figures with each other and not with
+  Fig. 4.
 
 ## Do the numerical routes agree?
 

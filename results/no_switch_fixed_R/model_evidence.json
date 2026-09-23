@@ -1,0 +1,34 @@
+{
+  "analysis": "no_switch_fixed_R",
+  "models": [
+    "sse",
+    "ssi",
+    "sse_so",
+    "ssi_so"
+  ],
+  "estimator": "bridge_sampling",
+  "log_evidence": {
+    "sse": -106.73096527911362,
+    "ssi": -84.661981617888,
+    "sse_so": -84.06913364232906,
+    "ssi_so": -84.63634461201474
+  },
+  "log_evidence_standard_error": {
+    "sse": 0.0,
+    "ssi": 0.016695516546629513,
+    "sse_so": 0.03545127989451883,
+    "ssi_so": 0.0171451441167679
+  },
+  "n_draws": {
+    "sse": 0,
+    "ssi": 12000,
+    "sse_so": 12000,
+    "ssi_so": 12000
+  },
+  "posterior_model_probability": {
+    "sse": 6.788678869150891e-11,
+    "ssi": 0.26074926363023415,
+    "sse_so": 0.4717302157586296,
+    "ssi_so": 0.2675205205432495
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "analysis": "onset_models_no_superspreading",
+  "models": [
+    "cori",
+    "cori_so",
+    "ssi",
+    "ssi_so"
+  ],
+  "sources": {
+    "cori": "onset_models_no_superspreading",
+    "cori_so": "onset_models_no_superspreading",
+    "ssi": "onset_models_fixed_k",
+    "ssi_so": "onset_models_fixed_k"
+  },
+  "estimator": "bridge_sampling",
+  "log_evidence": {
+    "cori": -91.76440560070476,
+    "cori_so": -82.61607508834189,
+    "ssi": -84.7643422815614,
+    "ssi_so": -81.81159722996723
+  },
+  "log_evidence_standard_error": {
+    "cori": 0.0009906183199782236,
+    "cori_so": 0.0015185016151034944,
+    "ssi": 0.01938024457269035,
+    "ssi_so": 0.019209704308403998
+  },
+  "n_draws": {
+    "cori": 12000,
+    "cori_so": 12000,
+    "ssi": 12000,
+    "ssi_so": 12000
+  },
+  "posterior_model_probability": {
+    "cori": 3.17383888498252e-05,
+    "cori_so": 0.2983007441982318,
+    "ssi": 0.03480757352377675,
+    "ssi_so": 0.6668599438891383
+  }
+}

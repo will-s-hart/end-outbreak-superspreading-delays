@@ -103,8 +103,10 @@ additional cases (RAC) after each day. Models placing overdispersion at the leve
 transmission event, or individual produced materially different risks at the same nominal
 dispersion parameter and inferred different values when that parameter was estimated. Models
 that anchored transmission to the infector's symptom onset and represented incubation explicitly
-crossed both decision thresholds a week or more earlier than their infection-anchored counterparts;
-they also inferred substantially smaller post-intervention reproduction numbers. Finally,
+crossed both decision thresholds a week or more earlier than their infection-anchored
+counterparts at a common dispersion parameter, and between four and fifteen days earlier when
+that parameter was estimated; they also inferred substantially smaller post-intervention
+reproduction numbers. Finally,
 distinguishing additional cases from additional transmission isolated the contribution of people
 already infected but not yet symptomatic---a component that infection-anchored models cannot
 represent. End-of-outbreak assessments therefore depend not only on the amount of transmission
@@ -172,13 +174,14 @@ days from the first observed onset:
   First onset (index case)      & \resultnum{data.firstday}         & \resultnum{data.firstdate} \\
   ERT arrival                   & \resultnum{data.ertarrivalday}    & \resultnum{data.ertarrivaldate} \\
   Last observed onset           & \resultnum{data.lastonsetday}     & \resultnum{data.lastonsetdate} \\
-  ERT withdrawal (window end)   & \resultnum{data.withdrawalday}    & \resultnum{data.withdrawaldate} \\
+  ERT withdrawal                & \resultnum{data.withdrawalday}    & \resultnum{data.withdrawaldate} \\
+  End of the analysis window    & \resultnum{data.lastday}          & \resultnum{data.lastdate} \\
   \bottomrule
 \end{tabular}
 \end{center}
 
 \noindent
-The analysis window is days $0$--$\resultnum{data.withdrawalday}$, i.e.\
+The analysis window is days $0$--$\resultnum{data.lastday}$, i.e.\
 \resultnum{data.days} days, with \resultnum{data.preertcases} cases before the ERT arrived and
 \resultnum{data.postertcases} after. The series is padded with zero counts from the last
 observed onset to the end of the window. These case-free days provide the evidence that drives
@@ -186,8 +189,23 @@ the estimated risk down. The main analyses take the series at face value;
 Section~\ref{sec:results-underreporting} relaxes that and treats the observed onsets as a
 reported fraction of the true ones.
 
+The window runs \resultnum{data.extradays} days past the ERT's withdrawal, and no case occurred
+in \'Equateur over those days. They are there so that every risk curve reported below settles
+below both decision thresholds inside the window: ending at the withdrawal left several curves
+still above $0.01$ on the final day, which bounds a crossing from below without locating it.
+\textbf{One caveat follows, and it is a limitation rather than a modelling choice.} $\Rpost$
+applies to every day from the ERT's arrival onwards, so the likelihood charges those last
+\resultnum{data.extradays} case-free days to the controlled regime although the response had in
+fact ended. The parameter posteriors, the model evidences and the dispersion summaries below are
+therefore conditioned on a record whose final days are counterfactual in that one respect. The
+effect is small enough to be invisible at the precision quoted --- refitting the fixed-$k$
+analysis to the withdrawal day instead moves every $\Rpost$ median by less than $0.005$ and
+every log evidence by less than the bridge-sampling standard error --- and the risk curve for a
+conditioning day beyond the withdrawal answers, by construction, what the risk would have been
+had the response been held in place until that day.
+
 Day~$0$ is treated as an initial condition in every model, so likelihoods run over days
-$1,\dots,\resultnum{data.withdrawalday}$. Conditioning on a single imported index case asserts
+$1,\dots,\resultnum{data.lastday}$. Conditioning on a single imported index case asserts
 that nothing was transmitting or incubating beforehand. For the infection-anchored models this
 is mild --- the renewal recursion simply starts from one case. For the onset-anchored models it
 is stronger, because it also asserts an \emph{empty incubation pipeline} at day~$0$: anyone
@@ -613,8 +631,8 @@ that this replicated future contains at least one further case.
 \end{quote}
 
 So $\Pr(\cdot \mid \text{data up to day } t)$ is the correct reading, and every conditioning day
-carries its own fit: the curve over days $1$--$\resultnum{data.withdrawalday}$ is
-\resultnum{data.withdrawalday} fits per model. Day $0$ is an initial condition in every model and
+carries its own fit: the curve over days $1$--$\resultnum{data.lastday}$ is
+\resultnum{data.lastday} fits per model. Day $0$ is an initial condition in every model and
 contributes no likelihood term, so the curve begins at day $1$.
 Section~\ref{sec:smoothing} explains why the parameters cannot be estimated once and reused.
 
@@ -1075,7 +1093,15 @@ sampled variable including the latent blocks, the worst $\hat{R}$ is
 are \resultnum{naivemodelsfixedk.diagnostics.minbulkess},
 \resultnum{naivemodelsestimatedk.diagnostics.minbulkess},
 \resultnum{onsetmodelsfixedk.diagnostics.minbulkess} and
-\resultnum{onsetmodelsestimatedk.diagnostics.minbulkess}. The analysis workflow refuses to
+\resultnum{onsetmodelsestimatedk.diagnostics.minbulkess}; the smallest of them, and the worst
+$\hat{R}$, both come from Analysis~4, which is the hardest geometry in the study and the reason
+its sampler runs at $\text{target\_accept} =
+\resultnum{onsetmodelsestimatedk.targetaccept}$ (Section~\ref{sec:priors}). The three variants
+of Section~\ref{sec:results-variants} add \resultnum{variants.diagnostics.fits} fits, of which
+\resultnum{variants.diagnostics.sampledfits} sample anything at all --- under
+\resultnum{noswitchfixedr.fixedrpre}-fixed $R$ and $k$, \sse{} has no free variable and its
+fits are point masses --- with a worst $\hat{R}$ of
+\resultnum{variants.diagnostics.maxrhat} over those that do. The analysis workflow refuses to
 produce a risk curve if any of the fits behind it exceeds $\hat{R} =
 \resultnum{convergence.maxrhat}$ or shows divergent
 transitions in more than 1\% of draws, so these are enforced criteria rather than a report of
@@ -1111,7 +1137,7 @@ sampling without changing the model.
 \label{sec:evidence}
 
 We compute the marginal likelihood
-$p(D_{1:\resultnum{data.withdrawalday}} \mid \text{model})$ by integrating over both parameters
+$p(D_{1:\resultnum{data.lastday}} \mid \text{model})$ by integrating over both parameters
 and latent states. Bridge sampling is the primary estimator; prior Monte Carlo and importance
 sampling provide independent numerical checks, and deterministic quadrature is used where the
 parameter space is sufficiently small. Posterior model probabilities follow from these marginal
@@ -1206,12 +1232,16 @@ where they are furthest apart.
     settles below $0.05$ on day~\resultnum{naivemodelsfixedk.dlo.rac05.day}
     (\resultnum{naivemodelsfixedk.dlo.rac05.date}), against
     day~\resultnum{naivemodelsfixedk.sse.rac05.day} for \sse{} and
-    day~\resultnum{naivemodelsfixedk.ssi.rac05.day} for \ssi{}. At the $0.01$ threshold \dlo{}
-    \textbf{\resultnum{naivemodelsfixedk.dlo.rac01.day}} settles within the analysis window,
-    while \sse{} does so on day~\resultnum{naivemodelsfixedk.sse.rac01.day} and \ssi{} on
-    day~\resultnum{naivemodelsfixedk.ssi.rac01.day}. On the day the ERT actually withdrew,
-    \dlo{} still places \resultnum{naivemodelsfixedk.dlo.rac.final} on a further case, against
-    \resultnum{naivemodelsfixedk.sse.rac.final} and \resultnum{naivemodelsfixedk.ssi.rac.final}.
+    day~\resultnum{naivemodelsfixedk.ssi.rac05.day} for \ssi{}. At the $0.01$ threshold the
+    ordering holds and the spread is wider still: \dlo{} settles on
+    day~\resultnum{naivemodelsfixedk.dlo.rac01.day}
+    (\resultnum{naivemodelsfixedk.dlo.rac01.date}), against
+    day~\resultnum{naivemodelsfixedk.sse.rac01.day} for \sse{} and
+    day~\resultnum{naivemodelsfixedk.ssi.rac01.day} for \ssi{}. Both of \dlo{}'s crossings fall after the
+    ERT actually withdrew: on that day it still places
+    \resultnum{naivemodelsfixedk.dlo.rac.withdrawal} on a further case, against
+    \resultnum{naivemodelsfixedk.sse.rac.withdrawal} and
+    \resultnum{naivemodelsfixedk.ssi.rac.withdrawal}.
   \item \textbf{\ssi{} lies on the same side of \sse{} as \dlo{} does.} After the final case
     \ssi{}'s risk is \emph{above} \sse{}'s
     (\resultnum{naivemodelsfixedk.ssi.rac.reference} against
@@ -1310,24 +1340,30 @@ where they are furthest apart.
     $(\resultnum{naivemodelsestimatedk.dlo.k.lower},
     \resultnum{naivemodelsestimatedk.dlo.k.upper})$ and \sse{}'s
     $(\resultnum{naivemodelsestimatedk.sse.k.lower},
-    \resultnum{naivemodelsestimatedk.sse.k.upper})$ do not, and both medians sit above the
-    prior's own 97.5th percentile of \resultnum{priors.k.quantileupper}, despite the informative
-    prior.
+    \resultnum{naivemodelsestimatedk.sse.k.upper})$ do not: both sit an order of magnitude above
+    it, and \sse{}'s median exceeds even the 97.5th percentile of its own prior,
+    \resultnum{priors.k.quantileupper}. The prior is not what puts them there --- it is a decade
+    wide on each side of \resultnum{priors.k.median} (Section~\ref{sec:priors}), so these
+    posteriors are the data's answer and not the prior's.
   \item \textbf{The evidence says the same thing more sharply.} Letting $k$ move is worth
     \resultnum{naivemodelsestimatedk.sse.evidencegain} nats to \sse{} and
     \resultnum{naivemodelsestimatedk.dlo.evidencegain} to \dlo{}, but only
-    \resultnum{naivemodelsestimatedk.ssi.evidencegain} to \ssi{}. Analysis~1 was charging \dlo{}
-    and \sse{} for a value poorly supported under those models, whereas
-    \resultnum{naivemodelsfixedk.fixedk} is compatible with \ssi{} on this series.
+    \resultnum{naivemodelsestimatedk.ssi.evidencegain} to \ssi{}. Each gain is net of what the
+    wide prior costs in the marginal likelihood --- a model that gains by being released has to
+    pay for the room it was given --- so Analysis~1 was charging \dlo{} and \sse{} for a value
+    poorly supported under those models, whereas \resultnum{naivemodelsfixedk.fixedk} is
+    compatible with \ssi{} on this series.
   \item \textbf{The risk gap persists when $k$ is estimated.} At each model's inferred $k$,
-    \dlo{} still crosses $0.05$ on
+    \dlo{} still crosses $0.05$ last, on
     day~\resultnum{naivemodelsestimatedk.dlo.rac05.day}, against
     day~\resultnum{naivemodelsestimatedk.sse.rac05.day} for \sse{} and
-    day~\resultnum{naivemodelsestimatedk.ssi.rac05.day} for \ssi{}, and still
-    \textbf{\resultnum{naivemodelsestimatedk.dlo.rac01.day}} reaches $0.01$ inside the window,
-    where \sse{} does on day~\resultnum{naivemodelsestimatedk.sse.rac01.day} and \ssi{} on
-    day~\resultnum{naivemodelsestimatedk.ssi.rac01.day}. Misapplying a literature $k$ creates the
-    gap; the day-level mechanism sustains it.
+    day~\resultnum{naivemodelsestimatedk.ssi.rac05.day} for \ssi{}; at $0.01$ the three fall on
+    days \resultnum{naivemodelsestimatedk.dlo.rac01.day},
+    \resultnum{naivemodelsestimatedk.sse.rac01.day} and
+    \resultnum{naivemodelsestimatedk.ssi.rac01.day}. Estimating $k$ does not close the gap, it
+    redraws it: \ssi{}, whose $k$ falls furthest, now settles earliest at both thresholds, and
+    \sse{}, whose $k$ rises furthest, moves back towards \dlo{} and the Poisson limit.
+    Misapplying a literature $k$ creates the gap; the day-level mechanism sustains it.
   \item \textbf{The posterior model probabilities keep their direction} --- \ssi{}
     \resultnum{naivemodelsestimatedk.ssi.probability}, \dlo{}
     \resultnum{naivemodelsestimatedk.dlo.probability}, \sse{}
@@ -1400,41 +1436,52 @@ where they are furthest apart.
     \resultnum{onsetmodelsfixedk.ssiso.logevidence},
     \resultnum{onsetmodelsfixedk.ssi.logevidence} and
     \resultnum{onsetmodelsfixedk.sse.logevidence} nats.
-  \item \textbf{Estimating $k$ changes little of this} (Fig.~\ref{fig:onset-estimated}). The
-    onset-anchored crossings still come
-    \resultnum{onsetmodelsestimatedk.sseso-vs-sse.shift05} and
-    \resultnum{onsetmodelsestimatedk.sseso-vs-sse.shift01} days earlier for \sseso{} against
-    \sse{}, and \resultnum{onsetmodelsestimatedk.ssiso-vs-ssi.shift05} and
-    \resultnum{onsetmodelsestimatedk.ssiso-vs-ssi.shift01} days for \ssiso{} against \ssi{};
-    the $\Rpost$ contrast and the model ordering --- the onset-anchored pair together, well ahead
-    of \ssi{} and then \sse{} --- are unchanged
-    (\resultnum{onsetmodelsestimatedk.sseso.probability},
+  \item \textbf{Estimating $k$ preserves the ordering but makes the advance mechanism-dependent}
+    (Fig.~\ref{fig:onset-estimated}). The onset-anchored pair still settle first and the model
+    ordering is unchanged (\resultnum{onsetmodelsestimatedk.sseso.probability},
     \resultnum{onsetmodelsestimatedk.ssiso.probability},
     \resultnum{onsetmodelsestimatedk.ssi.probability},
-    \resultnum{onsetmodelsestimatedk.sse.probability}).
-  \item \textbf{The onset-anchored $k$ posteriors reproduce their prior.} \sseso{}'s is
-    \resultnum{onsetmodelsestimatedk.sseso.k.interval} and \ssiso{}'s
+    \resultnum{onsetmodelsestimatedk.sse.probability}), as is the $\Rpost$ contrast. What changes
+    is the size of the advance: \sseso{} now crosses
+    \resultnum{onsetmodelsestimatedk.sseso-vs-sse.shift05} and
+    \resultnum{onsetmodelsestimatedk.sseso-vs-sse.shift01} days before \sse{}, while \ssiso{}
+    leads \ssi{} by only \resultnum{onsetmodelsestimatedk.ssiso-vs-ssi.shift05} and
+    \resultnum{onsetmodelsestimatedk.ssiso-vs-ssi.shift01} days, against
+    \resultnum{onsetmodelsfixedk.sseso-vs-sse.shift05} and
+    \resultnum{onsetmodelsfixedk.ssiso-vs-ssi.shift05} days respectively at fixed $k$. The
+    asymmetry is on the infection-anchored side: releasing $k$ moves \sse{} and \ssi{} in
+    opposite directions (Section~\ref{sec:results-naive-estimated}), so the gap each has to
+    close differs, while the two onset-anchored curves barely move at all.
+  \item \textbf{Under onset anchoring the data say almost nothing about $k$.} \sseso{}'s
+    posterior is \resultnum{onsetmodelsestimatedk.sseso.k.interval} and \ssiso{}'s
     \resultnum{onsetmodelsestimatedk.ssiso.k.interval}, against a prior with median
     \resultnum{priors.k.median} and 95\% interval
-    \resultnum{priors.k.quantilelower}--\resultnum{priors.k.quantileupper}, and releasing $k$ is worth
+    \resultnum{priors.k.quantilelower}--\resultnum{priors.k.quantileupper}: the posteriors sit on
+    the prior's median and retain most of its width, and releasing $k$ is worth
     \resultnum{onsetmodelsestimatedk.sseso.evidencegain} and
-    \resultnum{onsetmodelsestimatedk.ssiso.evidencegain} nats to them, within their own
-    estimation error. That is what data agreeing with the literature value would look like, but
-    also what data carrying no information about $k$ would look like; a repeat under a much
-    wider prior is needed to tell the two apart, and has not yet been run.
-  \item \textbf{The infection-anchored $k$ posteriors do move, and in the direction attenuation
-    predicts.} \sse{}'s $k$ posterior, \resultnum{onsetmodelsestimatedk.sse.k.interval}, sits
-    above \sseso{}'s: median ratio \resultnum{onsetmodelsestimatedk.sse-vs-sseso.medianratio},
+    \resultnum{onsetmodelsestimatedk.ssiso.evidencegain} nats --- nothing, to within the
+    estimation error. \textbf{This is what the prior's width is for.} A posterior reproducing an
+    informative prior is ambiguous: it looks the same whether the data agree with the prior or
+    carry no information at all. Here the prior spans a decade on each side of
+    \resultnum{priors.k.median} (Section~\ref{sec:priors}), and the posterior still reproduces
+    it, which the second reading alone explains. Under onset anchoring the dispersion sits on a
+    latent transmission process an incubation period removed from the observed onsets, and
+    \resultnum{data.totalcases} cases do not locate it.
+  \item \textbf{That makes the attenuation prediction untestable on the onset-anchored side of
+    this series.} The prediction is that a model reading onsets as infections should infer a
+    \emph{larger} $k$ than one that represents incubation explicitly, because the convolution has
+    already averaged out day-to-day variation. \sse{}'s posterior,
+    \resultnum{onsetmodelsestimatedk.sse.k.interval}, does sit an order of magnitude above
+    \sseso{}'s --- median ratio \resultnum{onsetmodelsestimatedk.sse-vs-sseso.medianratio},
     overlap \resultnum{onsetmodelsestimatedk.sse-vs-sseso.overlap},
     $\Pr(k_{\msse}>k_{\msseso}) =
-     \resultnum{onsetmodelsestimatedk.sse-vs-sseso.probabilitygreater}$, with a gain of
-    \resultnum{onsetmodelsestimatedk.sse.evidencegain} nats from releasing it. \ssi{} moves far
-    less --- \resultnum{onsetmodelsestimatedk.ssi.k.interval}, overlap with \ssiso{}
-    \resultnum{onsetmodelsestimatedk.ssi-vs-ssiso.overlap}. Incubation convolution attenuates
-    \emph{day-level} dispersion when onsets are read as infections; individual-level dispersion is
-    comparatively stable under regrouping. The event-versus-individual gap of
-    Section~\ref{sec:results-naive-estimated} is therefore largely attributable to temporal
-    conflation in this outbreak.
+     \resultnum{onsetmodelsestimatedk.sse-vs-sseso.probabilitygreater}$ --- but by the bullet
+    above that comparison holds an identified posterior against a prior, so it cannot be read as
+    attenuation measured. The \ssi{}/\ssiso{} pair overlap
+    \resultnum{onsetmodelsestimatedk.ssi-vs-ssiso.overlap} and are not separated at all. What
+    survives as evidence for the mechanism is Analysis~2's split between day-level and
+    individual-level dispersion (Section~\ref{sec:results-naive-estimated}), where every
+    posterior compared is identified by the data.
   \item \textbf{The advance is specific to this analysis.} Its direction is conditional on the
     reset and switch conventions, the outbreak history and the posterior; it is not a general
     result for arbitrary time series or interventions.
@@ -1444,8 +1491,12 @@ where they are furthest apart.
   \centering
   \caption{Threshold crossings of the risk of additional cases across the four analyses: the
     first day on which the curve settles below the threshold, with the calendar date. The ERT
-    withdrew on day~\resultnum{data.withdrawalday} (\resultnum{data.withdrawaldate});
-    ``never'' means the curve had not settled below the threshold by then.}
+    withdrew on day~\resultnum{data.withdrawalday} (\resultnum{data.withdrawaldate}) and the
+    window runs to day~\resultnum{data.lastday} (\resultnum{data.lastdate}); every curve here
+    settles below both thresholds inside it, so no entry is a bound. A curve still above a
+    threshold on the last day would be written ``$\ge \resultnum{data.days}$'' and ``not
+    before'' the following date, since the window bounds such a crossing from below without
+    locating it.}
   \label{tab:crossings}
   \small
   \begin{tabular}{llcccc}
@@ -1531,8 +1582,8 @@ Fig.~\ref{fig:sustained-estimated} repeats the comparison with $k$ estimated.
     days~\resultnum{onsetmodelsfixedk.sse.rst05.day} (\sse{}),
     \resultnum{onsetmodelsfixedk.sseso.rst05.day} (\sseso{}),
     \resultnum{onsetmodelsfixedk.ssi.rst05.day} (\ssi{}) and
-    \resultnum{onsetmodelsfixedk.ssiso.rst05.day} (\ssiso{}). The advance is never less than a
-    week, and reaches about two on $\RAT$, where the onset-anchored models also set aside the
+    \resultnum{onsetmodelsfixedk.ssiso.rst05.day} (\ssiso{}). At this fixed $k$ the advance is
+    never less than a week, and reaches about two on $\RAT$, where the onset-anchored models also set aside the
     incubation pipeline. The normalised delay distributions affect when residual transmission and the
     pipeline cross the conditioning day, but not the eventual-extinction root under the constant
     reset reproduction number.
@@ -1639,12 +1690,11 @@ convergence summaries alone.
     \resultnum{underreporting80.reportingpercent}\% reporting and
     \resultnum{underreporting60.sseso-vs-sse.shift05} days ahead at
     \resultnum{underreporting60.reportingpercent}\%. For \ssiso{} against \ssi{} the gaps are
-    \resultnum{onsetmodelsfixedk.ssiso-vs-ssi.shift05} and
-    \resultnum{underreporting80.ssiso-vs-ssi.shift05} days at complete and
-    \resultnum{underreporting80.reportingpercent}\% reporting. At
-    \resultnum{underreporting60.reportingpercent}\% there is no gap to subtract: \ssiso{} crosses
-    on day \resultnum{underreporting60.ssiso.rac05.day}, while \ssi{} reaches 0.05 only as the
-    window closes, so the onset-anchored model leads by at least the remainder of the record. Panels~C and~D show the same thing
+    \resultnum{onsetmodelsfixedk.ssiso-vs-ssi.shift05},
+    \resultnum{underreporting80.ssiso-vs-ssi.shift05} and
+    \resultnum{underreporting60.ssiso-vs-ssi.shift05} days across the three levels --- the one
+    place the advance \emph{widens} as the assumption weakens, because \ssi{} loses more to it
+    than \ssiso{} does. Panels~C and~D show the same thing
     without the subtraction: at either reduced reporting level both onset-anchored models lie to
     the left of both infection-anchored ones throughout. Weakening the assumption moves every
     curve later without closing the gap between the two conventions.
@@ -1682,27 +1732,35 @@ convergence summaries alone.
     \resultnum{underreporting80.sse.rac05.date} and \resultnum{underreporting60.sse.rac05.date},
     and \ssi{} from \resultnum{onsetmodelsfixedk.ssi.rac05.date} to
     \resultnum{underreporting80.ssi.rac05.date}. At
-    \resultnum{underreporting60.reportingpercent}\% reporting \ssi{} reaches the threshold only
-    as the window closes: it ends at \resultnum{underreporting60.ssi.rac.final} on
-    \resultnum{data.withdrawaldate}, the day the ERT actually withdrew --- on the line itself and
-    inside its Monte-Carlo error, so whether it formally clears 0.05 within the window is not
-    something the run can resolve.
-  \item \textbf{The stricter threshold is not reached at all under the weakest assumption.} At
-    0.01, \sseso{} settles on \resultnum{onsetmodelsfixedk.sseso.rac01.date} under complete
-    reporting and \resultnum{underreporting80.sseso.rac01.date} at
-    \resultnum{underreporting80.reportingpercent}\%, but at
-    \resultnum{underreporting60.reportingpercent}\% it does not reach the threshold within the
-    analysis window at all: the risk on the final day is still
-    \resultnum{underreporting60.sseso.rac.final}, against
-    \resultnum{onsetmodelsfixedk.sseso.rac.final} under complete reporting. \ssiso{} behaves the
-    same way. The infection-anchored models fail sooner: neither \sse{} nor \ssi{} reaches 0.01
-    at \emph{either} reduced level, ending at \resultnum{underreporting80.sse.rac.final} and
-    \resultnum{underreporting60.sse.rac.final} for \sse{} and
-    \resultnum{underreporting80.ssi.rac.final} and \resultnum{underreporting60.ssi.rac.final} for
-    \ssi{}, against \resultnum{onsetmodelsfixedk.sse.rac01.date} and
-    \resultnum{onsetmodelsfixedk.ssi.rac01.date} when reporting is assumed complete. A
-    declaration criterion written at 0.01 is therefore not robust to a reporting assumption this
-    weak, on a record of this length.
+    \resultnum{underreporting60.reportingpercent}\% reporting \ssi{} is the last to cross,
+    on day~\resultnum{underreporting60.ssi.rac05.day}
+    (\resultnum{underreporting60.ssi.rac05.date}) --- the very day the ERT withdrew, where it
+    stands at \resultnum{underreporting60.ssi.rac.withdrawal}. That is close enough to the line,
+    against a late-window Monte-Carlo error of
+    \resultnum{underreporting60.ssi.rac.mcselate}, that the crossing day itself is uncertain by
+    a day or two; the ordering it belongs to is not.
+  \item \textbf{At the stricter threshold, every crossing falls after the ERT withdrew.} At
+    0.01, \sseso{} settles on day~\resultnum{onsetmodelsfixedk.sseso.rac01.day} under complete
+    reporting, day~\resultnum{underreporting80.sseso.rac01.day} at
+    \resultnum{underreporting80.reportingpercent}\% and
+    day~\resultnum{underreporting60.sseso.rac01.day} at
+    \resultnum{underreporting60.reportingpercent}\%; \ssiso{} behaves the same way
+    (days \resultnum{onsetmodelsfixedk.ssiso.rac01.day},
+    \resultnum{underreporting80.ssiso.rac01.day} and
+    \resultnum{underreporting60.ssiso.rac01.day}). The infection-anchored models are later
+    again: \sse{} moves from day~\resultnum{onsetmodelsfixedk.sse.rac01.day} to
+    \resultnum{underreporting80.sse.rac01.day} and
+    \resultnum{underreporting60.sse.rac01.day}, and \ssi{} from
+    day~\resultnum{onsetmodelsfixedk.ssi.rac01.day} to
+    \resultnum{underreporting80.ssi.rac01.day} and
+    \resultnum{underreporting60.ssi.rac01.day}. At
+    \resultnum{underreporting60.reportingpercent}\% reporting all four crossings lie beyond
+    day~\resultnum{data.withdrawalday}, the day the response actually ended, by between a
+    fortnight and two. A declaration criterion written at 0.01 is therefore not robust to a
+    reporting assumption this weak on a record of this length --- and note that locating these
+    crossings at all requires the window to run past the withdrawal
+    (Section~\ref{sec:outbreak}); ended there, the run could only have reported that four
+    curves were still above the threshold.
   \item \textbf{Three things move the declaration, and they are of very different sizes.} The
     choice between the two superspreading mechanisms is the smallest: \sse{} and \ssi{} cross
     0.05 on days \resultnum{underreporting80.sse.rac05.day} and
@@ -1780,6 +1838,59 @@ With the switchpoint removed, the reset to $\Rpre$ in the definition of $\RAC$ i
 curves in Figs.~\ref{fig:no-switch-fixed} and~\ref{fig:no-switch-single} are forward posterior
 predictives rather than the reset predictive of the main analyses, and are to be compared with
 each other rather than with Fig.~\ref{fig:onset-fixed}.
+
+\begin{itemize}
+  \item \textbf{Most of the anchoring advance is the switchpoint.} Removing it leaves \sseso{}
+    only \resultnum{noswitchfixedr.sseso-vs-sse.shift05} days ahead of \sse{} at $0.05$ and
+    \resultnum{noswitchfixedr.ssiso-vs-ssi.shift05} days ahead for \ssiso{} against \ssi{},
+    against \resultnum{onsetmodelsfixedk.sseso-vs-sse.shift05} and
+    \resultnum{onsetmodelsfixedk.ssiso-vs-ssi.shift05} days with the switch in place at the same
+    fixed $k$ (Table~\ref{tab:crossings}). Estimating one $R$ per model instead of fixing it
+    changes nothing here --- the four posteriors are
+    \resultnum{noswitchsingler.sse.rpre.interval},
+    \resultnum{noswitchsingler.ssi.rpre.interval},
+    \resultnum{noswitchsingler.sseso.rpre.interval} and
+    \resultnum{noswitchsingler.ssiso.rpre.interval}, indistinguishable from each other, and the
+    crossings are the same days as under the fixed $R$. \textbf{So the
+    \resultnum{delays.incubation.mean}-day displacement of the intervention
+    (Section~\ref{sec:switch}) is what the advance mostly measures}, not the retained state: with no intervention to mis-date, the two conventions
+    almost agree about when to declare.
+  \item \textbf{What the retained state contributes on its own is the $\RAC$/$\RAT$ gap.} It
+    survives the switchpoint's removal intact --- \resultnum{noswitchfixedr.sseso.gap.shift05}
+    days for \sseso{} and \resultnum{noswitchfixedr.ssiso.gap.shift05} for \ssiso{}, against
+    \resultnum{onsetmodelsfixedk.sseso.gap.shift05} and
+    \resultnum{onsetmodelsfixedk.ssiso.gap.shift05} with the switch --- because the incubation
+    pipeline is a property of the model rather than of the intervention. The onset-anchored
+    models still hold their $\RAC$ back by about a week after $\RAT$ has settled when nothing
+    about the response is being estimated at all.
+  \item \textbf{Superspreading is decisively better supported than Poisson transmission under
+    infection anchoring, and only weakly so under onset anchoring.} Over the four models of
+    Fig.~\ref{fig:no-superspreading}, the posterior model probabilities are
+    \resultnum{onsetmodelsnosuperspreading.combined.ssiso.probability} for \ssiso{},
+    \resultnum{onsetmodelsnosuperspreading.combined.coriso.probability} for \coriso{},
+    \resultnum{onsetmodelsnosuperspreading.combined.ssi.probability} for \ssi{} and
+    \resultnum{onsetmodelsnosuperspreading.combined.cori.probability} for \cori{}. The naive
+    pair are separated by nearly seven nats
+    (\resultnum{onsetmodelsnosuperspreading.combined.ssi.logevidence} against
+    \resultnum{onsetmodelsnosuperspreading.combined.cori.logevidence}), the onset-anchored pair
+    by under one (\resultnum{onsetmodelsnosuperspreading.combined.ssiso.logevidence} against
+    \resultnum{onsetmodelsnosuperspreading.combined.coriso.logevidence}). Read with
+    Section~\ref{sec:results-onset}: once incubation is represented explicitly, much of what
+    individual-level dispersion was accounting for is already explained, which is the same
+    result the unidentified $k$ posteriors report from the other direction.
+  \item \textbf{Anchoring moves the declaration further than superspreading does, and the two
+    interact.} With superspreading removed, anchoring alone is worth
+    \resultnum{onsetmodelsnosuperspreading.coriso-vs-cori.shift05} days at $0.05$ (\cori{}
+    against \coriso{}) --- twice what it is worth in the models that carry it,
+    \resultnum{onsetmodelsfixedk.ssiso-vs-ssi.shift05} days for \ssi{} against \ssiso{}.
+    Superspreading, in turn, is worth
+    \resultnum{onsetmodelsnosuperspreading.combined.ssi-vs-cori.shift05} days under infection
+    anchoring (\cori{} against \ssi{}) but only
+    \resultnum{onsetmodelsnosuperspreading.combined.ssiso-vs-coriso.shift05} under onset
+    anchoring (\coriso{} against \ssiso{}). Each mechanism brings the declaration forward, and
+    each does so by less in the presence of the other: both act on the same residual risk, and
+    once either has removed it there is less left for the second to remove.
+\end{itemize}
 
 % =============================================================================================
 \section{Planned sensitivity analyses}

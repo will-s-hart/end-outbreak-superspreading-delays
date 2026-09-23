@@ -50,6 +50,40 @@
 %   results/onset_models_estimated_k/ssi_so_posterior.nc
 %   results/onset_models_estimated_k/ssi_so_rac.csv
 %   results/onset_models_estimated_k/ssi_so_rac_diagnostics.csv
+%   results/no_switch_fixed_R/model_evidence.json
+%   results/no_switch_fixed_R/sse_posterior.nc
+%   results/no_switch_fixed_R/sse_rac.csv
+%   results/no_switch_fixed_R/sse_rac_diagnostics.csv
+%   results/no_switch_fixed_R/sse_so_posterior.nc
+%   results/no_switch_fixed_R/sse_so_rac.csv
+%   results/no_switch_fixed_R/sse_so_rac_diagnostics.csv
+%   results/no_switch_fixed_R/ssi_posterior.nc
+%   results/no_switch_fixed_R/ssi_rac.csv
+%   results/no_switch_fixed_R/ssi_rac_diagnostics.csv
+%   results/no_switch_fixed_R/ssi_so_posterior.nc
+%   results/no_switch_fixed_R/ssi_so_rac.csv
+%   results/no_switch_fixed_R/ssi_so_rac_diagnostics.csv
+%   results/no_switch_single_R/model_evidence.json
+%   results/no_switch_single_R/sse_posterior.nc
+%   results/no_switch_single_R/sse_rac.csv
+%   results/no_switch_single_R/sse_rac_diagnostics.csv
+%   results/no_switch_single_R/sse_so_posterior.nc
+%   results/no_switch_single_R/sse_so_rac.csv
+%   results/no_switch_single_R/sse_so_rac_diagnostics.csv
+%   results/no_switch_single_R/ssi_posterior.nc
+%   results/no_switch_single_R/ssi_rac.csv
+%   results/no_switch_single_R/ssi_rac_diagnostics.csv
+%   results/no_switch_single_R/ssi_so_posterior.nc
+%   results/no_switch_single_R/ssi_so_rac.csv
+%   results/no_switch_single_R/ssi_so_rac_diagnostics.csv
+%   results/onset_models_no_superspreading/combined_model_evidence.json
+%   results/onset_models_no_superspreading/cori_posterior.nc
+%   results/onset_models_no_superspreading/cori_rac.csv
+%   results/onset_models_no_superspreading/cori_rac_diagnostics.csv
+%   results/onset_models_no_superspreading/cori_so_posterior.nc
+%   results/onset_models_no_superspreading/cori_so_rac.csv
+%   results/onset_models_no_superspreading/cori_so_rac_diagnostics.csv
+%   results/onset_models_no_superspreading/model_evidence.json
 %   results/underreporting_60/sse_posterior.nc
 %   results/underreporting_60/sse_rac.csv
 %   results/underreporting_60/sse_rac_diagnostics.csv
@@ -75,17 +109,21 @@
 %   results/underreporting_80/ssi_so_rac.csv
 %   results/underreporting_80/ssi_so_rac_diagnostics.csv
 %
-% 912 entries.
+% 1392 entries.
 \defresultnum{convergence.maxrhat}{1.02}
-\defresultnum{core.diagnostics.divergences}{151}
-\defresultnum{core.diagnostics.fits}{1540}
+\defresultnum{core.diagnostics.divergences}{157}
+\defresultnum{core.diagnostics.fits}{1820}
 \defresultnum{core.diagnostics.maxrhat}{1.012}
-\defresultnum{core.diagnostics.minbulkess}{1153}
-\defresultnum{data.days}{111}
+\defresultnum{core.diagnostics.minbulkess}{355}
+\defresultnum{core.diagnostics.sampledfits}{1820}
+\defresultnum{data.days}{131}
 \defresultnum{data.ertarrivaldate}{8 May 2018}
 \defresultnum{data.ertarrivalday}{33}
+\defresultnum{data.extradays}{20}
 \defresultnum{data.firstdate}{5 April 2018}
 \defresultnum{data.firstday}{0}
+\defresultnum{data.lastdate}{13 August 2018}
+\defresultnum{data.lastday}{130}
 \defresultnum{data.lastonsetdate}{2 June 2018}
 \defresultnum{data.lastonsetday}{58}
 \defresultnum{data.maxdailyonsets}{6}
@@ -104,7 +142,7 @@
 \defresultnum{delays.incubation.mean}{11.4}
 \defresultnum{delays.incubation.sd}{8.1}
 \defresultnum{delays.incubation.variance}{65.61}
-\defresultnum{delays.maxlag}{110}
+\defresultnum{delays.maxlag}{130}
 \defresultnum{delays.serialinterval.mean}{15.3}
 \defresultnum{delays.serialinterval.sd}{9.3}
 \defresultnum{delays.serialinterval.variance}{86.49}
@@ -113,143 +151,151 @@
 \defresultnum{delays.tost.sd}{4.57}
 \defresultnum{delays.tost.variance}{20.88}
 \defresultnum{naivemodelsestimatedk.chains}{4}
-\defresultnum{naivemodelsestimatedk.diagnostics.divergences}{67}
-\defresultnum{naivemodelsestimatedk.diagnostics.fits}{330}
-\defresultnum{naivemodelsestimatedk.diagnostics.maxrhat}{1.004}
-\defresultnum{naivemodelsestimatedk.diagnostics.minbulkess}{3461}
-\defresultnum{naivemodelsestimatedk.dlo-vs-sse.medianratio}{0.75}
-\defresultnum{naivemodelsestimatedk.dlo-vs-sse.overlap}{0.589}
-\defresultnum{naivemodelsestimatedk.dlo-vs-sse.probabilitygreater}{0.219}
-\defresultnum{naivemodelsestimatedk.dlo-vs-ssi.medianratio}{2.68}
-\defresultnum{naivemodelsestimatedk.dlo-vs-ssi.overlap}{0.095}
-\defresultnum{naivemodelsestimatedk.dlo-vs-ssi.probabilitygreater}{0.990}
-\defresultnum{naivemodelsestimatedk.dlo.evidencegain}{\ensuremath{+3.90}}
-\defresultnum{naivemodelsestimatedk.dlo.k.interval}{0.378 (0.230--0.629)}
-\defresultnum{naivemodelsestimatedk.dlo.k.lower}{0.230}
-\defresultnum{naivemodelsestimatedk.dlo.k.median}{0.378}
-\defresultnum{naivemodelsestimatedk.dlo.k.upper}{0.629}
-\defresultnum{naivemodelsestimatedk.dlo.logevidence}{\ensuremath{-93.2}}
+\defresultnum{naivemodelsestimatedk.diagnostics.divergences}{0}
+\defresultnum{naivemodelsestimatedk.diagnostics.fits}{390}
+\defresultnum{naivemodelsestimatedk.diagnostics.maxrhat}{1.008}
+\defresultnum{naivemodelsestimatedk.diagnostics.minbulkess}{1141}
+\defresultnum{naivemodelsestimatedk.diagnostics.sampledfits}{390}
+\defresultnum{naivemodelsestimatedk.dlo-vs-sse.medianratio}{0.48}
+\defresultnum{naivemodelsestimatedk.dlo-vs-sse.overlap}{0.448}
+\defresultnum{naivemodelsestimatedk.dlo-vs-sse.probabilitygreater}{0.140}
+\defresultnum{naivemodelsestimatedk.dlo-vs-ssi.medianratio}{16.83}
+\defresultnum{naivemodelsestimatedk.dlo-vs-ssi.overlap}{0.016}
+\defresultnum{naivemodelsestimatedk.dlo-vs-ssi.probabilitygreater}{0.999}
+\defresultnum{naivemodelsestimatedk.dlo.evidencegain}{\ensuremath{+7.30}}
+\defresultnum{naivemodelsestimatedk.dlo.k.interval}{0.905 (0.399--2.504)}
+\defresultnum{naivemodelsestimatedk.dlo.k.lower}{0.399}
+\defresultnum{naivemodelsestimatedk.dlo.k.median}{0.905}
+\defresultnum{naivemodelsestimatedk.dlo.k.upper}{2.504}
+\defresultnum{naivemodelsestimatedk.dlo.logevidence}{\ensuremath{-89.8}}
 \defresultnum{naivemodelsestimatedk.dlo.logevidencese}{0.002}
-\defresultnum{naivemodelsestimatedk.dlo.probability}{\ensuremath{2\times 10^{-4}}}
-\defresultnum{naivemodelsestimatedk.dlo.rac.final}{0.032}
-\defresultnum{naivemodelsestimatedk.dlo.rac.mcse}{0.0028}
-\defresultnum{naivemodelsestimatedk.dlo.rac.mcselate}{0.0023}
-\defresultnum{naivemodelsestimatedk.dlo.rac.reference}{0.427}
-\defresultnum{naivemodelsestimatedk.dlo.rac01.date}{never}
-\defresultnum{naivemodelsestimatedk.dlo.rac01.day}{never}
+\defresultnum{naivemodelsestimatedk.dlo.probability}{\ensuremath{2\times 10^{-3}}}
+\defresultnum{naivemodelsestimatedk.dlo.rac.final}{0.001}
+\defresultnum{naivemodelsestimatedk.dlo.rac.mcse}{0.0036}
+\defresultnum{naivemodelsestimatedk.dlo.rac.mcselate}{0.0021}
+\defresultnum{naivemodelsestimatedk.dlo.rac.reference}{0.425}
+\defresultnum{naivemodelsestimatedk.dlo.rac.withdrawal}{0.030}
+\defresultnum{naivemodelsestimatedk.dlo.rac01.date}{1 August 2018}
+\defresultnum{naivemodelsestimatedk.dlo.rac01.day}{118}
 \defresultnum{naivemodelsestimatedk.dlo.rac05.date}{21 July 2018}
 \defresultnum{naivemodelsestimatedk.dlo.rac05.day}{107}
-\defresultnum{naivemodelsestimatedk.dlo.rpost.interval}{0.59 (0.33--1.05)}
-\defresultnum{naivemodelsestimatedk.dlo.rpost.lower}{0.33}
-\defresultnum{naivemodelsestimatedk.dlo.rpost.median}{0.59}
-\defresultnum{naivemodelsestimatedk.dlo.rpost.upper}{1.05}
-\defresultnum{naivemodelsestimatedk.dlo.rpre.interval}{2.59 (1.35--5.25)}
-\defresultnum{naivemodelsestimatedk.dlo.rpre.lower}{1.35}
-\defresultnum{naivemodelsestimatedk.dlo.rpre.median}{2.59}
-\defresultnum{naivemodelsestimatedk.dlo.rpre.upper}{5.25}
+\defresultnum{naivemodelsestimatedk.dlo.rpost.interval}{0.60 (0.36--0.96)}
+\defresultnum{naivemodelsestimatedk.dlo.rpost.lower}{0.36}
+\defresultnum{naivemodelsestimatedk.dlo.rpost.median}{0.60}
+\defresultnum{naivemodelsestimatedk.dlo.rpost.upper}{0.96}
+\defresultnum{naivemodelsestimatedk.dlo.rpre.interval}{2.50 (1.44--4.34)}
+\defresultnum{naivemodelsestimatedk.dlo.rpre.lower}{1.44}
+\defresultnum{naivemodelsestimatedk.dlo.rpre.median}{2.50}
+\defresultnum{naivemodelsestimatedk.dlo.rpre.upper}{4.34}
 \defresultnum{naivemodelsestimatedk.draws}{2000}
 \defresultnum{naivemodelsestimatedk.fixedk}{estimated}
 \defresultnum{naivemodelsestimatedk.fixedrpost}{estimated}
 \defresultnum{naivemodelsestimatedk.fixedrpre}{estimated}
 \defresultnum{naivemodelsestimatedk.nmodels}{3}
 \defresultnum{naivemodelsestimatedk.reportingpercent}{100}
-\defresultnum{naivemodelsestimatedk.sse-vs-ssi.medianratio}{3.56}
-\defresultnum{naivemodelsestimatedk.sse-vs-ssi.overlap}{0.032}
-\defresultnum{naivemodelsestimatedk.sse-vs-ssi.probabilitygreater}{0.999}
-\defresultnum{naivemodelsestimatedk.sse.evidencegain}{\ensuremath{+7.41}}
-\defresultnum{naivemodelsestimatedk.sse.k.interval}{0.502 (0.307--0.853)}
-\defresultnum{naivemodelsestimatedk.sse.k.lower}{0.307}
-\defresultnum{naivemodelsestimatedk.sse.k.median}{0.502}
-\defresultnum{naivemodelsestimatedk.sse.k.upper}{0.853}
-\defresultnum{naivemodelsestimatedk.sse.logevidence}{\ensuremath{-99.4}}
+\defresultnum{naivemodelsestimatedk.sse-vs-ssi.medianratio}{35.04}
+\defresultnum{naivemodelsestimatedk.sse-vs-ssi.overlap}{0.004}
+\defresultnum{naivemodelsestimatedk.sse-vs-ssi.probabilitygreater}{1.000}
+\defresultnum{naivemodelsestimatedk.sse.evidencegain}{\ensuremath{+14.95}}
+\defresultnum{naivemodelsestimatedk.sse.k.interval}{1.884 (0.779--5.741)}
+\defresultnum{naivemodelsestimatedk.sse.k.lower}{0.779}
+\defresultnum{naivemodelsestimatedk.sse.k.median}{1.884}
+\defresultnum{naivemodelsestimatedk.sse.k.upper}{5.741}
+\defresultnum{naivemodelsestimatedk.sse.logevidence}{\ensuremath{-91.8}}
 \defresultnum{naivemodelsestimatedk.sse.logevidencese}{0.002}
-\defresultnum{naivemodelsestimatedk.sse.probability}{\ensuremath{4\times 10^{-7}}}
-\defresultnum{naivemodelsestimatedk.sse.rac.final}{0.010}
-\defresultnum{naivemodelsestimatedk.sse.rac.mcse}{0.0027}
-\defresultnum{naivemodelsestimatedk.sse.rac.mcselate}{0.0014}
-\defresultnum{naivemodelsestimatedk.sse.rac.reference}{0.169}
-\defresultnum{naivemodelsestimatedk.sse.rac01.date}{24 July 2018}
-\defresultnum{naivemodelsestimatedk.sse.rac01.day}{110}
-\defresultnum{naivemodelsestimatedk.sse.rac05.date}{13 July 2018}
-\defresultnum{naivemodelsestimatedk.sse.rac05.day}{99}
-\defresultnum{naivemodelsestimatedk.sse.rpost.interval}{0.64 (0.37--1.12)}
-\defresultnum{naivemodelsestimatedk.sse.rpost.lower}{0.37}
-\defresultnum{naivemodelsestimatedk.sse.rpost.median}{0.64}
-\defresultnum{naivemodelsestimatedk.sse.rpost.upper}{1.12}
-\defresultnum{naivemodelsestimatedk.sse.rpre.interval}{2.11 (0.98--4.72)}
-\defresultnum{naivemodelsestimatedk.sse.rpre.lower}{0.98}
-\defresultnum{naivemodelsestimatedk.sse.rpre.median}{2.11}
-\defresultnum{naivemodelsestimatedk.sse.rpre.upper}{4.72}
-\defresultnum{naivemodelsestimatedk.sse.rst.final}{0.006}
-\defresultnum{naivemodelsestimatedk.sse.rst.mcse}{0.0058}
-\defresultnum{naivemodelsestimatedk.sse.rst.mcselate}{0.0051}
-\defresultnum{naivemodelsestimatedk.sse.rst.reference}{0.100}
-\defresultnum{naivemodelsestimatedk.sse.rst01.date}{21 July 2018}
-\defresultnum{naivemodelsestimatedk.sse.rst01.day}{107}
-\defresultnum{naivemodelsestimatedk.sse.rst05.date}{10 July 2018}
-\defresultnum{naivemodelsestimatedk.sse.rst05.day}{96}
-\defresultnum{naivemodelsestimatedk.ssi.evidencegain}{\ensuremath{+0.22}}
-\defresultnum{naivemodelsestimatedk.ssi.k.interval}{0.141 (0.075--0.273)}
-\defresultnum{naivemodelsestimatedk.ssi.k.lower}{0.075}
-\defresultnum{naivemodelsestimatedk.ssi.k.median}{0.141}
-\defresultnum{naivemodelsestimatedk.ssi.k.upper}{0.273}
+\defresultnum{naivemodelsestimatedk.sse.probability}{\ensuremath{3\times 10^{-4}}}
+\defresultnum{naivemodelsestimatedk.sse.rac.final}{0.001}
+\defresultnum{naivemodelsestimatedk.sse.rac.mcse}{0.0054}
+\defresultnum{naivemodelsestimatedk.sse.rac.mcselate}{0.0017}
+\defresultnum{naivemodelsestimatedk.sse.rac.reference}{0.283}
+\defresultnum{naivemodelsestimatedk.sse.rac.withdrawal}{0.018}
+\defresultnum{naivemodelsestimatedk.sse.rac01.date}{28 July 2018}
+\defresultnum{naivemodelsestimatedk.sse.rac01.day}{114}
+\defresultnum{naivemodelsestimatedk.sse.rac05.date}{17 July 2018}
+\defresultnum{naivemodelsestimatedk.sse.rac05.day}{103}
+\defresultnum{naivemodelsestimatedk.sse.rpost.interval}{0.61 (0.40--0.94)}
+\defresultnum{naivemodelsestimatedk.sse.rpost.lower}{0.40}
+\defresultnum{naivemodelsestimatedk.sse.rpost.median}{0.61}
+\defresultnum{naivemodelsestimatedk.sse.rpost.upper}{0.94}
+\defresultnum{naivemodelsestimatedk.sse.rpre.interval}{2.26 (1.28--3.97)}
+\defresultnum{naivemodelsestimatedk.sse.rpre.lower}{1.28}
+\defresultnum{naivemodelsestimatedk.sse.rpre.median}{2.26}
+\defresultnum{naivemodelsestimatedk.sse.rpre.upper}{3.97}
+\defresultnum{naivemodelsestimatedk.sse.rst.final}{0.001}
+\defresultnum{naivemodelsestimatedk.sse.rst.mcse}{0.0085}
+\defresultnum{naivemodelsestimatedk.sse.rst.mcselate}{0.0032}
+\defresultnum{naivemodelsestimatedk.sse.rst.reference}{0.218}
+\defresultnum{naivemodelsestimatedk.sse.rst.withdrawal}{0.013}
+\defresultnum{naivemodelsestimatedk.sse.rst01.date}{26 July 2018}
+\defresultnum{naivemodelsestimatedk.sse.rst01.day}{112}
+\defresultnum{naivemodelsestimatedk.sse.rst05.date}{15 July 2018}
+\defresultnum{naivemodelsestimatedk.sse.rst05.day}{101}
+\defresultnum{naivemodelsestimatedk.ssi.evidencegain}{\ensuremath{+0.92}}
+\defresultnum{naivemodelsestimatedk.ssi.k.interval}{0.054 (0.013--0.233)}
+\defresultnum{naivemodelsestimatedk.ssi.k.lower}{0.013}
+\defresultnum{naivemodelsestimatedk.ssi.k.median}{0.054}
+\defresultnum{naivemodelsestimatedk.ssi.k.upper}{0.233}
 \defresultnum{naivemodelsestimatedk.ssi.latents.marginalised}{1}
 \defresultnum{naivemodelsestimatedk.ssi.latents.sampled}{30}
 \defresultnum{naivemodelsestimatedk.ssi.latents.total}{31}
-\defresultnum{naivemodelsestimatedk.ssi.logevidence}{\ensuremath{-84.5}}
-\defresultnum{naivemodelsestimatedk.ssi.logevidencese}{0.022}
+\defresultnum{naivemodelsestimatedk.ssi.logevidence}{\ensuremath{-83.8}}
+\defresultnum{naivemodelsestimatedk.ssi.logevidencese}{0.034}
 \defresultnum{naivemodelsestimatedk.ssi.probability}{1.00}
-\defresultnum{naivemodelsestimatedk.ssi.rac.final}{0.006}
-\defresultnum{naivemodelsestimatedk.ssi.rac.mcse}{0.0050}
-\defresultnum{naivemodelsestimatedk.ssi.rac.mcselate}{0.0050}
-\defresultnum{naivemodelsestimatedk.ssi.rac.reference}{0.107}
-\defresultnum{naivemodelsestimatedk.ssi.rac01.date}{21 July 2018}
-\defresultnum{naivemodelsestimatedk.ssi.rac01.day}{107}
-\defresultnum{naivemodelsestimatedk.ssi.rac05.date}{10 July 2018}
-\defresultnum{naivemodelsestimatedk.ssi.rac05.day}{96}
-\defresultnum{naivemodelsestimatedk.ssi.rpost.interval}{0.73 (0.36--1.63)}
-\defresultnum{naivemodelsestimatedk.ssi.rpost.lower}{0.36}
-\defresultnum{naivemodelsestimatedk.ssi.rpost.median}{0.73}
-\defresultnum{naivemodelsestimatedk.ssi.rpost.upper}{1.63}
-\defresultnum{naivemodelsestimatedk.ssi.rpre.interval}{1.53 (0.67--3.69)}
-\defresultnum{naivemodelsestimatedk.ssi.rpre.lower}{0.67}
-\defresultnum{naivemodelsestimatedk.ssi.rpre.median}{1.53}
-\defresultnum{naivemodelsestimatedk.ssi.rpre.upper}{3.69}
-\defresultnum{naivemodelsestimatedk.ssi.rst.final}{0.001}
-\defresultnum{naivemodelsestimatedk.ssi.rst.mcse}{0.0082}
-\defresultnum{naivemodelsestimatedk.ssi.rst.mcselate}{0.0075}
-\defresultnum{naivemodelsestimatedk.ssi.rst.reference}{0.016}
-\defresultnum{naivemodelsestimatedk.ssi.rst01.date}{7 July 2018}
-\defresultnum{naivemodelsestimatedk.ssi.rst01.day}{93}
-\defresultnum{naivemodelsestimatedk.ssi.rst05.date}{26 June 2018}
-\defresultnum{naivemodelsestimatedk.ssi.rst05.day}{82}
+\defresultnum{naivemodelsestimatedk.ssi.rac.final}{0.000}
+\defresultnum{naivemodelsestimatedk.ssi.rac.mcse}{0.0073}
+\defresultnum{naivemodelsestimatedk.ssi.rac.mcselate}{0.0073}
+\defresultnum{naivemodelsestimatedk.ssi.rac.reference}{0.063}
+\defresultnum{naivemodelsestimatedk.ssi.rac.withdrawal}{0.003}
+\defresultnum{naivemodelsestimatedk.ssi.rac01.date}{17 July 2018}
+\defresultnum{naivemodelsestimatedk.ssi.rac01.day}{103}
+\defresultnum{naivemodelsestimatedk.ssi.rac05.date}{6 July 2018}
+\defresultnum{naivemodelsestimatedk.ssi.rac05.day}{92}
+\defresultnum{naivemodelsestimatedk.ssi.rpost.interval}{0.81 (0.33--2.26)}
+\defresultnum{naivemodelsestimatedk.ssi.rpost.lower}{0.33}
+\defresultnum{naivemodelsestimatedk.ssi.rpost.median}{0.81}
+\defresultnum{naivemodelsestimatedk.ssi.rpost.upper}{2.26}
+\defresultnum{naivemodelsestimatedk.ssi.rpre.interval}{1.36 (0.52--3.70)}
+\defresultnum{naivemodelsestimatedk.ssi.rpre.lower}{0.52}
+\defresultnum{naivemodelsestimatedk.ssi.rpre.median}{1.36}
+\defresultnum{naivemodelsestimatedk.ssi.rpre.upper}{3.70}
+\defresultnum{naivemodelsestimatedk.ssi.rst.final}{0.000}
+\defresultnum{naivemodelsestimatedk.ssi.rst.mcse}{0.0106}
+\defresultnum{naivemodelsestimatedk.ssi.rst.mcselate}{0.0064}
+\defresultnum{naivemodelsestimatedk.ssi.rst.reference}{0.006}
+\defresultnum{naivemodelsestimatedk.ssi.rst.withdrawal}{0.000}
+\defresultnum{naivemodelsestimatedk.ssi.rst01.date}{1 July 2018}
+\defresultnum{naivemodelsestimatedk.ssi.rst01.day}{87}
+\defresultnum{naivemodelsestimatedk.ssi.rst05.date}{19 June 2018}
+\defresultnum{naivemodelsestimatedk.ssi.rst05.day}{75}
 \defresultnum{naivemodelsestimatedk.switchday}{33}
-\defresultnum{naivemodelsestimatedk.targetaccept}{0.90}
+\defresultnum{naivemodelsestimatedk.targetaccept}{0.99}
 \defresultnum{naivemodelsestimatedk.tune}{2000}
 \defresultnum{naivemodelsfixedk.chains}{4}
 \defresultnum{naivemodelsfixedk.diagnostics.divergences}{2}
-\defresultnum{naivemodelsfixedk.diagnostics.fits}{330}
+\defresultnum{naivemodelsfixedk.diagnostics.fits}{390}
 \defresultnum{naivemodelsfixedk.diagnostics.maxrhat}{1.004}
-\defresultnum{naivemodelsfixedk.diagnostics.minbulkess}{3741}
+\defresultnum{naivemodelsfixedk.diagnostics.minbulkess}{4156}
+\defresultnum{naivemodelsfixedk.diagnostics.sampledfits}{390}
 \defresultnum{naivemodelsfixedk.dlo.logevidence}{\ensuremath{-97.1}}
 \defresultnum{naivemodelsfixedk.dlo.logevidencese}{0.001}
 \defresultnum{naivemodelsfixedk.dlo.probability}{\ensuremath{4\times 10^{-6}}}
-\defresultnum{naivemodelsfixedk.dlo.rac.final}{0.032}
+\defresultnum{naivemodelsfixedk.dlo.rac.final}{0.001}
 \defresultnum{naivemodelsfixedk.dlo.rac.mcse}{0.0031}
 \defresultnum{naivemodelsfixedk.dlo.rac.mcselate}{0.0020}
 \defresultnum{naivemodelsfixedk.dlo.rac.reference}{0.412}
-\defresultnum{naivemodelsfixedk.dlo.rac01.date}{never}
-\defresultnum{naivemodelsfixedk.dlo.rac01.day}{never}
+\defresultnum{naivemodelsfixedk.dlo.rac.withdrawal}{0.032}
+\defresultnum{naivemodelsfixedk.dlo.rac01.date}{1 August 2018}
+\defresultnum{naivemodelsfixedk.dlo.rac01.day}{118}
 \defresultnum{naivemodelsfixedk.dlo.rac05.date}{21 July 2018}
 \defresultnum{naivemodelsfixedk.dlo.rac05.day}{107}
-\defresultnum{naivemodelsfixedk.dlo.rpost.interval}{0.59 (0.30--1.20)}
-\defresultnum{naivemodelsfixedk.dlo.rpost.lower}{0.30}
+\defresultnum{naivemodelsfixedk.dlo.rpost.interval}{0.59 (0.29--1.22)}
+\defresultnum{naivemodelsfixedk.dlo.rpost.lower}{0.29}
 \defresultnum{naivemodelsfixedk.dlo.rpost.median}{0.59}
-\defresultnum{naivemodelsfixedk.dlo.rpost.upper}{1.20}
-\defresultnum{naivemodelsfixedk.dlo.rpre.interval}{2.55 (1.20--6.05)}
-\defresultnum{naivemodelsfixedk.dlo.rpre.lower}{1.20}
+\defresultnum{naivemodelsfixedk.dlo.rpost.upper}{1.22}
+\defresultnum{naivemodelsfixedk.dlo.rpre.interval}{2.55 (1.17--5.94)}
+\defresultnum{naivemodelsfixedk.dlo.rpre.lower}{1.17}
 \defresultnum{naivemodelsfixedk.dlo.rpre.median}{2.55}
-\defresultnum{naivemodelsfixedk.dlo.rpre.upper}{6.05}
+\defresultnum{naivemodelsfixedk.dlo.rpre.upper}{5.94}
 \defresultnum{naivemodelsfixedk.draws}{2000}
 \defresultnum{naivemodelsfixedk.fixedk}{0.18}
 \defresultnum{naivemodelsfixedk.fixedrpost}{estimated}
@@ -259,26 +305,28 @@
 \defresultnum{naivemodelsfixedk.sse.logevidence}{\ensuremath{-106.8}}
 \defresultnum{naivemodelsfixedk.sse.logevidencese}{0.001}
 \defresultnum{naivemodelsfixedk.sse.probability}{\ensuremath{3\times 10^{-10}}}
-\defresultnum{naivemodelsfixedk.sse.rac.final}{0.005}
+\defresultnum{naivemodelsfixedk.sse.rac.final}{0.000}
 \defresultnum{naivemodelsfixedk.sse.rac.mcse}{0.0013}
 \defresultnum{naivemodelsfixedk.sse.rac.mcselate}{0.0011}
 \defresultnum{naivemodelsfixedk.sse.rac.reference}{0.093}
+\defresultnum{naivemodelsfixedk.sse.rac.withdrawal}{0.005}
 \defresultnum{naivemodelsfixedk.sse.rac01.date}{20 July 2018}
 \defresultnum{naivemodelsfixedk.sse.rac01.day}{106}
 \defresultnum{naivemodelsfixedk.sse.rac05.date}{9 July 2018}
 \defresultnum{naivemodelsfixedk.sse.rac05.day}{95}
-\defresultnum{naivemodelsfixedk.sse.rpost.interval}{0.68 (0.34--1.48)}
+\defresultnum{naivemodelsfixedk.sse.rpost.interval}{0.68 (0.34--1.50)}
 \defresultnum{naivemodelsfixedk.sse.rpost.lower}{0.34}
 \defresultnum{naivemodelsfixedk.sse.rpost.median}{0.68}
-\defresultnum{naivemodelsfixedk.sse.rpost.upper}{1.48}
-\defresultnum{naivemodelsfixedk.sse.rpre.interval}{1.81 (0.72--5.35)}
+\defresultnum{naivemodelsfixedk.sse.rpost.upper}{1.50}
+\defresultnum{naivemodelsfixedk.sse.rpre.interval}{1.80 (0.72--5.33)}
 \defresultnum{naivemodelsfixedk.sse.rpre.lower}{0.72}
-\defresultnum{naivemodelsfixedk.sse.rpre.median}{1.81}
-\defresultnum{naivemodelsfixedk.sse.rpre.upper}{5.35}
-\defresultnum{naivemodelsfixedk.sse.rst.final}{0.002}
+\defresultnum{naivemodelsfixedk.sse.rpre.median}{1.80}
+\defresultnum{naivemodelsfixedk.sse.rpre.upper}{5.33}
+\defresultnum{naivemodelsfixedk.sse.rst.final}{0.000}
 \defresultnum{naivemodelsfixedk.sse.rst.mcse}{0.0076}
 \defresultnum{naivemodelsfixedk.sse.rst.mcselate}{0.0062}
 \defresultnum{naivemodelsfixedk.sse.rst.reference}{0.039}
+\defresultnum{naivemodelsfixedk.sse.rst.withdrawal}{0.002}
 \defresultnum{naivemodelsfixedk.sse.rst01.date}{14 July 2018}
 \defresultnum{naivemodelsfixedk.sse.rst01.day}{100}
 \defresultnum{naivemodelsfixedk.sse.rst05.date}{3 July 2018}
@@ -286,240 +334,566 @@
 \defresultnum{naivemodelsfixedk.ssi.latents.marginalised}{1}
 \defresultnum{naivemodelsfixedk.ssi.latents.sampled}{30}
 \defresultnum{naivemodelsfixedk.ssi.latents.total}{31}
-\defresultnum{naivemodelsfixedk.ssi.logevidence}{\ensuremath{-84.8}}
+\defresultnum{naivemodelsfixedk.ssi.logevidence}{\ensuremath{-84.7}}
 \defresultnum{naivemodelsfixedk.ssi.logevidencese}{0.019}
 \defresultnum{naivemodelsfixedk.ssi.probability}{1.00}
-\defresultnum{naivemodelsfixedk.ssi.rac.final}{0.007}
+\defresultnum{naivemodelsfixedk.ssi.rac.final}{0.000}
 \defresultnum{naivemodelsfixedk.ssi.rac.mcse}{0.0043}
-\defresultnum{naivemodelsfixedk.ssi.rac.mcselate}{0.0041}
-\defresultnum{naivemodelsfixedk.ssi.rac.reference}{0.123}
+\defresultnum{naivemodelsfixedk.ssi.rac.mcselate}{0.0033}
+\defresultnum{naivemodelsfixedk.ssi.rac.reference}{0.124}
+\defresultnum{naivemodelsfixedk.ssi.rac.withdrawal}{0.007}
 \defresultnum{naivemodelsfixedk.ssi.rac01.date}{22 July 2018}
 \defresultnum{naivemodelsfixedk.ssi.rac01.day}{108}
 \defresultnum{naivemodelsfixedk.ssi.rac05.date}{11 July 2018}
 \defresultnum{naivemodelsfixedk.ssi.rac05.day}{97}
-\defresultnum{naivemodelsfixedk.ssi.rpost.interval}{0.71 (0.36--1.44)}
+\defresultnum{naivemodelsfixedk.ssi.rpost.interval}{0.71 (0.36--1.46)}
 \defresultnum{naivemodelsfixedk.ssi.rpost.lower}{0.36}
 \defresultnum{naivemodelsfixedk.ssi.rpost.median}{0.71}
-\defresultnum{naivemodelsfixedk.ssi.rpost.upper}{1.44}
-\defresultnum{naivemodelsfixedk.ssi.rpre.interval}{1.61 (0.73--3.73)}
-\defresultnum{naivemodelsfixedk.ssi.rpre.lower}{0.73}
-\defresultnum{naivemodelsfixedk.ssi.rpre.median}{1.61}
-\defresultnum{naivemodelsfixedk.ssi.rpre.upper}{3.73}
-\defresultnum{naivemodelsfixedk.ssi.rst.final}{0.001}
-\defresultnum{naivemodelsfixedk.ssi.rst.mcse}{0.0076}
-\defresultnum{naivemodelsfixedk.ssi.rst.mcselate}{0.0070}
+\defresultnum{naivemodelsfixedk.ssi.rpost.upper}{1.46}
+\defresultnum{naivemodelsfixedk.ssi.rpre.interval}{1.62 (0.74--3.67)}
+\defresultnum{naivemodelsfixedk.ssi.rpre.lower}{0.74}
+\defresultnum{naivemodelsfixedk.ssi.rpre.median}{1.62}
+\defresultnum{naivemodelsfixedk.ssi.rpre.upper}{3.67}
+\defresultnum{naivemodelsfixedk.ssi.rst.final}{0.000}
+\defresultnum{naivemodelsfixedk.ssi.rst.mcse}{0.0071}
+\defresultnum{naivemodelsfixedk.ssi.rst.mcselate}{0.0062}
 \defresultnum{naivemodelsfixedk.ssi.rst.reference}{0.021}
-\defresultnum{naivemodelsfixedk.ssi.rst01.date}{9 July 2018}
-\defresultnum{naivemodelsfixedk.ssi.rst01.day}{95}
+\defresultnum{naivemodelsfixedk.ssi.rst.withdrawal}{0.001}
+\defresultnum{naivemodelsfixedk.ssi.rst01.date}{10 July 2018}
+\defresultnum{naivemodelsfixedk.ssi.rst01.day}{96}
 \defresultnum{naivemodelsfixedk.ssi.rst05.date}{28 June 2018}
 \defresultnum{naivemodelsfixedk.ssi.rst05.day}{84}
 \defresultnum{naivemodelsfixedk.switchday}{33}
 \defresultnum{naivemodelsfixedk.targetaccept}{0.90}
 \defresultnum{naivemodelsfixedk.tune}{2000}
+\defresultnum{noswitchfixedr.chains}{4}
+\defresultnum{noswitchfixedr.diagnostics.divergences}{4}
+\defresultnum{noswitchfixedr.diagnostics.fits}{520}
+\defresultnum{noswitchfixedr.diagnostics.maxrhat}{1.010}
+\defresultnum{noswitchfixedr.diagnostics.minbulkess}{1001}
+\defresultnum{noswitchfixedr.diagnostics.sampledfits}{384}
+\defresultnum{noswitchfixedr.draws}{2000}
+\defresultnum{noswitchfixedr.fixedk}{0.18}
+\defresultnum{noswitchfixedr.fixedrpost}{0.95}
+\defresultnum{noswitchfixedr.fixedrpre}{0.95}
+\defresultnum{noswitchfixedr.nmodels}{4}
+\defresultnum{noswitchfixedr.reportingpercent}{100}
+\defresultnum{noswitchfixedr.sse.logevidence}{\ensuremath{-106.7}}
+\defresultnum{noswitchfixedr.sse.logevidencese}{0.000}
+\defresultnum{noswitchfixedr.sse.probability}{\ensuremath{7\times 10^{-11}}}
+\defresultnum{noswitchfixedr.sse.rac.final}{0.000}
+\defresultnum{noswitchfixedr.sse.rac.mcse}{0.0000}
+\defresultnum{noswitchfixedr.sse.rac.mcselate}{0.0000}
+\defresultnum{noswitchfixedr.sse.rac.reference}{0.071}
+\defresultnum{noswitchfixedr.sse.rac.withdrawal}{0.004}
+\defresultnum{noswitchfixedr.sse.rac01.date}{18 July 2018}
+\defresultnum{noswitchfixedr.sse.rac01.day}{104}
+\defresultnum{noswitchfixedr.sse.rac05.date}{7 July 2018}
+\defresultnum{noswitchfixedr.sse.rac05.day}{93}
+\defresultnum{noswitchfixedr.sse.rst.final}{0.000}
+\defresultnum{noswitchfixedr.sse.rst.mcse}{0.0000}
+\defresultnum{noswitchfixedr.sse.rst.mcselate}{0.0000}
+\defresultnum{noswitchfixedr.sse.rst.reference}{0.000}
+\defresultnum{noswitchfixedr.sse.rst.withdrawal}{0.000}
+\defresultnum{noswitchfixedr.sse.rst01.date}{6 April 2018}
+\defresultnum{noswitchfixedr.sse.rst01.day}{1}
+\defresultnum{noswitchfixedr.sse.rst05.date}{6 April 2018}
+\defresultnum{noswitchfixedr.sse.rst05.day}{1}
+\defresultnum{noswitchfixedr.sseso-vs-sse.shift01}{3}
+\defresultnum{noswitchfixedr.sseso-vs-sse.shift05}{3}
+\defresultnum{noswitchfixedr.sseso.gap.date}{10 June 2018}
+\defresultnum{noswitchfixedr.sseso.gap.day}{66}
+\defresultnum{noswitchfixedr.sseso.gap.max}{0.353}
+\defresultnum{noswitchfixedr.sseso.gap.shift01}{8}
+\defresultnum{noswitchfixedr.sseso.gap.shift05}{8}
+\defresultnum{noswitchfixedr.sseso.latents.marginalised}{72}
+\defresultnum{noswitchfixedr.sseso.latents.sampled}{58}
+\defresultnum{noswitchfixedr.sseso.latents.total}{130}
+\defresultnum{noswitchfixedr.sseso.logevidence}{\ensuremath{-84.1}}
+\defresultnum{noswitchfixedr.sseso.logevidencese}{0.035}
+\defresultnum{noswitchfixedr.sseso.probability}{0.47}
+\defresultnum{noswitchfixedr.sseso.rac.final}{0.000}
+\defresultnum{noswitchfixedr.sseso.rac.mcse}{0.0025}
+\defresultnum{noswitchfixedr.sseso.rac.mcselate}{0.0011}
+\defresultnum{noswitchfixedr.sseso.rac.reference}{0.048}
+\defresultnum{noswitchfixedr.sseso.rac.withdrawal}{0.002}
+\defresultnum{noswitchfixedr.sseso.rac01.date}{15 July 2018}
+\defresultnum{noswitchfixedr.sseso.rac01.day}{101}
+\defresultnum{noswitchfixedr.sseso.rac05.date}{4 July 2018}
+\defresultnum{noswitchfixedr.sseso.rac05.day}{90}
+\defresultnum{noswitchfixedr.sseso.rat.final}{0.000}
+\defresultnum{noswitchfixedr.sseso.rat.mcse}{0.0032}
+\defresultnum{noswitchfixedr.sseso.rat.mcselate}{0.0012}
+\defresultnum{noswitchfixedr.sseso.rat.reference}{0.015}
+\defresultnum{noswitchfixedr.sseso.rat.withdrawal}{0.001}
+\defresultnum{noswitchfixedr.sseso.rat01.date}{7 July 2018}
+\defresultnum{noswitchfixedr.sseso.rat01.day}{93}
+\defresultnum{noswitchfixedr.sseso.rat05.date}{26 June 2018}
+\defresultnum{noswitchfixedr.sseso.rat05.day}{82}
+\defresultnum{noswitchfixedr.sseso.rst.final}{0.000}
+\defresultnum{noswitchfixedr.sseso.rst.mcse}{0.0000}
+\defresultnum{noswitchfixedr.sseso.rst.mcselate}{0.0000}
+\defresultnum{noswitchfixedr.sseso.rst.reference}{0.000}
+\defresultnum{noswitchfixedr.sseso.rst.withdrawal}{0.000}
+\defresultnum{noswitchfixedr.sseso.rst01.date}{6 April 2018}
+\defresultnum{noswitchfixedr.sseso.rst01.day}{1}
+\defresultnum{noswitchfixedr.sseso.rst05.date}{6 April 2018}
+\defresultnum{noswitchfixedr.sseso.rst05.day}{1}
+\defresultnum{noswitchfixedr.ssi.latents.marginalised}{1}
+\defresultnum{noswitchfixedr.ssi.latents.sampled}{30}
+\defresultnum{noswitchfixedr.ssi.latents.total}{31}
+\defresultnum{noswitchfixedr.ssi.logevidence}{\ensuremath{-84.7}}
+\defresultnum{noswitchfixedr.ssi.logevidencese}{0.017}
+\defresultnum{noswitchfixedr.ssi.probability}{0.26}
+\defresultnum{noswitchfixedr.ssi.rac.final}{0.000}
+\defresultnum{noswitchfixedr.ssi.rac.mcse}{0.0041}
+\defresultnum{noswitchfixedr.ssi.rac.mcselate}{0.0017}
+\defresultnum{noswitchfixedr.ssi.rac.reference}{0.055}
+\defresultnum{noswitchfixedr.ssi.rac.withdrawal}{0.003}
+\defresultnum{noswitchfixedr.ssi.rac01.date}{16 July 2018}
+\defresultnum{noswitchfixedr.ssi.rac01.day}{102}
+\defresultnum{noswitchfixedr.ssi.rac05.date}{5 July 2018}
+\defresultnum{noswitchfixedr.ssi.rac05.day}{91}
+\defresultnum{noswitchfixedr.ssi.rst.final}{0.000}
+\defresultnum{noswitchfixedr.ssi.rst.mcse}{0.0000}
+\defresultnum{noswitchfixedr.ssi.rst.mcselate}{0.0000}
+\defresultnum{noswitchfixedr.ssi.rst.reference}{0.000}
+\defresultnum{noswitchfixedr.ssi.rst.withdrawal}{0.000}
+\defresultnum{noswitchfixedr.ssi.rst01.date}{6 April 2018}
+\defresultnum{noswitchfixedr.ssi.rst01.day}{1}
+\defresultnum{noswitchfixedr.ssi.rst05.date}{6 April 2018}
+\defresultnum{noswitchfixedr.ssi.rst05.day}{1}
+\defresultnum{noswitchfixedr.ssiso-vs-ssi.shift01}{0}
+\defresultnum{noswitchfixedr.ssiso-vs-ssi.shift05}{0}
+\defresultnum{noswitchfixedr.ssiso.gap.date}{11 June 2018}
+\defresultnum{noswitchfixedr.ssiso.gap.day}{67}
+\defresultnum{noswitchfixedr.ssiso.gap.max}{0.377}
+\defresultnum{noswitchfixedr.ssiso.gap.shift01}{8}
+\defresultnum{noswitchfixedr.ssiso.gap.shift05}{8}
+\defresultnum{noswitchfixedr.ssiso.latents.marginalised}{1}
+\defresultnum{noswitchfixedr.ssiso.latents.sampled}{30}
+\defresultnum{noswitchfixedr.ssiso.latents.total}{31}
+\defresultnum{noswitchfixedr.ssiso.logevidence}{\ensuremath{-84.6}}
+\defresultnum{noswitchfixedr.ssiso.logevidencese}{0.017}
+\defresultnum{noswitchfixedr.ssiso.probability}{0.27}
+\defresultnum{noswitchfixedr.ssiso.rac.final}{0.000}
+\defresultnum{noswitchfixedr.ssiso.rac.mcse}{0.0050}
+\defresultnum{noswitchfixedr.ssiso.rac.mcselate}{0.0018}
+\defresultnum{noswitchfixedr.ssiso.rac.reference}{0.055}
+\defresultnum{noswitchfixedr.ssiso.rac.withdrawal}{0.003}
+\defresultnum{noswitchfixedr.ssiso.rac01.date}{16 July 2018}
+\defresultnum{noswitchfixedr.ssiso.rac01.day}{102}
+\defresultnum{noswitchfixedr.ssiso.rac05.date}{5 July 2018}
+\defresultnum{noswitchfixedr.ssiso.rac05.day}{91}
+\defresultnum{noswitchfixedr.ssiso.rat.final}{0.000}
+\defresultnum{noswitchfixedr.ssiso.rat.mcse}{0.0055}
+\defresultnum{noswitchfixedr.ssiso.rat.mcselate}{0.0013}
+\defresultnum{noswitchfixedr.ssiso.rat.reference}{0.016}
+\defresultnum{noswitchfixedr.ssiso.rat.withdrawal}{0.001}
+\defresultnum{noswitchfixedr.ssiso.rat01.date}{8 July 2018}
+\defresultnum{noswitchfixedr.ssiso.rat01.day}{94}
+\defresultnum{noswitchfixedr.ssiso.rat05.date}{27 June 2018}
+\defresultnum{noswitchfixedr.ssiso.rat05.day}{83}
+\defresultnum{noswitchfixedr.ssiso.rst.final}{0.000}
+\defresultnum{noswitchfixedr.ssiso.rst.mcse}{0.0000}
+\defresultnum{noswitchfixedr.ssiso.rst.mcselate}{0.0000}
+\defresultnum{noswitchfixedr.ssiso.rst.reference}{0.000}
+\defresultnum{noswitchfixedr.ssiso.rst.withdrawal}{0.000}
+\defresultnum{noswitchfixedr.ssiso.rst01.date}{6 April 2018}
+\defresultnum{noswitchfixedr.ssiso.rst01.day}{1}
+\defresultnum{noswitchfixedr.ssiso.rst05.date}{6 April 2018}
+\defresultnum{noswitchfixedr.ssiso.rst05.day}{1}
+\defresultnum{noswitchfixedr.switchday}{none}
+\defresultnum{noswitchfixedr.targetaccept}{0.90}
+\defresultnum{noswitchfixedr.tune}{2000}
+\defresultnum{noswitchsingler.chains}{4}
+\defresultnum{noswitchsingler.diagnostics.divergences}{30}
+\defresultnum{noswitchsingler.diagnostics.fits}{520}
+\defresultnum{noswitchsingler.diagnostics.maxrhat}{1.010}
+\defresultnum{noswitchsingler.diagnostics.minbulkess}{920}
+\defresultnum{noswitchsingler.diagnostics.sampledfits}{520}
+\defresultnum{noswitchsingler.draws}{2000}
+\defresultnum{noswitchsingler.fixedk}{0.18}
+\defresultnum{noswitchsingler.fixedrpost}{estimated}
+\defresultnum{noswitchsingler.fixedrpre}{estimated}
+\defresultnum{noswitchsingler.nmodels}{4}
+\defresultnum{noswitchsingler.reportingpercent}{100}
+\defresultnum{noswitchsingler.sse.logevidence}{\ensuremath{-107.7}}
+\defresultnum{noswitchsingler.sse.logevidencese}{0.001}
+\defresultnum{noswitchsingler.sse.probability}{\ensuremath{7\times 10^{-11}}}
+\defresultnum{noswitchsingler.sse.rac.final}{0.000}
+\defresultnum{noswitchsingler.sse.rac.mcse}{0.0021}
+\defresultnum{noswitchsingler.sse.rac.mcselate}{0.0009}
+\defresultnum{noswitchsingler.sse.rac.reference}{0.073}
+\defresultnum{noswitchsingler.sse.rac.withdrawal}{0.004}
+\defresultnum{noswitchsingler.sse.rac01.date}{18 July 2018}
+\defresultnum{noswitchsingler.sse.rac01.day}{104}
+\defresultnum{noswitchsingler.sse.rac05.date}{7 July 2018}
+\defresultnum{noswitchsingler.sse.rac05.day}{93}
+\defresultnum{noswitchsingler.sse.rpost.interval}{1.01 (0.21--4.98)}
+\defresultnum{noswitchsingler.sse.rpost.lower}{0.21}
+\defresultnum{noswitchsingler.sse.rpost.median}{1.01}
+\defresultnum{noswitchsingler.sse.rpost.upper}{4.98}
+\defresultnum{noswitchsingler.sse.rpre.interval}{1.00 (0.54--2.03)}
+\defresultnum{noswitchsingler.sse.rpre.lower}{0.54}
+\defresultnum{noswitchsingler.sse.rpre.median}{1.00}
+\defresultnum{noswitchsingler.sse.rpre.upper}{2.03}
+\defresultnum{noswitchsingler.sse.rst.final}{0.000}
+\defresultnum{noswitchsingler.sse.rst.mcse}{0.0089}
+\defresultnum{noswitchsingler.sse.rst.mcselate}{0.0043}
+\defresultnum{noswitchsingler.sse.rst.reference}{0.009}
+\defresultnum{noswitchsingler.sse.rst.withdrawal}{0.000}
+\defresultnum{noswitchsingler.sse.rst01.date}{4 July 2018}
+\defresultnum{noswitchsingler.sse.rst01.day}{90}
+\defresultnum{noswitchsingler.sse.rst05.date}{22 June 2018}
+\defresultnum{noswitchsingler.sse.rst05.day}{78}
+\defresultnum{noswitchsingler.sseso-vs-sse.shift01}{3}
+\defresultnum{noswitchsingler.sseso-vs-sse.shift05}{3}
+\defresultnum{noswitchsingler.sseso.gap.date}{10 June 2018}
+\defresultnum{noswitchsingler.sseso.gap.day}{66}
+\defresultnum{noswitchsingler.sseso.gap.max}{0.343}
+\defresultnum{noswitchsingler.sseso.gap.shift01}{8}
+\defresultnum{noswitchsingler.sseso.gap.shift05}{7}
+\defresultnum{noswitchsingler.sseso.latents.marginalised}{72}
+\defresultnum{noswitchsingler.sseso.latents.sampled}{58}
+\defresultnum{noswitchsingler.sseso.latents.total}{130}
+\defresultnum{noswitchsingler.sseso.logevidence}{\ensuremath{-85.0}}
+\defresultnum{noswitchsingler.sseso.logevidencese}{0.038}
+\defresultnum{noswitchsingler.sseso.probability}{0.46}
+\defresultnum{noswitchsingler.sseso.rac.final}{0.000}
+\defresultnum{noswitchsingler.sseso.rac.mcse}{0.0028}
+\defresultnum{noswitchsingler.sseso.rac.mcselate}{0.0013}
+\defresultnum{noswitchsingler.sseso.rac.reference}{0.048}
+\defresultnum{noswitchsingler.sseso.rac.withdrawal}{0.002}
+\defresultnum{noswitchsingler.sseso.rac01.date}{15 July 2018}
+\defresultnum{noswitchsingler.sseso.rac01.day}{101}
+\defresultnum{noswitchsingler.sseso.rac05.date}{4 July 2018}
+\defresultnum{noswitchsingler.sseso.rac05.day}{90}
+\defresultnum{noswitchsingler.sseso.rat.final}{0.000}
+\defresultnum{noswitchsingler.sseso.rat.mcse}{0.0043}
+\defresultnum{noswitchsingler.sseso.rat.mcselate}{0.0021}
+\defresultnum{noswitchsingler.sseso.rat.reference}{0.015}
+\defresultnum{noswitchsingler.sseso.rat.withdrawal}{0.001}
+\defresultnum{noswitchsingler.sseso.rat01.date}{7 July 2018}
+\defresultnum{noswitchsingler.sseso.rat01.day}{93}
+\defresultnum{noswitchsingler.sseso.rat05.date}{27 June 2018}
+\defresultnum{noswitchsingler.sseso.rat05.day}{83}
+\defresultnum{noswitchsingler.sseso.rpost.interval}{1.00 (0.20--5.06)}
+\defresultnum{noswitchsingler.sseso.rpost.lower}{0.20}
+\defresultnum{noswitchsingler.sseso.rpost.median}{1.00}
+\defresultnum{noswitchsingler.sseso.rpost.upper}{5.06}
+\defresultnum{noswitchsingler.sseso.rpre.interval}{1.00 (0.57--1.97)}
+\defresultnum{noswitchsingler.sseso.rpre.lower}{0.57}
+\defresultnum{noswitchsingler.sseso.rpre.median}{1.00}
+\defresultnum{noswitchsingler.sseso.rpre.upper}{1.97}
+\defresultnum{noswitchsingler.sseso.rst.final}{0.000}
+\defresultnum{noswitchsingler.sseso.rst.mcse}{0.0119}
+\defresultnum{noswitchsingler.sseso.rst.mcselate}{0.0035}
+\defresultnum{noswitchsingler.sseso.rst.reference}{0.002}
+\defresultnum{noswitchsingler.sseso.rst.withdrawal}{0.000}
+\defresultnum{noswitchsingler.sseso.rst01.date}{24 June 2018}
+\defresultnum{noswitchsingler.sseso.rst01.day}{80}
+\defresultnum{noswitchsingler.sseso.rst05.date}{13 June 2018}
+\defresultnum{noswitchsingler.sseso.rst05.day}{69}
+\defresultnum{noswitchsingler.ssi.latents.marginalised}{1}
+\defresultnum{noswitchsingler.ssi.latents.sampled}{30}
+\defresultnum{noswitchsingler.ssi.latents.total}{31}
+\defresultnum{noswitchsingler.ssi.logevidence}{\ensuremath{-85.6}}
+\defresultnum{noswitchsingler.ssi.logevidencese}{0.020}
+\defresultnum{noswitchsingler.ssi.probability}{0.28}
+\defresultnum{noswitchsingler.ssi.rac.final}{0.000}
+\defresultnum{noswitchsingler.ssi.rac.mcse}{0.0021}
+\defresultnum{noswitchsingler.ssi.rac.mcselate}{0.0010}
+\defresultnum{noswitchsingler.ssi.rac.reference}{0.055}
+\defresultnum{noswitchsingler.ssi.rac.withdrawal}{0.003}
+\defresultnum{noswitchsingler.ssi.rac01.date}{16 July 2018}
+\defresultnum{noswitchsingler.ssi.rac01.day}{102}
+\defresultnum{noswitchsingler.ssi.rac05.date}{5 July 2018}
+\defresultnum{noswitchsingler.ssi.rac05.day}{91}
+\defresultnum{noswitchsingler.ssi.rpost.interval}{1.00 (0.20--4.93)}
+\defresultnum{noswitchsingler.ssi.rpost.lower}{0.20}
+\defresultnum{noswitchsingler.ssi.rpost.median}{1.00}
+\defresultnum{noswitchsingler.ssi.rpost.upper}{4.93}
+\defresultnum{noswitchsingler.ssi.rpre.interval}{1.01 (0.55--2.01)}
+\defresultnum{noswitchsingler.ssi.rpre.lower}{0.55}
+\defresultnum{noswitchsingler.ssi.rpre.median}{1.01}
+\defresultnum{noswitchsingler.ssi.rpre.upper}{2.01}
+\defresultnum{noswitchsingler.ssi.rst.final}{0.000}
+\defresultnum{noswitchsingler.ssi.rst.mcse}{0.0081}
+\defresultnum{noswitchsingler.ssi.rst.mcselate}{0.0052}
+\defresultnum{noswitchsingler.ssi.rst.reference}{0.002}
+\defresultnum{noswitchsingler.ssi.rst.withdrawal}{0.000}
+\defresultnum{noswitchsingler.ssi.rst01.date}{24 June 2018}
+\defresultnum{noswitchsingler.ssi.rst01.day}{80}
+\defresultnum{noswitchsingler.ssi.rst05.date}{13 June 2018}
+\defresultnum{noswitchsingler.ssi.rst05.day}{69}
+\defresultnum{noswitchsingler.ssiso-vs-ssi.shift01}{0}
+\defresultnum{noswitchsingler.ssiso-vs-ssi.shift05}{0}
+\defresultnum{noswitchsingler.ssiso.gap.date}{11 June 2018}
+\defresultnum{noswitchsingler.ssiso.gap.day}{67}
+\defresultnum{noswitchsingler.ssiso.gap.max}{0.368}
+\defresultnum{noswitchsingler.ssiso.gap.shift01}{8}
+\defresultnum{noswitchsingler.ssiso.gap.shift05}{8}
+\defresultnum{noswitchsingler.ssiso.latents.marginalised}{1}
+\defresultnum{noswitchsingler.ssiso.latents.sampled}{30}
+\defresultnum{noswitchsingler.ssiso.latents.total}{31}
+\defresultnum{noswitchsingler.ssiso.logevidence}{\ensuremath{-85.6}}
+\defresultnum{noswitchsingler.ssiso.logevidencese}{0.019}
+\defresultnum{noswitchsingler.ssiso.probability}{0.26}
+\defresultnum{noswitchsingler.ssiso.rac.final}{0.000}
+\defresultnum{noswitchsingler.ssiso.rac.mcse}{0.0035}
+\defresultnum{noswitchsingler.ssiso.rac.mcselate}{0.0017}
+\defresultnum{noswitchsingler.ssiso.rac.reference}{0.055}
+\defresultnum{noswitchsingler.ssiso.rac.withdrawal}{0.003}
+\defresultnum{noswitchsingler.ssiso.rac01.date}{16 July 2018}
+\defresultnum{noswitchsingler.ssiso.rac01.day}{102}
+\defresultnum{noswitchsingler.ssiso.rac05.date}{5 July 2018}
+\defresultnum{noswitchsingler.ssiso.rac05.day}{91}
+\defresultnum{noswitchsingler.ssiso.rat.final}{0.000}
+\defresultnum{noswitchsingler.ssiso.rat.mcse}{0.0031}
+\defresultnum{noswitchsingler.ssiso.rat.mcselate}{0.0025}
+\defresultnum{noswitchsingler.ssiso.rat.reference}{0.017}
+\defresultnum{noswitchsingler.ssiso.rat.withdrawal}{0.001}
+\defresultnum{noswitchsingler.ssiso.rat01.date}{8 July 2018}
+\defresultnum{noswitchsingler.ssiso.rat01.day}{94}
+\defresultnum{noswitchsingler.ssiso.rat05.date}{27 June 2018}
+\defresultnum{noswitchsingler.ssiso.rat05.day}{83}
+\defresultnum{noswitchsingler.ssiso.rpost.interval}{1.01 (0.19--5.26)}
+\defresultnum{noswitchsingler.ssiso.rpost.lower}{0.19}
+\defresultnum{noswitchsingler.ssiso.rpost.median}{1.01}
+\defresultnum{noswitchsingler.ssiso.rpost.upper}{5.26}
+\defresultnum{noswitchsingler.ssiso.rpre.interval}{1.00 (0.55--1.99)}
+\defresultnum{noswitchsingler.ssiso.rpre.lower}{0.55}
+\defresultnum{noswitchsingler.ssiso.rpre.median}{1.00}
+\defresultnum{noswitchsingler.ssiso.rpre.upper}{1.99}
+\defresultnum{noswitchsingler.ssiso.rst.final}{0.000}
+\defresultnum{noswitchsingler.ssiso.rst.mcse}{0.0084}
+\defresultnum{noswitchsingler.ssiso.rst.mcselate}{0.0031}
+\defresultnum{noswitchsingler.ssiso.rst.reference}{0.002}
+\defresultnum{noswitchsingler.ssiso.rst.withdrawal}{0.000}
+\defresultnum{noswitchsingler.ssiso.rst01.date}{24 June 2018}
+\defresultnum{noswitchsingler.ssiso.rst01.day}{80}
+\defresultnum{noswitchsingler.ssiso.rst05.date}{13 June 2018}
+\defresultnum{noswitchsingler.ssiso.rst05.day}{69}
+\defresultnum{noswitchsingler.switchday}{none}
+\defresultnum{noswitchsingler.targetaccept}{0.90}
+\defresultnum{noswitchsingler.tune}{2000}
 \defresultnum{onsetmodelsestimatedk.chains}{4}
-\defresultnum{onsetmodelsestimatedk.diagnostics.divergences}{28}
-\defresultnum{onsetmodelsestimatedk.diagnostics.fits}{440}
-\defresultnum{onsetmodelsestimatedk.diagnostics.maxrhat}{1.008}
-\defresultnum{onsetmodelsestimatedk.diagnostics.minbulkess}{1201}
+\defresultnum{onsetmodelsestimatedk.diagnostics.divergences}{78}
+\defresultnum{onsetmodelsestimatedk.diagnostics.fits}{520}
+\defresultnum{onsetmodelsestimatedk.diagnostics.maxrhat}{1.012}
+\defresultnum{onsetmodelsestimatedk.diagnostics.minbulkess}{355}
+\defresultnum{onsetmodelsestimatedk.diagnostics.sampledfits}{520}
 \defresultnum{onsetmodelsestimatedk.draws}{2000}
 \defresultnum{onsetmodelsestimatedk.fixedk}{estimated}
 \defresultnum{onsetmodelsestimatedk.fixedrpost}{estimated}
 \defresultnum{onsetmodelsestimatedk.fixedrpre}{estimated}
 \defresultnum{onsetmodelsestimatedk.nmodels}{4}
 \defresultnum{onsetmodelsestimatedk.reportingpercent}{100}
-\defresultnum{onsetmodelsestimatedk.sse-vs-sseso.medianratio}{2.85}
-\defresultnum{onsetmodelsestimatedk.sse-vs-sseso.overlap}{0.089}
-\defresultnum{onsetmodelsestimatedk.sse-vs-sseso.probabilitygreater}{0.991}
-\defresultnum{onsetmodelsestimatedk.sse-vs-ssi.medianratio}{3.54}
-\defresultnum{onsetmodelsestimatedk.sse-vs-ssi.overlap}{0.033}
-\defresultnum{onsetmodelsestimatedk.sse-vs-ssi.probabilitygreater}{0.999}
-\defresultnum{onsetmodelsestimatedk.sse-vs-ssiso.medianratio}{2.85}
-\defresultnum{onsetmodelsestimatedk.sse-vs-ssiso.overlap}{0.090}
-\defresultnum{onsetmodelsestimatedk.sse-vs-ssiso.probabilitygreater}{0.992}
-\defresultnum{onsetmodelsestimatedk.sse.evidencegain}{\ensuremath{+7.41}}
-\defresultnum{onsetmodelsestimatedk.sse.k.interval}{0.501 (0.306--0.847)}
-\defresultnum{onsetmodelsestimatedk.sse.k.lower}{0.306}
-\defresultnum{onsetmodelsestimatedk.sse.k.median}{0.501}
-\defresultnum{onsetmodelsestimatedk.sse.k.upper}{0.847}
-\defresultnum{onsetmodelsestimatedk.sse.logevidence}{\ensuremath{-99.4}}
-\defresultnum{onsetmodelsestimatedk.sse.logevidencese}{0.001}
-\defresultnum{onsetmodelsestimatedk.sse.probability}{\ensuremath{1\times 10^{-8}}}
-\defresultnum{onsetmodelsestimatedk.sse.rac.final}{0.010}
-\defresultnum{onsetmodelsestimatedk.sse.rac.mcse}{0.0026}
-\defresultnum{onsetmodelsestimatedk.sse.rac.mcselate}{0.0015}
-\defresultnum{onsetmodelsestimatedk.sse.rac.reference}{0.170}
-\defresultnum{onsetmodelsestimatedk.sse.rac01.date}{24 July 2018}
-\defresultnum{onsetmodelsestimatedk.sse.rac01.day}{110}
-\defresultnum{onsetmodelsestimatedk.sse.rac05.date}{13 July 2018}
-\defresultnum{onsetmodelsestimatedk.sse.rac05.day}{99}
-\defresultnum{onsetmodelsestimatedk.sse.rpost.interval}{0.63 (0.37--1.11)}
-\defresultnum{onsetmodelsestimatedk.sse.rpost.lower}{0.37}
-\defresultnum{onsetmodelsestimatedk.sse.rpost.median}{0.63}
-\defresultnum{onsetmodelsestimatedk.sse.rpost.upper}{1.11}
-\defresultnum{onsetmodelsestimatedk.sse.rpre.interval}{2.09 (0.98--4.77)}
-\defresultnum{onsetmodelsestimatedk.sse.rpre.lower}{0.98}
-\defresultnum{onsetmodelsestimatedk.sse.rpre.median}{2.09}
-\defresultnum{onsetmodelsestimatedk.sse.rpre.upper}{4.77}
-\defresultnum{onsetmodelsestimatedk.sse.rst.final}{0.006}
-\defresultnum{onsetmodelsestimatedk.sse.rst.mcse}{0.0065}
-\defresultnum{onsetmodelsestimatedk.sse.rst.mcselate}{0.0054}
-\defresultnum{onsetmodelsestimatedk.sse.rst.reference}{0.101}
-\defresultnum{onsetmodelsestimatedk.sse.rst01.date}{21 July 2018}
-\defresultnum{onsetmodelsestimatedk.sse.rst01.day}{107}
-\defresultnum{onsetmodelsestimatedk.sse.rst05.date}{10 July 2018}
-\defresultnum{onsetmodelsestimatedk.sse.rst05.day}{96}
-\defresultnum{onsetmodelsestimatedk.sseso-vs-sse.shift01}{11}
-\defresultnum{onsetmodelsestimatedk.sseso-vs-sse.shift05}{11}
-\defresultnum{onsetmodelsestimatedk.sseso-vs-ssiso.medianratio}{1.00}
-\defresultnum{onsetmodelsestimatedk.sseso-vs-ssiso.overlap}{0.985}
-\defresultnum{onsetmodelsestimatedk.sseso-vs-ssiso.probabilitygreater}{0.500}
-\defresultnum{onsetmodelsestimatedk.sseso.evidencegain}{\ensuremath{+0.05}}
-\defresultnum{onsetmodelsestimatedk.sseso.gap.date}{9 June 2018}
-\defresultnum{onsetmodelsestimatedk.sseso.gap.day}{65}
-\defresultnum{onsetmodelsestimatedk.sseso.gap.max}{0.273}
-\defresultnum{onsetmodelsestimatedk.sseso.gap.shift01}{7}
+\defresultnum{onsetmodelsestimatedk.sse-vs-sseso.medianratio}{10.99}
+\defresultnum{onsetmodelsestimatedk.sse-vs-sseso.overlap}{0.126}
+\defresultnum{onsetmodelsestimatedk.sse-vs-sseso.probabilitygreater}{0.976}
+\defresultnum{onsetmodelsestimatedk.sse-vs-ssi.medianratio}{35.59}
+\defresultnum{onsetmodelsestimatedk.sse-vs-ssi.overlap}{0.003}
+\defresultnum{onsetmodelsestimatedk.sse-vs-ssi.probabilitygreater}{1.000}
+\defresultnum{onsetmodelsestimatedk.sse-vs-ssiso.medianratio}{11.62}
+\defresultnum{onsetmodelsestimatedk.sse-vs-ssiso.overlap}{0.119}
+\defresultnum{onsetmodelsestimatedk.sse-vs-ssiso.probabilitygreater}{0.975}
+\defresultnum{onsetmodelsestimatedk.sse.evidencegain}{\ensuremath{+14.94}}
+\defresultnum{onsetmodelsestimatedk.sse.k.interval}{1.856 (0.763--5.569)}
+\defresultnum{onsetmodelsestimatedk.sse.k.lower}{0.763}
+\defresultnum{onsetmodelsestimatedk.sse.k.median}{1.856}
+\defresultnum{onsetmodelsestimatedk.sse.k.upper}{5.569}
+\defresultnum{onsetmodelsestimatedk.sse.logevidence}{\ensuremath{-91.8}}
+\defresultnum{onsetmodelsestimatedk.sse.logevidencese}{0.002}
+\defresultnum{onsetmodelsestimatedk.sse.probability}{\ensuremath{2\times 10^{-5}}}
+\defresultnum{onsetmodelsestimatedk.sse.rac.final}{0.001}
+\defresultnum{onsetmodelsestimatedk.sse.rac.mcse}{0.0035}
+\defresultnum{onsetmodelsestimatedk.sse.rac.mcselate}{0.0020}
+\defresultnum{onsetmodelsestimatedk.sse.rac.reference}{0.285}
+\defresultnum{onsetmodelsestimatedk.sse.rac.withdrawal}{0.018}
+\defresultnum{onsetmodelsestimatedk.sse.rac01.date}{28 July 2018}
+\defresultnum{onsetmodelsestimatedk.sse.rac01.day}{114}
+\defresultnum{onsetmodelsestimatedk.sse.rac05.date}{17 July 2018}
+\defresultnum{onsetmodelsestimatedk.sse.rac05.day}{103}
+\defresultnum{onsetmodelsestimatedk.sse.rpost.interval}{0.61 (0.39--0.94)}
+\defresultnum{onsetmodelsestimatedk.sse.rpost.lower}{0.39}
+\defresultnum{onsetmodelsestimatedk.sse.rpost.median}{0.61}
+\defresultnum{onsetmodelsestimatedk.sse.rpost.upper}{0.94}
+\defresultnum{onsetmodelsestimatedk.sse.rpre.interval}{2.29 (1.28--3.99)}
+\defresultnum{onsetmodelsestimatedk.sse.rpre.lower}{1.28}
+\defresultnum{onsetmodelsestimatedk.sse.rpre.median}{2.29}
+\defresultnum{onsetmodelsestimatedk.sse.rpre.upper}{3.99}
+\defresultnum{onsetmodelsestimatedk.sse.rst.final}{0.001}
+\defresultnum{onsetmodelsestimatedk.sse.rst.mcse}{0.0110}
+\defresultnum{onsetmodelsestimatedk.sse.rst.mcselate}{0.0047}
+\defresultnum{onsetmodelsestimatedk.sse.rst.reference}{0.221}
+\defresultnum{onsetmodelsestimatedk.sse.rst.withdrawal}{0.013}
+\defresultnum{onsetmodelsestimatedk.sse.rst01.date}{26 July 2018}
+\defresultnum{onsetmodelsestimatedk.sse.rst01.day}{112}
+\defresultnum{onsetmodelsestimatedk.sse.rst05.date}{15 July 2018}
+\defresultnum{onsetmodelsestimatedk.sse.rst05.day}{101}
+\defresultnum{onsetmodelsestimatedk.sseso-vs-sse.shift01}{15}
+\defresultnum{onsetmodelsestimatedk.sseso-vs-sse.shift05}{15}
+\defresultnum{onsetmodelsestimatedk.sseso-vs-ssiso.medianratio}{1.06}
+\defresultnum{onsetmodelsestimatedk.sseso-vs-ssiso.overlap}{0.970}
+\defresultnum{onsetmodelsestimatedk.sseso-vs-ssiso.probabilitygreater}{0.516}
+\defresultnum{onsetmodelsestimatedk.sseso.evidencegain}{\ensuremath{-0.11}}
+\defresultnum{onsetmodelsestimatedk.sseso.gap.date}{10 June 2018}
+\defresultnum{onsetmodelsestimatedk.sseso.gap.day}{66}
+\defresultnum{onsetmodelsestimatedk.sseso.gap.max}{0.248}
+\defresultnum{onsetmodelsestimatedk.sseso.gap.shift01}{6}
 \defresultnum{onsetmodelsestimatedk.sseso.gap.shift05}{6}
-\defresultnum{onsetmodelsestimatedk.sseso.k.interval}{0.176 (0.087--0.355)}
-\defresultnum{onsetmodelsestimatedk.sseso.k.lower}{0.087}
-\defresultnum{onsetmodelsestimatedk.sseso.k.median}{0.176}
-\defresultnum{onsetmodelsestimatedk.sseso.k.upper}{0.355}
-\defresultnum{onsetmodelsestimatedk.sseso.latents.marginalised}{52}
+\defresultnum{onsetmodelsestimatedk.sseso.k.interval}{0.169 (0.025--1.488)}
+\defresultnum{onsetmodelsestimatedk.sseso.k.lower}{0.025}
+\defresultnum{onsetmodelsestimatedk.sseso.k.median}{0.169}
+\defresultnum{onsetmodelsestimatedk.sseso.k.upper}{1.488}
+\defresultnum{onsetmodelsestimatedk.sseso.latents.marginalised}{72}
 \defresultnum{onsetmodelsestimatedk.sseso.latents.sampled}{58}
-\defresultnum{onsetmodelsestimatedk.sseso.latents.total}{110}
-\defresultnum{onsetmodelsestimatedk.sseso.logevidence}{\ensuremath{-81.8}}
-\defresultnum{onsetmodelsestimatedk.sseso.logevidencese}{0.039}
-\defresultnum{onsetmodelsestimatedk.sseso.probability}{0.50}
-\defresultnum{onsetmodelsestimatedk.sseso.rac.final}{0.002}
-\defresultnum{onsetmodelsestimatedk.sseso.rac.mcse}{0.0028}
-\defresultnum{onsetmodelsestimatedk.sseso.rac.mcselate}{0.0020}
-\defresultnum{onsetmodelsestimatedk.sseso.rac.reference}{0.034}
+\defresultnum{onsetmodelsestimatedk.sseso.latents.total}{130}
+\defresultnum{onsetmodelsestimatedk.sseso.logevidence}{\ensuremath{-81.9}}
+\defresultnum{onsetmodelsestimatedk.sseso.logevidencese}{0.047}
+\defresultnum{onsetmodelsestimatedk.sseso.probability}{0.46}
+\defresultnum{onsetmodelsestimatedk.sseso.rac.final}{0.000}
+\defresultnum{onsetmodelsestimatedk.sseso.rac.mcse}{0.0043}
+\defresultnum{onsetmodelsestimatedk.sseso.rac.mcselate}{0.0043}
+\defresultnum{onsetmodelsestimatedk.sseso.rac.reference}{0.033}
+\defresultnum{onsetmodelsestimatedk.sseso.rac.withdrawal}{0.002}
 \defresultnum{onsetmodelsestimatedk.sseso.rac01.date}{13 July 2018}
 \defresultnum{onsetmodelsestimatedk.sseso.rac01.day}{99}
 \defresultnum{onsetmodelsestimatedk.sseso.rac05.date}{2 July 2018}
 \defresultnum{onsetmodelsestimatedk.sseso.rac05.day}{88}
-\defresultnum{onsetmodelsestimatedk.sseso.rat.final}{0.001}
-\defresultnum{onsetmodelsestimatedk.sseso.rat.mcse}{0.0039}
-\defresultnum{onsetmodelsestimatedk.sseso.rat.mcselate}{0.0022}
-\defresultnum{onsetmodelsestimatedk.sseso.rat.reference}{0.014}
-\defresultnum{onsetmodelsestimatedk.sseso.rat01.date}{6 July 2018}
-\defresultnum{onsetmodelsestimatedk.sseso.rat01.day}{92}
+\defresultnum{onsetmodelsestimatedk.sseso.rat.final}{0.000}
+\defresultnum{onsetmodelsestimatedk.sseso.rat.mcse}{0.0082}
+\defresultnum{onsetmodelsestimatedk.sseso.rat.mcselate}{0.0082}
+\defresultnum{onsetmodelsestimatedk.sseso.rat.reference}{0.015}
+\defresultnum{onsetmodelsestimatedk.sseso.rat.withdrawal}{0.001}
+\defresultnum{onsetmodelsestimatedk.sseso.rat01.date}{7 July 2018}
+\defresultnum{onsetmodelsestimatedk.sseso.rat01.day}{93}
 \defresultnum{onsetmodelsestimatedk.sseso.rat05.date}{26 June 2018}
 \defresultnum{onsetmodelsestimatedk.sseso.rat05.day}{82}
-\defresultnum{onsetmodelsestimatedk.sseso.rpost.interval}{0.28 (0.08--0.97)}
+\defresultnum{onsetmodelsestimatedk.sseso.rpost.interval}{0.28 (0.08--1.51)}
 \defresultnum{onsetmodelsestimatedk.sseso.rpost.lower}{0.08}
 \defresultnum{onsetmodelsestimatedk.sseso.rpost.median}{0.28}
-\defresultnum{onsetmodelsestimatedk.sseso.rpost.upper}{0.97}
-\defresultnum{onsetmodelsestimatedk.sseso.rpre.interval}{1.83 (0.82--4.48)}
-\defresultnum{onsetmodelsestimatedk.sseso.rpre.lower}{0.82}
-\defresultnum{onsetmodelsestimatedk.sseso.rpre.median}{1.83}
-\defresultnum{onsetmodelsestimatedk.sseso.rpre.upper}{4.48}
+\defresultnum{onsetmodelsestimatedk.sseso.rpost.upper}{1.51}
+\defresultnum{onsetmodelsestimatedk.sseso.rpre.interval}{1.84 (0.69--4.41)}
+\defresultnum{onsetmodelsestimatedk.sseso.rpre.lower}{0.69}
+\defresultnum{onsetmodelsestimatedk.sseso.rpre.median}{1.84}
+\defresultnum{onsetmodelsestimatedk.sseso.rpre.upper}{4.41}
 \defresultnum{onsetmodelsestimatedk.sseso.rst.final}{0.000}
-\defresultnum{onsetmodelsestimatedk.sseso.rst.mcse}{0.0067}
-\defresultnum{onsetmodelsestimatedk.sseso.rst.mcselate}{0.0033}
-\defresultnum{onsetmodelsestimatedk.sseso.rst.reference}{0.006}
-\defresultnum{onsetmodelsestimatedk.sseso.rst01.date}{1 July 2018}
-\defresultnum{onsetmodelsestimatedk.sseso.rst01.day}{87}
-\defresultnum{onsetmodelsestimatedk.sseso.rst05.date}{20 June 2018}
-\defresultnum{onsetmodelsestimatedk.sseso.rst05.day}{76}
-\defresultnum{onsetmodelsestimatedk.ssi-vs-sseso.medianratio}{0.80}
-\defresultnum{onsetmodelsestimatedk.ssi-vs-sseso.overlap}{0.751}
-\defresultnum{onsetmodelsestimatedk.ssi-vs-sseso.probabilitygreater}{0.326}
-\defresultnum{onsetmodelsestimatedk.ssi-vs-ssiso.medianratio}{0.81}
-\defresultnum{onsetmodelsestimatedk.ssi-vs-ssiso.overlap}{0.754}
-\defresultnum{onsetmodelsestimatedk.ssi-vs-ssiso.probabilitygreater}{0.326}
-\defresultnum{onsetmodelsestimatedk.ssi.evidencegain}{\ensuremath{+0.23}}
-\defresultnum{onsetmodelsestimatedk.ssi.k.interval}{0.141 (0.074--0.271)}
-\defresultnum{onsetmodelsestimatedk.ssi.k.lower}{0.074}
-\defresultnum{onsetmodelsestimatedk.ssi.k.median}{0.141}
-\defresultnum{onsetmodelsestimatedk.ssi.k.upper}{0.271}
+\defresultnum{onsetmodelsestimatedk.sseso.rst.mcse}{0.0116}
+\defresultnum{onsetmodelsestimatedk.sseso.rst.mcselate}{0.0102}
+\defresultnum{onsetmodelsestimatedk.sseso.rst.reference}{0.008}
+\defresultnum{onsetmodelsestimatedk.sseso.rst.withdrawal}{0.000}
+\defresultnum{onsetmodelsestimatedk.sseso.rst01.date}{3 July 2018}
+\defresultnum{onsetmodelsestimatedk.sseso.rst01.day}{89}
+\defresultnum{onsetmodelsestimatedk.sseso.rst05.date}{22 June 2018}
+\defresultnum{onsetmodelsestimatedk.sseso.rst05.day}{78}
+\defresultnum{onsetmodelsestimatedk.ssi-vs-sseso.medianratio}{0.31}
+\defresultnum{onsetmodelsestimatedk.ssi-vs-sseso.overlap}{0.507}
+\defresultnum{onsetmodelsestimatedk.ssi-vs-sseso.probabilitygreater}{0.178}
+\defresultnum{onsetmodelsestimatedk.ssi-vs-ssiso.medianratio}{0.33}
+\defresultnum{onsetmodelsestimatedk.ssi-vs-ssiso.overlap}{0.522}
+\defresultnum{onsetmodelsestimatedk.ssi-vs-ssiso.probabilitygreater}{0.193}
+\defresultnum{onsetmodelsestimatedk.ssi.evidencegain}{\ensuremath{+0.92}}
+\defresultnum{onsetmodelsestimatedk.ssi.k.interval}{0.052 (0.013--0.231)}
+\defresultnum{onsetmodelsestimatedk.ssi.k.lower}{0.013}
+\defresultnum{onsetmodelsestimatedk.ssi.k.median}{0.052}
+\defresultnum{onsetmodelsestimatedk.ssi.k.upper}{0.231}
 \defresultnum{onsetmodelsestimatedk.ssi.latents.marginalised}{1}
 \defresultnum{onsetmodelsestimatedk.ssi.latents.sampled}{30}
 \defresultnum{onsetmodelsestimatedk.ssi.latents.total}{31}
-\defresultnum{onsetmodelsestimatedk.ssi.logevidence}{\ensuremath{-84.5}}
-\defresultnum{onsetmodelsestimatedk.ssi.logevidencese}{0.023}
-\defresultnum{onsetmodelsestimatedk.ssi.probability}{0.03}
-\defresultnum{onsetmodelsestimatedk.ssi.rac.final}{0.006}
-\defresultnum{onsetmodelsestimatedk.ssi.rac.mcse}{0.0041}
-\defresultnum{onsetmodelsestimatedk.ssi.rac.mcselate}{0.0031}
-\defresultnum{onsetmodelsestimatedk.ssi.rac.reference}{0.109}
-\defresultnum{onsetmodelsestimatedk.ssi.rac01.date}{21 July 2018}
-\defresultnum{onsetmodelsestimatedk.ssi.rac01.day}{107}
-\defresultnum{onsetmodelsestimatedk.ssi.rac05.date}{10 July 2018}
-\defresultnum{onsetmodelsestimatedk.ssi.rac05.day}{96}
-\defresultnum{onsetmodelsestimatedk.ssi.rpost.interval}{0.73 (0.36--1.66)}
-\defresultnum{onsetmodelsestimatedk.ssi.rpost.lower}{0.36}
-\defresultnum{onsetmodelsestimatedk.ssi.rpost.median}{0.73}
-\defresultnum{onsetmodelsestimatedk.ssi.rpost.upper}{1.66}
-\defresultnum{onsetmodelsestimatedk.ssi.rpre.interval}{1.54 (0.66--3.61)}
-\defresultnum{onsetmodelsestimatedk.ssi.rpre.lower}{0.66}
-\defresultnum{onsetmodelsestimatedk.ssi.rpre.median}{1.54}
+\defresultnum{onsetmodelsestimatedk.ssi.logevidence}{\ensuremath{-83.8}}
+\defresultnum{onsetmodelsestimatedk.ssi.logevidencese}{0.034}
+\defresultnum{onsetmodelsestimatedk.ssi.probability}{0.06}
+\defresultnum{onsetmodelsestimatedk.ssi.rac.final}{0.000}
+\defresultnum{onsetmodelsestimatedk.ssi.rac.mcse}{0.0071}
+\defresultnum{onsetmodelsestimatedk.ssi.rac.mcselate}{0.0071}
+\defresultnum{onsetmodelsestimatedk.ssi.rac.reference}{0.066}
+\defresultnum{onsetmodelsestimatedk.ssi.rac.withdrawal}{0.003}
+\defresultnum{onsetmodelsestimatedk.ssi.rac01.date}{17 July 2018}
+\defresultnum{onsetmodelsestimatedk.ssi.rac01.day}{103}
+\defresultnum{onsetmodelsestimatedk.ssi.rac05.date}{6 July 2018}
+\defresultnum{onsetmodelsestimatedk.ssi.rac05.day}{92}
+\defresultnum{onsetmodelsestimatedk.ssi.rpost.interval}{0.80 (0.32--2.23)}
+\defresultnum{onsetmodelsestimatedk.ssi.rpost.lower}{0.32}
+\defresultnum{onsetmodelsestimatedk.ssi.rpost.median}{0.80}
+\defresultnum{onsetmodelsestimatedk.ssi.rpost.upper}{2.23}
+\defresultnum{onsetmodelsestimatedk.ssi.rpre.interval}{1.34 (0.48--3.61)}
+\defresultnum{onsetmodelsestimatedk.ssi.rpre.lower}{0.48}
+\defresultnum{onsetmodelsestimatedk.ssi.rpre.median}{1.34}
 \defresultnum{onsetmodelsestimatedk.ssi.rpre.upper}{3.61}
-\defresultnum{onsetmodelsestimatedk.ssi.rst.final}{0.001}
-\defresultnum{onsetmodelsestimatedk.ssi.rst.mcse}{0.0097}
-\defresultnum{onsetmodelsestimatedk.ssi.rst.mcselate}{0.0097}
-\defresultnum{onsetmodelsestimatedk.ssi.rst.reference}{0.017}
-\defresultnum{onsetmodelsestimatedk.ssi.rst01.date}{8 July 2018}
-\defresultnum{onsetmodelsestimatedk.ssi.rst01.day}{94}
-\defresultnum{onsetmodelsestimatedk.ssi.rst05.date}{26 June 2018}
-\defresultnum{onsetmodelsestimatedk.ssi.rst05.day}{82}
-\defresultnum{onsetmodelsestimatedk.ssiso-vs-ssi.shift01}{8}
-\defresultnum{onsetmodelsestimatedk.ssiso-vs-ssi.shift05}{7}
-\defresultnum{onsetmodelsestimatedk.ssiso.evidencegain}{\ensuremath{-0.01}}
-\defresultnum{onsetmodelsestimatedk.ssiso.gap.date}{11 June 2018}
-\defresultnum{onsetmodelsestimatedk.ssiso.gap.day}{67}
-\defresultnum{onsetmodelsestimatedk.ssiso.gap.max}{0.237}
+\defresultnum{onsetmodelsestimatedk.ssi.rst.final}{0.000}
+\defresultnum{onsetmodelsestimatedk.ssi.rst.mcse}{0.0113}
+\defresultnum{onsetmodelsestimatedk.ssi.rst.mcselate}{0.0070}
+\defresultnum{onsetmodelsestimatedk.ssi.rst.reference}{0.006}
+\defresultnum{onsetmodelsestimatedk.ssi.rst.withdrawal}{0.000}
+\defresultnum{onsetmodelsestimatedk.ssi.rst01.date}{1 July 2018}
+\defresultnum{onsetmodelsestimatedk.ssi.rst01.day}{87}
+\defresultnum{onsetmodelsestimatedk.ssi.rst05.date}{20 June 2018}
+\defresultnum{onsetmodelsestimatedk.ssi.rst05.day}{76}
+\defresultnum{onsetmodelsestimatedk.ssiso-vs-ssi.shift01}{4}
+\defresultnum{onsetmodelsestimatedk.ssiso-vs-ssi.shift05}{4}
+\defresultnum{onsetmodelsestimatedk.ssiso.evidencegain}{\ensuremath{-0.02}}
+\defresultnum{onsetmodelsestimatedk.ssiso.gap.date}{10 June 2018}
+\defresultnum{onsetmodelsestimatedk.ssiso.gap.day}{66}
+\defresultnum{onsetmodelsestimatedk.ssiso.gap.max}{0.234}
 \defresultnum{onsetmodelsestimatedk.ssiso.gap.shift01}{6}
-\defresultnum{onsetmodelsestimatedk.ssiso.gap.shift05}{6}
-\defresultnum{onsetmodelsestimatedk.ssiso.k.interval}{0.176 (0.088--0.351)}
-\defresultnum{onsetmodelsestimatedk.ssiso.k.lower}{0.088}
-\defresultnum{onsetmodelsestimatedk.ssiso.k.median}{0.176}
-\defresultnum{onsetmodelsestimatedk.ssiso.k.upper}{0.351}
+\defresultnum{onsetmodelsestimatedk.ssiso.gap.shift05}{5}
+\defresultnum{onsetmodelsestimatedk.ssiso.k.interval}{0.160 (0.020--1.615)}
+\defresultnum{onsetmodelsestimatedk.ssiso.k.lower}{0.020}
+\defresultnum{onsetmodelsestimatedk.ssiso.k.median}{0.160}
+\defresultnum{onsetmodelsestimatedk.ssiso.k.upper}{1.615}
 \defresultnum{onsetmodelsestimatedk.ssiso.latents.marginalised}{1}
 \defresultnum{onsetmodelsestimatedk.ssiso.latents.sampled}{30}
 \defresultnum{onsetmodelsestimatedk.ssiso.latents.total}{31}
 \defresultnum{onsetmodelsestimatedk.ssiso.logevidence}{\ensuremath{-81.8}}
-\defresultnum{onsetmodelsestimatedk.ssiso.logevidencese}{0.020}
-\defresultnum{onsetmodelsestimatedk.ssiso.probability}{0.47}
-\defresultnum{onsetmodelsestimatedk.ssiso.rac.final}{0.002}
-\defresultnum{onsetmodelsestimatedk.ssiso.rac.mcse}{0.0033}
-\defresultnum{onsetmodelsestimatedk.ssiso.rac.mcselate}{0.0026}
-\defresultnum{onsetmodelsestimatedk.ssiso.rac.reference}{0.038}
+\defresultnum{onsetmodelsestimatedk.ssiso.logevidencese}{0.028}
+\defresultnum{onsetmodelsestimatedk.ssiso.probability}{0.48}
+\defresultnum{onsetmodelsestimatedk.ssiso.rac.final}{0.000}
+\defresultnum{onsetmodelsestimatedk.ssiso.rac.mcse}{0.0041}
+\defresultnum{onsetmodelsestimatedk.ssiso.rac.mcselate}{0.0041}
+\defresultnum{onsetmodelsestimatedk.ssiso.rac.reference}{0.036}
+\defresultnum{onsetmodelsestimatedk.ssiso.rac.withdrawal}{0.002}
 \defresultnum{onsetmodelsestimatedk.ssiso.rac01.date}{13 July 2018}
 \defresultnum{onsetmodelsestimatedk.ssiso.rac01.day}{99}
-\defresultnum{onsetmodelsestimatedk.ssiso.rac05.date}{3 July 2018}
-\defresultnum{onsetmodelsestimatedk.ssiso.rac05.day}{89}
-\defresultnum{onsetmodelsestimatedk.ssiso.rat.final}{0.001}
-\defresultnum{onsetmodelsestimatedk.ssiso.rat.mcse}{0.0039}
-\defresultnum{onsetmodelsestimatedk.ssiso.rat.mcselate}{0.0034}
+\defresultnum{onsetmodelsestimatedk.ssiso.rac05.date}{2 July 2018}
+\defresultnum{onsetmodelsestimatedk.ssiso.rac05.day}{88}
+\defresultnum{onsetmodelsestimatedk.ssiso.rat.final}{0.000}
+\defresultnum{onsetmodelsestimatedk.ssiso.rat.mcse}{0.0078}
+\defresultnum{onsetmodelsestimatedk.ssiso.rat.mcselate}{0.0078}
 \defresultnum{onsetmodelsestimatedk.ssiso.rat.reference}{0.016}
+\defresultnum{onsetmodelsestimatedk.ssiso.rat.withdrawal}{0.001}
 \defresultnum{onsetmodelsestimatedk.ssiso.rat01.date}{7 July 2018}
 \defresultnum{onsetmodelsestimatedk.ssiso.rat01.day}{93}
 \defresultnum{onsetmodelsestimatedk.ssiso.rat05.date}{27 June 2018}
 \defresultnum{onsetmodelsestimatedk.ssiso.rat05.day}{83}
-\defresultnum{onsetmodelsestimatedk.ssiso.rpost.interval}{0.26 (0.08--0.87)}
+\defresultnum{onsetmodelsestimatedk.ssiso.rpost.interval}{0.27 (0.08--1.36)}
 \defresultnum{onsetmodelsestimatedk.ssiso.rpost.lower}{0.08}
-\defresultnum{onsetmodelsestimatedk.ssiso.rpost.median}{0.26}
-\defresultnum{onsetmodelsestimatedk.ssiso.rpost.upper}{0.87}
-\defresultnum{onsetmodelsestimatedk.ssiso.rpre.interval}{1.88 (0.87--4.48)}
-\defresultnum{onsetmodelsestimatedk.ssiso.rpre.lower}{0.87}
-\defresultnum{onsetmodelsestimatedk.ssiso.rpre.median}{1.88}
-\defresultnum{onsetmodelsestimatedk.ssiso.rpre.upper}{4.48}
+\defresultnum{onsetmodelsestimatedk.ssiso.rpost.median}{0.27}
+\defresultnum{onsetmodelsestimatedk.ssiso.rpost.upper}{1.36}
+\defresultnum{onsetmodelsestimatedk.ssiso.rpre.interval}{1.87 (0.70--4.25)}
+\defresultnum{onsetmodelsestimatedk.ssiso.rpre.lower}{0.70}
+\defresultnum{onsetmodelsestimatedk.ssiso.rpre.median}{1.87}
+\defresultnum{onsetmodelsestimatedk.ssiso.rpre.upper}{4.25}
 \defresultnum{onsetmodelsestimatedk.ssiso.rst.final}{0.000}
-\defresultnum{onsetmodelsestimatedk.ssiso.rst.mcse}{0.0081}
-\defresultnum{onsetmodelsestimatedk.ssiso.rst.mcselate}{0.0044}
-\defresultnum{onsetmodelsestimatedk.ssiso.rst.reference}{0.007}
-\defresultnum{onsetmodelsestimatedk.ssiso.rst01.date}{2 July 2018}
-\defresultnum{onsetmodelsestimatedk.ssiso.rst01.day}{88}
-\defresultnum{onsetmodelsestimatedk.ssiso.rst05.date}{21 June 2018}
-\defresultnum{onsetmodelsestimatedk.ssiso.rst05.day}{77}
+\defresultnum{onsetmodelsestimatedk.ssiso.rst.mcse}{0.0118}
+\defresultnum{onsetmodelsestimatedk.ssiso.rst.mcselate}{0.0072}
+\defresultnum{onsetmodelsestimatedk.ssiso.rst.reference}{0.008}
+\defresultnum{onsetmodelsestimatedk.ssiso.rst.withdrawal}{0.000}
+\defresultnum{onsetmodelsestimatedk.ssiso.rst01.date}{3 July 2018}
+\defresultnum{onsetmodelsestimatedk.ssiso.rst01.day}{89}
+\defresultnum{onsetmodelsestimatedk.ssiso.rst05.date}{22 June 2018}
+\defresultnum{onsetmodelsestimatedk.ssiso.rst05.day}{78}
 \defresultnum{onsetmodelsestimatedk.switchday}{33}
-\defresultnum{onsetmodelsestimatedk.targetaccept}{0.95}
+\defresultnum{onsetmodelsestimatedk.targetaccept}{0.99}
 \defresultnum{onsetmodelsestimatedk.tune}{2000}
 \defresultnum{onsetmodelsfixedk.chains}{4}
-\defresultnum{onsetmodelsfixedk.diagnostics.divergences}{54}
-\defresultnum{onsetmodelsfixedk.diagnostics.fits}{440}
-\defresultnum{onsetmodelsfixedk.diagnostics.maxrhat}{1.012}
-\defresultnum{onsetmodelsfixedk.diagnostics.minbulkess}{1153}
+\defresultnum{onsetmodelsfixedk.diagnostics.divergences}{77}
+\defresultnum{onsetmodelsfixedk.diagnostics.fits}{520}
+\defresultnum{onsetmodelsfixedk.diagnostics.maxrhat}{1.010}
+\defresultnum{onsetmodelsfixedk.diagnostics.minbulkess}{1020}
+\defresultnum{onsetmodelsfixedk.diagnostics.sampledfits}{520}
 \defresultnum{onsetmodelsfixedk.draws}{2000}
 \defresultnum{onsetmodelsfixedk.fixedk}{0.18}
 \defresultnum{onsetmodelsfixedk.fixedrpost}{estimated}
@@ -529,10 +903,11 @@
 \defresultnum{onsetmodelsfixedk.sse.logevidence}{\ensuremath{-106.8}}
 \defresultnum{onsetmodelsfixedk.sse.logevidencese}{0.001}
 \defresultnum{onsetmodelsfixedk.sse.probability}{\ensuremath{7\times 10^{-12}}}
-\defresultnum{onsetmodelsfixedk.sse.rac.final}{0.005}
+\defresultnum{onsetmodelsfixedk.sse.rac.final}{0.000}
 \defresultnum{onsetmodelsfixedk.sse.rac.mcse}{0.0018}
 \defresultnum{onsetmodelsfixedk.sse.rac.mcselate}{0.0009}
 \defresultnum{onsetmodelsfixedk.sse.rac.reference}{0.093}
+\defresultnum{onsetmodelsfixedk.sse.rac.withdrawal}{0.005}
 \defresultnum{onsetmodelsfixedk.sse.rac01.date}{20 July 2018}
 \defresultnum{onsetmodelsfixedk.sse.rac01.day}{106}
 \defresultnum{onsetmodelsfixedk.sse.rac05.date}{9 July 2018}
@@ -541,14 +916,15 @@
 \defresultnum{onsetmodelsfixedk.sse.rpost.lower}{0.34}
 \defresultnum{onsetmodelsfixedk.sse.rpost.median}{0.68}
 \defresultnum{onsetmodelsfixedk.sse.rpost.upper}{1.50}
-\defresultnum{onsetmodelsfixedk.sse.rpre.interval}{1.81 (0.71--5.48)}
+\defresultnum{onsetmodelsfixedk.sse.rpre.interval}{1.81 (0.71--5.52)}
 \defresultnum{onsetmodelsfixedk.sse.rpre.lower}{0.71}
 \defresultnum{onsetmodelsfixedk.sse.rpre.median}{1.81}
-\defresultnum{onsetmodelsfixedk.sse.rpre.upper}{5.48}
-\defresultnum{onsetmodelsfixedk.sse.rst.final}{0.002}
+\defresultnum{onsetmodelsfixedk.sse.rpre.upper}{5.52}
+\defresultnum{onsetmodelsfixedk.sse.rst.final}{0.000}
 \defresultnum{onsetmodelsfixedk.sse.rst.mcse}{0.0081}
 \defresultnum{onsetmodelsfixedk.sse.rst.mcselate}{0.0061}
 \defresultnum{onsetmodelsfixedk.sse.rst.reference}{0.038}
+\defresultnum{onsetmodelsfixedk.sse.rst.withdrawal}{0.002}
 \defresultnum{onsetmodelsfixedk.sse.rst01.date}{14 July 2018}
 \defresultnum{onsetmodelsfixedk.sse.rst01.day}{100}
 \defresultnum{onsetmodelsfixedk.sse.rst05.date}{3 July 2018}
@@ -560,40 +936,43 @@
 \defresultnum{onsetmodelsfixedk.sseso.gap.max}{0.276}
 \defresultnum{onsetmodelsfixedk.sseso.gap.shift01}{7}
 \defresultnum{onsetmodelsfixedk.sseso.gap.shift05}{6}
-\defresultnum{onsetmodelsfixedk.sseso.latents.marginalised}{52}
+\defresultnum{onsetmodelsfixedk.sseso.latents.marginalised}{72}
 \defresultnum{onsetmodelsfixedk.sseso.latents.sampled}{58}
-\defresultnum{onsetmodelsfixedk.sseso.latents.total}{110}
+\defresultnum{onsetmodelsfixedk.sseso.latents.total}{130}
 \defresultnum{onsetmodelsfixedk.sseso.logevidence}{\ensuremath{-81.8}}
-\defresultnum{onsetmodelsfixedk.sseso.logevidencese}{0.038}
-\defresultnum{onsetmodelsfixedk.sseso.probability}{0.48}
-\defresultnum{onsetmodelsfixedk.sseso.rac.final}{0.002}
-\defresultnum{onsetmodelsfixedk.sseso.rac.mcse}{0.0042}
-\defresultnum{onsetmodelsfixedk.sseso.rac.mcselate}{0.0016}
+\defresultnum{onsetmodelsfixedk.sseso.logevidencese}{0.037}
+\defresultnum{onsetmodelsfixedk.sseso.probability}{0.50}
+\defresultnum{onsetmodelsfixedk.sseso.rac.final}{0.000}
+\defresultnum{onsetmodelsfixedk.sseso.rac.mcse}{0.0028}
+\defresultnum{onsetmodelsfixedk.sseso.rac.mcselate}{0.0020}
 \defresultnum{onsetmodelsfixedk.sseso.rac.reference}{0.035}
+\defresultnum{onsetmodelsfixedk.sseso.rac.withdrawal}{0.002}
 \defresultnum{onsetmodelsfixedk.sseso.rac01.date}{13 July 2018}
 \defresultnum{onsetmodelsfixedk.sseso.rac01.day}{99}
 \defresultnum{onsetmodelsfixedk.sseso.rac05.date}{2 July 2018}
 \defresultnum{onsetmodelsfixedk.sseso.rac05.day}{88}
-\defresultnum{onsetmodelsfixedk.sseso.rat.final}{0.001}
-\defresultnum{onsetmodelsfixedk.sseso.rat.mcse}{0.0043}
-\defresultnum{onsetmodelsfixedk.sseso.rat.mcselate}{0.0020}
+\defresultnum{onsetmodelsfixedk.sseso.rat.final}{0.000}
+\defresultnum{onsetmodelsfixedk.sseso.rat.mcse}{0.0034}
+\defresultnum{onsetmodelsfixedk.sseso.rat.mcselate}{0.0014}
 \defresultnum{onsetmodelsfixedk.sseso.rat.reference}{0.013}
+\defresultnum{onsetmodelsfixedk.sseso.rat.withdrawal}{0.001}
 \defresultnum{onsetmodelsfixedk.sseso.rat01.date}{6 July 2018}
 \defresultnum{onsetmodelsfixedk.sseso.rat01.day}{92}
 \defresultnum{onsetmodelsfixedk.sseso.rat05.date}{26 June 2018}
 \defresultnum{onsetmodelsfixedk.sseso.rat05.day}{82}
-\defresultnum{onsetmodelsfixedk.sseso.rpost.interval}{0.27 (0.08--0.87)}
+\defresultnum{onsetmodelsfixedk.sseso.rpost.interval}{0.28 (0.08--0.87)}
 \defresultnum{onsetmodelsfixedk.sseso.rpost.lower}{0.08}
-\defresultnum{onsetmodelsfixedk.sseso.rpost.median}{0.27}
+\defresultnum{onsetmodelsfixedk.sseso.rpost.median}{0.28}
 \defresultnum{onsetmodelsfixedk.sseso.rpost.upper}{0.87}
-\defresultnum{onsetmodelsfixedk.sseso.rpre.interval}{1.86 (0.86--4.46)}
-\defresultnum{onsetmodelsfixedk.sseso.rpre.lower}{0.86}
-\defresultnum{onsetmodelsfixedk.sseso.rpre.median}{1.86}
-\defresultnum{onsetmodelsfixedk.sseso.rpre.upper}{4.46}
+\defresultnum{onsetmodelsfixedk.sseso.rpre.interval}{1.84 (0.85--4.42)}
+\defresultnum{onsetmodelsfixedk.sseso.rpre.lower}{0.85}
+\defresultnum{onsetmodelsfixedk.sseso.rpre.median}{1.84}
+\defresultnum{onsetmodelsfixedk.sseso.rpre.upper}{4.42}
 \defresultnum{onsetmodelsfixedk.sseso.rst.final}{0.000}
-\defresultnum{onsetmodelsfixedk.sseso.rst.mcse}{0.0075}
+\defresultnum{onsetmodelsfixedk.sseso.rst.mcse}{0.0092}
 \defresultnum{onsetmodelsfixedk.sseso.rst.mcselate}{0.0047}
 \defresultnum{onsetmodelsfixedk.sseso.rst.reference}{0.006}
+\defresultnum{onsetmodelsfixedk.sseso.rst.withdrawal}{0.000}
 \defresultnum{onsetmodelsfixedk.sseso.rst01.date}{1 July 2018}
 \defresultnum{onsetmodelsfixedk.sseso.rst01.day}{87}
 \defresultnum{onsetmodelsfixedk.sseso.rst05.date}{20 June 2018}
@@ -604,26 +983,28 @@
 \defresultnum{onsetmodelsfixedk.ssi.logevidence}{\ensuremath{-84.8}}
 \defresultnum{onsetmodelsfixedk.ssi.logevidencese}{0.019}
 \defresultnum{onsetmodelsfixedk.ssi.probability}{0.02}
-\defresultnum{onsetmodelsfixedk.ssi.rac.final}{0.007}
+\defresultnum{onsetmodelsfixedk.ssi.rac.final}{0.000}
 \defresultnum{onsetmodelsfixedk.ssi.rac.mcse}{0.0043}
 \defresultnum{onsetmodelsfixedk.ssi.rac.mcselate}{0.0026}
 \defresultnum{onsetmodelsfixedk.ssi.rac.reference}{0.123}
+\defresultnum{onsetmodelsfixedk.ssi.rac.withdrawal}{0.007}
 \defresultnum{onsetmodelsfixedk.ssi.rac01.date}{22 July 2018}
 \defresultnum{onsetmodelsfixedk.ssi.rac01.day}{108}
 \defresultnum{onsetmodelsfixedk.ssi.rac05.date}{11 July 2018}
 \defresultnum{onsetmodelsfixedk.ssi.rac05.day}{97}
-\defresultnum{onsetmodelsfixedk.ssi.rpost.interval}{0.72 (0.37--1.49)}
+\defresultnum{onsetmodelsfixedk.ssi.rpost.interval}{0.72 (0.37--1.45)}
 \defresultnum{onsetmodelsfixedk.ssi.rpost.lower}{0.37}
 \defresultnum{onsetmodelsfixedk.ssi.rpost.median}{0.72}
-\defresultnum{onsetmodelsfixedk.ssi.rpost.upper}{1.49}
-\defresultnum{onsetmodelsfixedk.ssi.rpre.interval}{1.60 (0.73--3.72)}
+\defresultnum{onsetmodelsfixedk.ssi.rpost.upper}{1.45}
+\defresultnum{onsetmodelsfixedk.ssi.rpre.interval}{1.61 (0.73--3.77)}
 \defresultnum{onsetmodelsfixedk.ssi.rpre.lower}{0.73}
-\defresultnum{onsetmodelsfixedk.ssi.rpre.median}{1.60}
-\defresultnum{onsetmodelsfixedk.ssi.rpre.upper}{3.72}
-\defresultnum{onsetmodelsfixedk.ssi.rst.final}{0.001}
+\defresultnum{onsetmodelsfixedk.ssi.rpre.median}{1.61}
+\defresultnum{onsetmodelsfixedk.ssi.rpre.upper}{3.77}
+\defresultnum{onsetmodelsfixedk.ssi.rst.final}{0.000}
 \defresultnum{onsetmodelsfixedk.ssi.rst.mcse}{0.0082}
 \defresultnum{onsetmodelsfixedk.ssi.rst.mcselate}{0.0075}
 \defresultnum{onsetmodelsfixedk.ssi.rst.reference}{0.021}
+\defresultnum{onsetmodelsfixedk.ssi.rst.withdrawal}{0.001}
 \defresultnum{onsetmodelsfixedk.ssi.rst01.date}{9 July 2018}
 \defresultnum{onsetmodelsfixedk.ssi.rst01.day}{95}
 \defresultnum{onsetmodelsfixedk.ssi.rst05.date}{28 June 2018}
@@ -640,35 +1021,38 @@
 \defresultnum{onsetmodelsfixedk.ssiso.latents.total}{31}
 \defresultnum{onsetmodelsfixedk.ssiso.logevidence}{\ensuremath{-81.8}}
 \defresultnum{onsetmodelsfixedk.ssiso.logevidencese}{0.019}
-\defresultnum{onsetmodelsfixedk.ssiso.probability}{0.49}
-\defresultnum{onsetmodelsfixedk.ssiso.rac.final}{0.002}
+\defresultnum{onsetmodelsfixedk.ssiso.probability}{0.48}
+\defresultnum{onsetmodelsfixedk.ssiso.rac.final}{0.000}
 \defresultnum{onsetmodelsfixedk.ssiso.rac.mcse}{0.0036}
-\defresultnum{onsetmodelsfixedk.ssiso.rac.mcselate}{0.0020}
+\defresultnum{onsetmodelsfixedk.ssiso.rac.mcselate}{0.0016}
 \defresultnum{onsetmodelsfixedk.ssiso.rac.reference}{0.038}
+\defresultnum{onsetmodelsfixedk.ssiso.rac.withdrawal}{0.002}
 \defresultnum{onsetmodelsfixedk.ssiso.rac01.date}{14 July 2018}
 \defresultnum{onsetmodelsfixedk.ssiso.rac01.day}{100}
 \defresultnum{onsetmodelsfixedk.ssiso.rac05.date}{3 July 2018}
 \defresultnum{onsetmodelsfixedk.ssiso.rac05.day}{89}
-\defresultnum{onsetmodelsfixedk.ssiso.rat.final}{0.001}
+\defresultnum{onsetmodelsfixedk.ssiso.rat.final}{0.000}
 \defresultnum{onsetmodelsfixedk.ssiso.rat.mcse}{0.0043}
-\defresultnum{onsetmodelsfixedk.ssiso.rat.mcselate}{0.0025}
+\defresultnum{onsetmodelsfixedk.ssiso.rat.mcselate}{0.0020}
 \defresultnum{onsetmodelsfixedk.ssiso.rat.reference}{0.015}
+\defresultnum{onsetmodelsfixedk.ssiso.rat.withdrawal}{0.001}
 \defresultnum{onsetmodelsfixedk.ssiso.rat01.date}{7 July 2018}
 \defresultnum{onsetmodelsfixedk.ssiso.rat01.day}{93}
 \defresultnum{onsetmodelsfixedk.ssiso.rat05.date}{27 June 2018}
 \defresultnum{onsetmodelsfixedk.ssiso.rat05.day}{83}
-\defresultnum{onsetmodelsfixedk.ssiso.rpost.interval}{0.25 (0.07--0.79)}
-\defresultnum{onsetmodelsfixedk.ssiso.rpost.lower}{0.07}
-\defresultnum{onsetmodelsfixedk.ssiso.rpost.median}{0.25}
-\defresultnum{onsetmodelsfixedk.ssiso.rpost.upper}{0.79}
-\defresultnum{onsetmodelsfixedk.ssiso.rpre.interval}{1.89 (0.91--4.35)}
-\defresultnum{onsetmodelsfixedk.ssiso.rpre.lower}{0.91}
+\defresultnum{onsetmodelsfixedk.ssiso.rpost.interval}{0.26 (0.08--0.78)}
+\defresultnum{onsetmodelsfixedk.ssiso.rpost.lower}{0.08}
+\defresultnum{onsetmodelsfixedk.ssiso.rpost.median}{0.26}
+\defresultnum{onsetmodelsfixedk.ssiso.rpost.upper}{0.78}
+\defresultnum{onsetmodelsfixedk.ssiso.rpre.interval}{1.89 (0.90--4.46)}
+\defresultnum{onsetmodelsfixedk.ssiso.rpre.lower}{0.90}
 \defresultnum{onsetmodelsfixedk.ssiso.rpre.median}{1.89}
-\defresultnum{onsetmodelsfixedk.ssiso.rpre.upper}{4.35}
+\defresultnum{onsetmodelsfixedk.ssiso.rpre.upper}{4.46}
 \defresultnum{onsetmodelsfixedk.ssiso.rst.final}{0.000}
-\defresultnum{onsetmodelsfixedk.ssiso.rst.mcse}{0.0073}
-\defresultnum{onsetmodelsfixedk.ssiso.rst.mcselate}{0.0046}
+\defresultnum{onsetmodelsfixedk.ssiso.rst.mcse}{0.0068}
+\defresultnum{onsetmodelsfixedk.ssiso.rst.mcselate}{0.0052}
 \defresultnum{onsetmodelsfixedk.ssiso.rst.reference}{0.006}
+\defresultnum{onsetmodelsfixedk.ssiso.rst.withdrawal}{0.000}
 \defresultnum{onsetmodelsfixedk.ssiso.rst01.date}{1 July 2018}
 \defresultnum{onsetmodelsfixedk.ssiso.rst01.day}{87}
 \defresultnum{onsetmodelsfixedk.ssiso.rst05.date}{21 June 2018}
@@ -676,205 +1060,322 @@
 \defresultnum{onsetmodelsfixedk.switchday}{33}
 \defresultnum{onsetmodelsfixedk.targetaccept}{0.90}
 \defresultnum{onsetmodelsfixedk.tune}{2000}
-\defresultnum{overall.diagnostics.divergences}{246}
-\defresultnum{overall.diagnostics.fits}{2164}
+\defresultnum{onsetmodelsnosuperspreading.chains}{4}
+\defresultnum{onsetmodelsnosuperspreading.combined.cori.logevidence}{\ensuremath{-91.8}}
+\defresultnum{onsetmodelsnosuperspreading.combined.cori.probability}{\ensuremath{3\times 10^{-5}}}
+\defresultnum{onsetmodelsnosuperspreading.combined.coriso.logevidence}{\ensuremath{-82.6}}
+\defresultnum{onsetmodelsnosuperspreading.combined.coriso.probability}{0.30}
+\defresultnum{onsetmodelsnosuperspreading.combined.ssi-vs-cori.shift01}{9}
+\defresultnum{onsetmodelsnosuperspreading.combined.ssi-vs-cori.shift05}{10}
+\defresultnum{onsetmodelsnosuperspreading.combined.ssi.logevidence}{\ensuremath{-84.8}}
+\defresultnum{onsetmodelsnosuperspreading.combined.ssi.probability}{0.03}
+\defresultnum{onsetmodelsnosuperspreading.combined.ssiso-vs-coriso.shift01}{1}
+\defresultnum{onsetmodelsnosuperspreading.combined.ssiso-vs-coriso.shift05}{2}
+\defresultnum{onsetmodelsnosuperspreading.combined.ssiso.logevidence}{\ensuremath{-81.8}}
+\defresultnum{onsetmodelsnosuperspreading.combined.ssiso.probability}{0.67}
+\defresultnum{onsetmodelsnosuperspreading.cori.logevidence}{\ensuremath{-91.8}}
+\defresultnum{onsetmodelsnosuperspreading.cori.logevidencese}{0.001}
+\defresultnum{onsetmodelsnosuperspreading.cori.probability}{\ensuremath{1\times 10^{-4}}}
+\defresultnum{onsetmodelsnosuperspreading.cori.rac.final}{0.001}
+\defresultnum{onsetmodelsnosuperspreading.cori.rac.mcse}{0.0030}
+\defresultnum{onsetmodelsnosuperspreading.cori.rac.mcselate}{0.0014}
+\defresultnum{onsetmodelsnosuperspreading.cori.rac.reference}{0.413}
+\defresultnum{onsetmodelsnosuperspreading.cori.rac.withdrawal}{0.028}
+\defresultnum{onsetmodelsnosuperspreading.cori.rac01.date}{31 July 2018}
+\defresultnum{onsetmodelsnosuperspreading.cori.rac01.day}{117}
+\defresultnum{onsetmodelsnosuperspreading.cori.rac05.date}{21 July 2018}
+\defresultnum{onsetmodelsnosuperspreading.cori.rac05.day}{107}
+\defresultnum{onsetmodelsnosuperspreading.cori.rpost.interval}{0.61 (0.41--0.86)}
+\defresultnum{onsetmodelsnosuperspreading.cori.rpost.lower}{0.41}
+\defresultnum{onsetmodelsnosuperspreading.cori.rpost.median}{0.61}
+\defresultnum{onsetmodelsnosuperspreading.cori.rpost.upper}{0.86}
+\defresultnum{onsetmodelsnosuperspreading.cori.rpre.interval}{2.38 (1.59--3.36)}
+\defresultnum{onsetmodelsnosuperspreading.cori.rpre.lower}{1.59}
+\defresultnum{onsetmodelsnosuperspreading.cori.rpre.median}{2.38}
+\defresultnum{onsetmodelsnosuperspreading.cori.rpre.upper}{3.36}
+\defresultnum{onsetmodelsnosuperspreading.cori.rst.final}{0.001}
+\defresultnum{onsetmodelsnosuperspreading.cori.rst.mcse}{0.0056}
+\defresultnum{onsetmodelsnosuperspreading.cori.rst.mcselate}{0.0021}
+\defresultnum{onsetmodelsnosuperspreading.cori.rst.reference}{0.369}
+\defresultnum{onsetmodelsnosuperspreading.cori.rst.withdrawal}{0.024}
+\defresultnum{onsetmodelsnosuperspreading.cori.rst01.date}{30 July 2018}
+\defresultnum{onsetmodelsnosuperspreading.cori.rst01.day}{116}
+\defresultnum{onsetmodelsnosuperspreading.cori.rst05.date}{20 July 2018}
+\defresultnum{onsetmodelsnosuperspreading.cori.rst05.day}{106}
+\defresultnum{onsetmodelsnosuperspreading.coriso-vs-cori.shift01}{16}
+\defresultnum{onsetmodelsnosuperspreading.coriso-vs-cori.shift05}{16}
+\defresultnum{onsetmodelsnosuperspreading.coriso.gap.date}{7 April 2018}
+\defresultnum{onsetmodelsnosuperspreading.coriso.gap.day}{2}
+\defresultnum{onsetmodelsnosuperspreading.coriso.gap.max}{0.062}
+\defresultnum{onsetmodelsnosuperspreading.coriso.gap.shift01}{0}
+\defresultnum{onsetmodelsnosuperspreading.coriso.gap.shift05}{1}
+\defresultnum{onsetmodelsnosuperspreading.coriso.logevidence}{\ensuremath{-82.6}}
+\defresultnum{onsetmodelsnosuperspreading.coriso.logevidencese}{0.002}
+\defresultnum{onsetmodelsnosuperspreading.coriso.probability}{1.00}
+\defresultnum{onsetmodelsnosuperspreading.coriso.rac.final}{0.000}
+\defresultnum{onsetmodelsnosuperspreading.coriso.rac.mcse}{0.0039}
+\defresultnum{onsetmodelsnosuperspreading.coriso.rac.mcselate}{0.0014}
+\defresultnum{onsetmodelsnosuperspreading.coriso.rac.reference}{0.050}
+\defresultnum{onsetmodelsnosuperspreading.coriso.rac.withdrawal}{0.002}
+\defresultnum{onsetmodelsnosuperspreading.coriso.rac01.date}{15 July 2018}
+\defresultnum{onsetmodelsnosuperspreading.coriso.rac01.day}{101}
+\defresultnum{onsetmodelsnosuperspreading.coriso.rac05.date}{5 July 2018}
+\defresultnum{onsetmodelsnosuperspreading.coriso.rac05.day}{91}
+\defresultnum{onsetmodelsnosuperspreading.coriso.rat.final}{0.000}
+\defresultnum{onsetmodelsnosuperspreading.coriso.rat.mcse}{0.0044}
+\defresultnum{onsetmodelsnosuperspreading.coriso.rat.mcselate}{0.0014}
+\defresultnum{onsetmodelsnosuperspreading.coriso.rat.reference}{0.046}
+\defresultnum{onsetmodelsnosuperspreading.coriso.rat.withdrawal}{0.002}
+\defresultnum{onsetmodelsnosuperspreading.coriso.rat01.date}{15 July 2018}
+\defresultnum{onsetmodelsnosuperspreading.coriso.rat01.day}{101}
+\defresultnum{onsetmodelsnosuperspreading.coriso.rat05.date}{4 July 2018}
+\defresultnum{onsetmodelsnosuperspreading.coriso.rat05.day}{90}
+\defresultnum{onsetmodelsnosuperspreading.coriso.rpost.interval}{0.17 (0.06--0.36)}
+\defresultnum{onsetmodelsnosuperspreading.coriso.rpost.lower}{0.06}
+\defresultnum{onsetmodelsnosuperspreading.coriso.rpost.median}{0.17}
+\defresultnum{onsetmodelsnosuperspreading.coriso.rpost.upper}{0.36}
+\defresultnum{onsetmodelsnosuperspreading.coriso.rpre.interval}{2.21 (1.64--2.90)}
+\defresultnum{onsetmodelsnosuperspreading.coriso.rpre.lower}{1.64}
+\defresultnum{onsetmodelsnosuperspreading.coriso.rpre.median}{2.21}
+\defresultnum{onsetmodelsnosuperspreading.coriso.rpre.upper}{2.90}
+\defresultnum{onsetmodelsnosuperspreading.coriso.rst.final}{0.000}
+\defresultnum{onsetmodelsnosuperspreading.coriso.rst.mcse}{0.0065}
+\defresultnum{onsetmodelsnosuperspreading.coriso.rst.mcselate}{0.0017}
+\defresultnum{onsetmodelsnosuperspreading.coriso.rst.reference}{0.042}
+\defresultnum{onsetmodelsnosuperspreading.coriso.rst.withdrawal}{0.002}
+\defresultnum{onsetmodelsnosuperspreading.coriso.rst01.date}{14 July 2018}
+\defresultnum{onsetmodelsnosuperspreading.coriso.rst01.day}{100}
+\defresultnum{onsetmodelsnosuperspreading.coriso.rst05.date}{3 July 2018}
+\defresultnum{onsetmodelsnosuperspreading.coriso.rst05.day}{89}
+\defresultnum{onsetmodelsnosuperspreading.diagnostics.divergences}{0}
+\defresultnum{onsetmodelsnosuperspreading.diagnostics.fits}{260}
+\defresultnum{onsetmodelsnosuperspreading.diagnostics.maxrhat}{1.002}
+\defresultnum{onsetmodelsnosuperspreading.diagnostics.minbulkess}{3743}
+\defresultnum{onsetmodelsnosuperspreading.diagnostics.sampledfits}{260}
+\defresultnum{onsetmodelsnosuperspreading.draws}{2000}
+\defresultnum{onsetmodelsnosuperspreading.fixedk}{estimated}
+\defresultnum{onsetmodelsnosuperspreading.fixedrpost}{estimated}
+\defresultnum{onsetmodelsnosuperspreading.fixedrpre}{estimated}
+\defresultnum{onsetmodelsnosuperspreading.nmodels}{2}
+\defresultnum{onsetmodelsnosuperspreading.reportingpercent}{100}
+\defresultnum{onsetmodelsnosuperspreading.switchday}{33}
+\defresultnum{onsetmodelsnosuperspreading.targetaccept}{0.90}
+\defresultnum{onsetmodelsnosuperspreading.tune}{2000}
+\defresultnum{overall.diagnostics.divergences}{303}
+\defresultnum{overall.diagnostics.fits}{3904}
 \defresultnum{overall.diagnostics.maxrhat}{1.012}
-\defresultnum{overall.diagnostics.minbulkess}{567}
+\defresultnum{overall.diagnostics.minbulkess}{355}
+\defresultnum{overall.diagnostics.sampledfits}{3768}
 \defresultnum{priors.R.median}{1.0}
 \defresultnum{priors.R.quantilelower}{0.2}
 \defresultnum{priors.R.quantileupper}{5.0}
 \defresultnum{priors.k.median}{0.18}
-\defresultnum{priors.k.quantilelower}{0.09}
-\defresultnum{priors.k.quantileupper}{0.36}
-\defresultnum{reporting.diagnostics.divergences}{95}
-\defresultnum{reporting.diagnostics.fits}{624}
+\defresultnum{priors.k.quantilelower}{0.018}
+\defresultnum{priors.k.quantileupper}{1.8}
+\defresultnum{reporting.diagnostics.divergences}{112}
+\defresultnum{reporting.diagnostics.fits}{784}
 \defresultnum{reporting.diagnostics.maxrhat}{1.009}
 \defresultnum{reporting.diagnostics.minbulkess}{567}
+\defresultnum{reporting.diagnostics.sampledfits}{784}
 \defresultnum{underreporting60.chains}{4}
-\defresultnum{underreporting60.diagnostics.divergences}{59}
-\defresultnum{underreporting60.diagnostics.fits}{312}
+\defresultnum{underreporting60.diagnostics.divergences}{64}
+\defresultnum{underreporting60.diagnostics.fits}{392}
 \defresultnum{underreporting60.diagnostics.maxrhat}{1.009}
 \defresultnum{underreporting60.diagnostics.minbulkess}{567}
+\defresultnum{underreporting60.diagnostics.sampledfits}{392}
 \defresultnum{underreporting60.draws}{8000}
 \defresultnum{underreporting60.fixedk}{0.18}
 \defresultnum{underreporting60.fixedrpost}{estimated}
 \defresultnum{underreporting60.fixedrpre}{estimated}
 \defresultnum{underreporting60.nmodels}{4}
 \defresultnum{underreporting60.reportingpercent}{60}
-\defresultnum{underreporting60.sse.rac.final}{0.028}
+\defresultnum{underreporting60.sse.rac.final}{0.003}
 \defresultnum{underreporting60.sse.rac.mcse}{0.0045}
 \defresultnum{underreporting60.sse.rac.mcselate}{0.0045}
 \defresultnum{underreporting60.sse.rac.reference}{0.246}
-\defresultnum{underreporting60.sse.rac01.date}{never}
-\defresultnum{underreporting60.sse.rac01.day}{never}
+\defresultnum{underreporting60.sse.rac.withdrawal}{0.028}
+\defresultnum{underreporting60.sse.rac01.date}{4 August 2018}
+\defresultnum{underreporting60.sse.rac01.day}{121}
 \defresultnum{underreporting60.sse.rac05.date}{19 July 2018}
 \defresultnum{underreporting60.sse.rac05.day}{105}
-\defresultnum{underreporting60.sse.rpost.interval}{0.61 (0.34--1.15)}
+\defresultnum{underreporting60.sse.rpost.interval}{0.61 (0.34--1.14)}
 \defresultnum{underreporting60.sse.rpost.lower}{0.34}
 \defresultnum{underreporting60.sse.rpost.median}{0.61}
-\defresultnum{underreporting60.sse.rpost.upper}{1.15}
-\defresultnum{underreporting60.sse.rpre.interval}{1.98 (0.94--4.75)}
-\defresultnum{underreporting60.sse.rpre.lower}{0.94}
-\defresultnum{underreporting60.sse.rpre.median}{1.98}
-\defresultnum{underreporting60.sse.rpre.upper}{4.75}
-\defresultnum{underreporting60.sse.rst.final}{0.013}
+\defresultnum{underreporting60.sse.rpost.upper}{1.14}
+\defresultnum{underreporting60.sse.rpre.interval}{1.99 (0.92--4.85)}
+\defresultnum{underreporting60.sse.rpre.lower}{0.92}
+\defresultnum{underreporting60.sse.rpre.median}{1.99}
+\defresultnum{underreporting60.sse.rpre.upper}{4.85}
+\defresultnum{underreporting60.sse.rst.final}{0.001}
 \defresultnum{underreporting60.sse.rst.mcse}{0.0033}
 \defresultnum{underreporting60.sse.rst.mcselate}{0.0033}
 \defresultnum{underreporting60.sse.rst.reference}{0.118}
-\defresultnum{underreporting60.sse.rst01.date}{never}
-\defresultnum{underreporting60.sse.rst01.day}{never}
+\defresultnum{underreporting60.sse.rst.withdrawal}{0.013}
+\defresultnum{underreporting60.sse.rst01.date}{26 July 2018}
+\defresultnum{underreporting60.sse.rst01.day}{112}
 \defresultnum{underreporting60.sse.rst05.date}{12 July 2018}
 \defresultnum{underreporting60.sse.rst05.day}{98}
-\defresultnum{underreporting60.sseso-vs-sse.shift01}{never}
+\defresultnum{underreporting60.sseso-vs-sse.shift01}{9}
 \defresultnum{underreporting60.sseso-vs-sse.shift05}{8}
 \defresultnum{underreporting60.sseso.gap.date}{14 June 2018}
 \defresultnum{underreporting60.sseso.gap.day}{70}
 \defresultnum{underreporting60.sseso.gap.max}{0.241}
-\defresultnum{underreporting60.sseso.gap.shift01}{never}
+\defresultnum{underreporting60.sseso.gap.shift01}{7}
 \defresultnum{underreporting60.sseso.gap.shift05}{5}
 \defresultnum{underreporting60.sseso.latents.marginalised}{0}
-\defresultnum{underreporting60.sseso.latents.sampled}{110}
-\defresultnum{underreporting60.sseso.latents.total}{110}
-\defresultnum{underreporting60.sseso.rac.final}{0.011}
+\defresultnum{underreporting60.sseso.latents.sampled}{130}
+\defresultnum{underreporting60.sseso.latents.total}{130}
+\defresultnum{underreporting60.sseso.rac.final}{0.001}
 \defresultnum{underreporting60.sseso.rac.mcse}{0.0056}
 \defresultnum{underreporting60.sseso.rac.mcselate}{0.0056}
 \defresultnum{underreporting60.sseso.rac.reference}{0.113}
-\defresultnum{underreporting60.sseso.rac01.date}{never}
-\defresultnum{underreporting60.sseso.rac01.day}{never}
+\defresultnum{underreporting60.sseso.rac.withdrawal}{0.010}
+\defresultnum{underreporting60.sseso.rac01.date}{26 July 2018}
+\defresultnum{underreporting60.sseso.rac01.day}{112}
 \defresultnum{underreporting60.sseso.rac05.date}{11 July 2018}
 \defresultnum{underreporting60.sseso.rac05.day}{97}
-\defresultnum{underreporting60.sseso.rat.final}{0.005}
+\defresultnum{underreporting60.sseso.rat.final}{0.000}
 \defresultnum{underreporting60.sseso.rat.mcse}{0.0038}
 \defresultnum{underreporting60.sseso.rat.mcselate}{0.0038}
 \defresultnum{underreporting60.sseso.rat.reference}{0.058}
+\defresultnum{underreporting60.sseso.rat.withdrawal}{0.005}
 \defresultnum{underreporting60.sseso.rat01.date}{19 July 2018}
 \defresultnum{underreporting60.sseso.rat01.day}{105}
 \defresultnum{underreporting60.sseso.rat05.date}{6 July 2018}
 \defresultnum{underreporting60.sseso.rat05.day}{92}
-\defresultnum{underreporting60.sseso.rpost.interval}{0.22 (0.07--0.63)}
+\defresultnum{underreporting60.sseso.rpost.interval}{0.22 (0.07--0.61)}
 \defresultnum{underreporting60.sseso.rpost.lower}{0.07}
 \defresultnum{underreporting60.sseso.rpost.median}{0.22}
-\defresultnum{underreporting60.sseso.rpost.upper}{0.63}
-\defresultnum{underreporting60.sseso.rpre.interval}{2.01 (1.02--4.29)}
-\defresultnum{underreporting60.sseso.rpre.lower}{1.02}
-\defresultnum{underreporting60.sseso.rpre.median}{2.01}
-\defresultnum{underreporting60.sseso.rpre.upper}{4.29}
-\defresultnum{underreporting60.sseso.rst.final}{0.003}
+\defresultnum{underreporting60.sseso.rpost.upper}{0.61}
+\defresultnum{underreporting60.sseso.rpre.interval}{1.99 (1.03--4.22)}
+\defresultnum{underreporting60.sseso.rpre.lower}{1.03}
+\defresultnum{underreporting60.sseso.rpre.median}{1.99}
+\defresultnum{underreporting60.sseso.rpre.upper}{4.22}
+\defresultnum{underreporting60.sseso.rst.final}{0.000}
 \defresultnum{underreporting60.sseso.rst.mcse}{0.0031}
 \defresultnum{underreporting60.sseso.rst.mcselate}{0.0031}
 \defresultnum{underreporting60.sseso.rst.reference}{0.028}
+\defresultnum{underreporting60.sseso.rst.withdrawal}{0.002}
 \defresultnum{underreporting60.sseso.rst01.date}{13 July 2018}
 \defresultnum{underreporting60.sseso.rst01.day}{99}
 \defresultnum{underreporting60.sseso.rst05.date}{30 June 2018}
 \defresultnum{underreporting60.sseso.rst05.day}{86}
 \defresultnum{underreporting60.ssi.latents.marginalised}{0}
-\defresultnum{underreporting60.ssi.latents.sampled}{111}
-\defresultnum{underreporting60.ssi.latents.total}{111}
-\defresultnum{underreporting60.ssi.rac.final}{0.050}
-\defresultnum{underreporting60.ssi.rac.mcse}{0.0047}
-\defresultnum{underreporting60.ssi.rac.mcselate}{0.0047}
-\defresultnum{underreporting60.ssi.rac.reference}{0.374}
-\defresultnum{underreporting60.ssi.rac01.date}{never}
-\defresultnum{underreporting60.ssi.rac01.day}{never}
-\defresultnum{underreporting60.ssi.rac05.date}{never}
-\defresultnum{underreporting60.ssi.rac05.day}{never}
+\defresultnum{underreporting60.ssi.latents.sampled}{131}
+\defresultnum{underreporting60.ssi.latents.total}{131}
+\defresultnum{underreporting60.ssi.rac.final}{0.004}
+\defresultnum{underreporting60.ssi.rac.mcse}{0.0058}
+\defresultnum{underreporting60.ssi.rac.mcselate}{0.0058}
+\defresultnum{underreporting60.ssi.rac.reference}{0.379}
+\defresultnum{underreporting60.ssi.rac.withdrawal}{0.049}
+\defresultnum{underreporting60.ssi.rac01.date}{8 August 2018}
+\defresultnum{underreporting60.ssi.rac01.day}{125}
+\defresultnum{underreporting60.ssi.rac05.date}{24 July 2018}
+\defresultnum{underreporting60.ssi.rac05.day}{110}
 \defresultnum{underreporting60.ssi.rpost.interval}{0.66 (0.36--1.22)}
 \defresultnum{underreporting60.ssi.rpost.lower}{0.36}
 \defresultnum{underreporting60.ssi.rpost.median}{0.66}
 \defresultnum{underreporting60.ssi.rpost.upper}{1.22}
-\defresultnum{underreporting60.ssi.rpre.interval}{1.82 (0.93--3.85)}
-\defresultnum{underreporting60.ssi.rpre.lower}{0.93}
-\defresultnum{underreporting60.ssi.rpre.median}{1.82}
-\defresultnum{underreporting60.ssi.rpre.upper}{3.85}
-\defresultnum{underreporting60.ssi.rst.final}{0.012}
-\defresultnum{underreporting60.ssi.rst.mcse}{0.0082}
-\defresultnum{underreporting60.ssi.rst.mcselate}{0.0082}
-\defresultnum{underreporting60.ssi.rst.reference}{0.102}
-\defresultnum{underreporting60.ssi.rst01.date}{never}
-\defresultnum{underreporting60.ssi.rst01.day}{never}
+\defresultnum{underreporting60.ssi.rpre.interval}{1.81 (0.92--3.84)}
+\defresultnum{underreporting60.ssi.rpre.lower}{0.92}
+\defresultnum{underreporting60.ssi.rpre.median}{1.81}
+\defresultnum{underreporting60.ssi.rpre.upper}{3.84}
+\defresultnum{underreporting60.ssi.rst.final}{0.001}
+\defresultnum{underreporting60.ssi.rst.mcse}{0.0051}
+\defresultnum{underreporting60.ssi.rst.mcselate}{0.0051}
+\defresultnum{underreporting60.ssi.rst.reference}{0.105}
+\defresultnum{underreporting60.ssi.rst.withdrawal}{0.012}
+\defresultnum{underreporting60.ssi.rst01.date}{25 July 2018}
+\defresultnum{underreporting60.ssi.rst01.day}{111}
 \defresultnum{underreporting60.ssi.rst05.date}{11 July 2018}
 \defresultnum{underreporting60.ssi.rst05.day}{97}
-\defresultnum{underreporting60.ssiso-vs-ssi.shift01}{never}
-\defresultnum{underreporting60.ssiso-vs-ssi.shift05}{never}
+\defresultnum{underreporting60.ssiso-vs-ssi.shift01}{13}
+\defresultnum{underreporting60.ssiso-vs-ssi.shift05}{12}
 \defresultnum{underreporting60.ssiso.gap.date}{16 June 2018}
 \defresultnum{underreporting60.ssiso.gap.day}{72}
-\defresultnum{underreporting60.ssiso.gap.max}{0.189}
-\defresultnum{underreporting60.ssiso.gap.shift01}{never}
-\defresultnum{underreporting60.ssiso.gap.shift05}{5}
+\defresultnum{underreporting60.ssiso.gap.max}{0.191}
+\defresultnum{underreporting60.ssiso.gap.shift01}{5}
+\defresultnum{underreporting60.ssiso.gap.shift05}{4}
 \defresultnum{underreporting60.ssiso.latents.marginalised}{0}
-\defresultnum{underreporting60.ssiso.latents.sampled}{111}
-\defresultnum{underreporting60.ssiso.latents.total}{111}
-\defresultnum{underreporting60.ssiso.rac.final}{0.012}
-\defresultnum{underreporting60.ssiso.rac.mcse}{0.0041}
-\defresultnum{underreporting60.ssiso.rac.mcselate}{0.0041}
-\defresultnum{underreporting60.ssiso.rac.reference}{0.124}
-\defresultnum{underreporting60.ssiso.rac01.date}{never}
-\defresultnum{underreporting60.ssiso.rac01.day}{never}
-\defresultnum{underreporting60.ssiso.rac05.date}{13 July 2018}
-\defresultnum{underreporting60.ssiso.rac05.day}{99}
-\defresultnum{underreporting60.ssiso.rat.final}{0.007}
-\defresultnum{underreporting60.ssiso.rat.mcse}{0.0040}
-\defresultnum{underreporting60.ssiso.rat.mcselate}{0.0040}
-\defresultnum{underreporting60.ssiso.rat.reference}{0.073}
+\defresultnum{underreporting60.ssiso.latents.sampled}{131}
+\defresultnum{underreporting60.ssiso.latents.total}{131}
+\defresultnum{underreporting60.ssiso.rac.final}{0.001}
+\defresultnum{underreporting60.ssiso.rac.mcse}{0.0037}
+\defresultnum{underreporting60.ssiso.rac.mcselate}{0.0037}
+\defresultnum{underreporting60.ssiso.rac.reference}{0.128}
+\defresultnum{underreporting60.ssiso.rac.withdrawal}{0.011}
+\defresultnum{underreporting60.ssiso.rac01.date}{26 July 2018}
+\defresultnum{underreporting60.ssiso.rac01.day}{112}
+\defresultnum{underreporting60.ssiso.rac05.date}{12 July 2018}
+\defresultnum{underreporting60.ssiso.rac05.day}{98}
+\defresultnum{underreporting60.ssiso.rat.final}{0.001}
+\defresultnum{underreporting60.ssiso.rat.mcse}{0.0037}
+\defresultnum{underreporting60.ssiso.rat.mcselate}{0.0037}
+\defresultnum{underreporting60.ssiso.rat.reference}{0.075}
+\defresultnum{underreporting60.ssiso.rat.withdrawal}{0.006}
 \defresultnum{underreporting60.ssiso.rat01.date}{21 July 2018}
 \defresultnum{underreporting60.ssiso.rat01.day}{107}
 \defresultnum{underreporting60.ssiso.rat05.date}{8 July 2018}
 \defresultnum{underreporting60.ssiso.rat05.day}{94}
-\defresultnum{underreporting60.ssiso.rpost.interval}{0.21 (0.07--0.57)}
+\defresultnum{underreporting60.ssiso.rpost.interval}{0.21 (0.07--0.58)}
 \defresultnum{underreporting60.ssiso.rpost.lower}{0.07}
 \defresultnum{underreporting60.ssiso.rpost.median}{0.21}
-\defresultnum{underreporting60.ssiso.rpost.upper}{0.57}
-\defresultnum{underreporting60.ssiso.rpre.interval}{2.01 (1.08--4.10)}
-\defresultnum{underreporting60.ssiso.rpre.lower}{1.08}
+\defresultnum{underreporting60.ssiso.rpost.upper}{0.58}
+\defresultnum{underreporting60.ssiso.rpre.interval}{2.01 (1.05--4.13)}
+\defresultnum{underreporting60.ssiso.rpre.lower}{1.05}
 \defresultnum{underreporting60.ssiso.rpre.median}{2.01}
-\defresultnum{underreporting60.ssiso.rpre.upper}{4.10}
-\defresultnum{underreporting60.ssiso.rst.final}{0.002}
-\defresultnum{underreporting60.ssiso.rst.mcse}{0.0042}
-\defresultnum{underreporting60.ssiso.rst.mcselate}{0.0031}
+\defresultnum{underreporting60.ssiso.rpre.upper}{4.13}
+\defresultnum{underreporting60.ssiso.rst.final}{0.000}
+\defresultnum{underreporting60.ssiso.rst.mcse}{0.0040}
+\defresultnum{underreporting60.ssiso.rst.mcselate}{0.0032}
 \defresultnum{underreporting60.ssiso.rst.reference}{0.030}
+\defresultnum{underreporting60.ssiso.rst.withdrawal}{0.002}
 \defresultnum{underreporting60.ssiso.rst01.date}{14 July 2018}
 \defresultnum{underreporting60.ssiso.rst01.day}{100}
-\defresultnum{underreporting60.ssiso.rst05.date}{1 July 2018}
-\defresultnum{underreporting60.ssiso.rst05.day}{87}
+\defresultnum{underreporting60.ssiso.rst05.date}{30 June 2018}
+\defresultnum{underreporting60.ssiso.rst05.day}{86}
 \defresultnum{underreporting60.switchday}{33}
 \defresultnum{underreporting60.targetaccept}{0.90}
 \defresultnum{underreporting60.tune}{4000}
 \defresultnum{underreporting80.chains}{4}
-\defresultnum{underreporting80.diagnostics.divergences}{36}
-\defresultnum{underreporting80.diagnostics.fits}{312}
+\defresultnum{underreporting80.diagnostics.divergences}{48}
+\defresultnum{underreporting80.diagnostics.fits}{392}
 \defresultnum{underreporting80.diagnostics.maxrhat}{1.005}
 \defresultnum{underreporting80.diagnostics.minbulkess}{601}
+\defresultnum{underreporting80.diagnostics.sampledfits}{392}
 \defresultnum{underreporting80.draws}{8000}
 \defresultnum{underreporting80.fixedk}{0.18}
 \defresultnum{underreporting80.fixedrpost}{estimated}
 \defresultnum{underreporting80.fixedrpre}{estimated}
 \defresultnum{underreporting80.nmodels}{4}
 \defresultnum{underreporting80.reportingpercent}{80}
-\defresultnum{underreporting80.sse.rac.final}{0.011}
+\defresultnum{underreporting80.sse.rac.final}{0.001}
 \defresultnum{underreporting80.sse.rac.mcse}{0.0029}
 \defresultnum{underreporting80.sse.rac.mcselate}{0.0029}
 \defresultnum{underreporting80.sse.rac.reference}{0.145}
-\defresultnum{underreporting80.sse.rac01.date}{never}
-\defresultnum{underreporting80.sse.rac01.day}{never}
+\defresultnum{underreporting80.sse.rac.withdrawal}{0.011}
+\defresultnum{underreporting80.sse.rac01.date}{25 July 2018}
+\defresultnum{underreporting80.sse.rac01.day}{111}
 \defresultnum{underreporting80.sse.rac05.date}{13 July 2018}
 \defresultnum{underreporting80.sse.rac05.day}{99}
-\defresultnum{underreporting80.sse.rpost.interval}{0.64 (0.34--1.32)}
+\defresultnum{underreporting80.sse.rpost.interval}{0.64 (0.34--1.29)}
 \defresultnum{underreporting80.sse.rpost.lower}{0.34}
 \defresultnum{underreporting80.sse.rpost.median}{0.64}
-\defresultnum{underreporting80.sse.rpost.upper}{1.32}
-\defresultnum{underreporting80.sse.rpre.interval}{1.88 (0.81--5.00)}
+\defresultnum{underreporting80.sse.rpost.upper}{1.29}
+\defresultnum{underreporting80.sse.rpre.interval}{1.88 (0.81--4.92)}
 \defresultnum{underreporting80.sse.rpre.lower}{0.81}
 \defresultnum{underreporting80.sse.rpre.median}{1.88}
-\defresultnum{underreporting80.sse.rpre.upper}{5.00}
-\defresultnum{underreporting80.sse.rst.final}{0.005}
+\defresultnum{underreporting80.sse.rpre.upper}{4.92}
+\defresultnum{underreporting80.sse.rst.final}{0.000}
 \defresultnum{underreporting80.sse.rst.mcse}{0.0041}
 \defresultnum{underreporting80.sse.rst.mcselate}{0.0041}
 \defresultnum{underreporting80.sse.rst.reference}{0.063}
+\defresultnum{underreporting80.sse.rst.withdrawal}{0.005}
 \defresultnum{underreporting80.sse.rst01.date}{19 July 2018}
 \defresultnum{underreporting80.sse.rst01.day}{105}
 \defresultnum{underreporting80.sse.rst05.date}{7 July 2018}
 \defresultnum{underreporting80.sse.rst05.day}{93}
-\defresultnum{underreporting80.sseso-vs-sse.shift01}{never}
+\defresultnum{underreporting80.sseso-vs-sse.shift01}{7}
 \defresultnum{underreporting80.sseso-vs-sse.shift05}{7}
 \defresultnum{underreporting80.sseso.gap.date}{11 June 2018}
 \defresultnum{underreporting80.sseso.gap.day}{67}
@@ -882,68 +1383,73 @@
 \defresultnum{underreporting80.sseso.gap.shift01}{6}
 \defresultnum{underreporting80.sseso.gap.shift05}{6}
 \defresultnum{underreporting80.sseso.latents.marginalised}{0}
-\defresultnum{underreporting80.sseso.latents.sampled}{110}
-\defresultnum{underreporting80.sseso.latents.total}{110}
-\defresultnum{underreporting80.sseso.rac.final}{0.004}
-\defresultnum{underreporting80.sseso.rac.mcse}{0.0026}
-\defresultnum{underreporting80.sseso.rac.mcselate}{0.0026}
-\defresultnum{underreporting80.sseso.rac.reference}{0.063}
+\defresultnum{underreporting80.sseso.latents.sampled}{130}
+\defresultnum{underreporting80.sseso.latents.total}{130}
+\defresultnum{underreporting80.sseso.rac.final}{0.000}
+\defresultnum{underreporting80.sseso.rac.mcse}{0.0036}
+\defresultnum{underreporting80.sseso.rac.mcselate}{0.0036}
+\defresultnum{underreporting80.sseso.rac.reference}{0.062}
+\defresultnum{underreporting80.sseso.rac.withdrawal}{0.005}
 \defresultnum{underreporting80.sseso.rac01.date}{18 July 2018}
 \defresultnum{underreporting80.sseso.rac01.day}{104}
 \defresultnum{underreporting80.sseso.rac05.date}{6 July 2018}
 \defresultnum{underreporting80.sseso.rac05.day}{92}
-\defresultnum{underreporting80.sseso.rat.final}{0.002}
-\defresultnum{underreporting80.sseso.rat.mcse}{0.0025}
-\defresultnum{underreporting80.sseso.rat.mcselate}{0.0025}
-\defresultnum{underreporting80.sseso.rat.reference}{0.029}
+\defresultnum{underreporting80.sseso.rat.final}{0.000}
+\defresultnum{underreporting80.sseso.rat.mcse}{0.0033}
+\defresultnum{underreporting80.sseso.rat.mcselate}{0.0033}
+\defresultnum{underreporting80.sseso.rat.reference}{0.028}
+\defresultnum{underreporting80.sseso.rat.withdrawal}{0.002}
 \defresultnum{underreporting80.sseso.rat01.date}{12 July 2018}
 \defresultnum{underreporting80.sseso.rat01.day}{98}
 \defresultnum{underreporting80.sseso.rat05.date}{30 June 2018}
 \defresultnum{underreporting80.sseso.rat05.day}{86}
-\defresultnum{underreporting80.sseso.rpost.interval}{0.25 (0.07--0.74)}
-\defresultnum{underreporting80.sseso.rpost.lower}{0.07}
+\defresultnum{underreporting80.sseso.rpost.interval}{0.25 (0.08--0.76)}
+\defresultnum{underreporting80.sseso.rpost.lower}{0.08}
 \defresultnum{underreporting80.sseso.rpost.median}{0.25}
-\defresultnum{underreporting80.sseso.rpost.upper}{0.74}
-\defresultnum{underreporting80.sseso.rpre.interval}{1.90 (0.93--4.35)}
-\defresultnum{underreporting80.sseso.rpre.lower}{0.93}
-\defresultnum{underreporting80.sseso.rpre.median}{1.90}
-\defresultnum{underreporting80.sseso.rpre.upper}{4.35}
-\defresultnum{underreporting80.sseso.rst.final}{0.001}
-\defresultnum{underreporting80.sseso.rst.mcse}{0.0033}
-\defresultnum{underreporting80.sseso.rst.mcselate}{0.0028}
-\defresultnum{underreporting80.sseso.rst.reference}{0.014}
-\defresultnum{underreporting80.sseso.rst01.date}{7 July 2018}
-\defresultnum{underreporting80.sseso.rst01.day}{93}
+\defresultnum{underreporting80.sseso.rpost.upper}{0.76}
+\defresultnum{underreporting80.sseso.rpre.interval}{1.92 (0.92--4.30)}
+\defresultnum{underreporting80.sseso.rpre.lower}{0.92}
+\defresultnum{underreporting80.sseso.rpre.median}{1.92}
+\defresultnum{underreporting80.sseso.rpre.upper}{4.30}
+\defresultnum{underreporting80.sseso.rst.final}{0.000}
+\defresultnum{underreporting80.sseso.rst.mcse}{0.0028}
+\defresultnum{underreporting80.sseso.rst.mcselate}{0.0023}
+\defresultnum{underreporting80.sseso.rst.reference}{0.013}
+\defresultnum{underreporting80.sseso.rst.withdrawal}{0.001}
+\defresultnum{underreporting80.sseso.rst01.date}{6 July 2018}
+\defresultnum{underreporting80.sseso.rst01.day}{92}
 \defresultnum{underreporting80.sseso.rst05.date}{24 June 2018}
 \defresultnum{underreporting80.sseso.rst05.day}{80}
 \defresultnum{underreporting80.ssi.latents.marginalised}{0}
-\defresultnum{underreporting80.ssi.latents.sampled}{111}
-\defresultnum{underreporting80.ssi.latents.total}{111}
-\defresultnum{underreporting80.ssi.rac.final}{0.018}
-\defresultnum{underreporting80.ssi.rac.mcse}{0.0033}
-\defresultnum{underreporting80.ssi.rac.mcselate}{0.0033}
-\defresultnum{underreporting80.ssi.rac.reference}{0.211}
-\defresultnum{underreporting80.ssi.rac01.date}{never}
-\defresultnum{underreporting80.ssi.rac01.day}{never}
+\defresultnum{underreporting80.ssi.latents.sampled}{131}
+\defresultnum{underreporting80.ssi.latents.total}{131}
+\defresultnum{underreporting80.ssi.rac.final}{0.001}
+\defresultnum{underreporting80.ssi.rac.mcse}{0.0030}
+\defresultnum{underreporting80.ssi.rac.mcselate}{0.0030}
+\defresultnum{underreporting80.ssi.rac.reference}{0.216}
+\defresultnum{underreporting80.ssi.rac.withdrawal}{0.019}
+\defresultnum{underreporting80.ssi.rac01.date}{28 July 2018}
+\defresultnum{underreporting80.ssi.rac01.day}{114}
 \defresultnum{underreporting80.ssi.rac05.date}{16 July 2018}
 \defresultnum{underreporting80.ssi.rac05.day}{102}
-\defresultnum{underreporting80.ssi.rpost.interval}{0.69 (0.36--1.36)}
-\defresultnum{underreporting80.ssi.rpost.lower}{0.36}
+\defresultnum{underreporting80.ssi.rpost.interval}{0.69 (0.38--1.35)}
+\defresultnum{underreporting80.ssi.rpost.lower}{0.38}
 \defresultnum{underreporting80.ssi.rpost.median}{0.69}
-\defresultnum{underreporting80.ssi.rpost.upper}{1.36}
-\defresultnum{underreporting80.ssi.rpre.interval}{1.69 (0.80--3.80)}
-\defresultnum{underreporting80.ssi.rpre.lower}{0.80}
-\defresultnum{underreporting80.ssi.rpre.median}{1.69}
-\defresultnum{underreporting80.ssi.rpre.upper}{3.80}
-\defresultnum{underreporting80.ssi.rst.final}{0.004}
-\defresultnum{underreporting80.ssi.rst.mcse}{0.0049}
-\defresultnum{underreporting80.ssi.rst.mcselate}{0.0049}
+\defresultnum{underreporting80.ssi.rpost.upper}{1.35}
+\defresultnum{underreporting80.ssi.rpre.interval}{1.68 (0.81--3.78)}
+\defresultnum{underreporting80.ssi.rpre.lower}{0.81}
+\defresultnum{underreporting80.ssi.rpre.median}{1.68}
+\defresultnum{underreporting80.ssi.rpre.upper}{3.78}
+\defresultnum{underreporting80.ssi.rst.final}{0.000}
+\defresultnum{underreporting80.ssi.rst.mcse}{0.0042}
+\defresultnum{underreporting80.ssi.rst.mcselate}{0.0042}
 \defresultnum{underreporting80.ssi.rst.reference}{0.046}
+\defresultnum{underreporting80.ssi.rst.withdrawal}{0.004}
 \defresultnum{underreporting80.ssi.rst01.date}{16 July 2018}
 \defresultnum{underreporting80.ssi.rst01.day}{102}
 \defresultnum{underreporting80.ssi.rst05.date}{4 July 2018}
 \defresultnum{underreporting80.ssi.rst05.day}{90}
-\defresultnum{underreporting80.ssiso-vs-ssi.shift01}{never}
+\defresultnum{underreporting80.ssiso-vs-ssi.shift01}{8}
 \defresultnum{underreporting80.ssiso-vs-ssi.shift05}{9}
 \defresultnum{underreporting80.ssiso.gap.date}{13 June 2018}
 \defresultnum{underreporting80.ssiso.gap.day}{69}
@@ -951,36 +1457,39 @@
 \defresultnum{underreporting80.ssiso.gap.shift01}{6}
 \defresultnum{underreporting80.ssiso.gap.shift05}{5}
 \defresultnum{underreporting80.ssiso.latents.marginalised}{0}
-\defresultnum{underreporting80.ssiso.latents.sampled}{111}
-\defresultnum{underreporting80.ssiso.latents.total}{111}
-\defresultnum{underreporting80.ssiso.rac.final}{0.005}
+\defresultnum{underreporting80.ssiso.latents.sampled}{131}
+\defresultnum{underreporting80.ssiso.latents.total}{131}
+\defresultnum{underreporting80.ssiso.rac.final}{0.000}
 \defresultnum{underreporting80.ssiso.rac.mcse}{0.0031}
 \defresultnum{underreporting80.ssiso.rac.mcselate}{0.0031}
 \defresultnum{underreporting80.ssiso.rac.reference}{0.069}
+\defresultnum{underreporting80.ssiso.rac.withdrawal}{0.005}
 \defresultnum{underreporting80.ssiso.rac01.date}{20 July 2018}
 \defresultnum{underreporting80.ssiso.rac01.day}{106}
 \defresultnum{underreporting80.ssiso.rac05.date}{7 July 2018}
 \defresultnum{underreporting80.ssiso.rac05.day}{93}
-\defresultnum{underreporting80.ssiso.rat.final}{0.003}
+\defresultnum{underreporting80.ssiso.rat.final}{0.000}
 \defresultnum{underreporting80.ssiso.rat.mcse}{0.0032}
 \defresultnum{underreporting80.ssiso.rat.mcselate}{0.0032}
 \defresultnum{underreporting80.ssiso.rat.reference}{0.035}
+\defresultnum{underreporting80.ssiso.rat.withdrawal}{0.002}
 \defresultnum{underreporting80.ssiso.rat01.date}{14 July 2018}
 \defresultnum{underreporting80.ssiso.rat01.day}{100}
 \defresultnum{underreporting80.ssiso.rat05.date}{2 July 2018}
 \defresultnum{underreporting80.ssiso.rat05.day}{88}
-\defresultnum{underreporting80.ssiso.rpost.interval}{0.23 (0.07--0.68)}
-\defresultnum{underreporting80.ssiso.rpost.lower}{0.07}
-\defresultnum{underreporting80.ssiso.rpost.median}{0.23}
-\defresultnum{underreporting80.ssiso.rpost.upper}{0.68}
-\defresultnum{underreporting80.ssiso.rpre.interval}{1.94 (0.96--4.21)}
-\defresultnum{underreporting80.ssiso.rpre.lower}{0.96}
-\defresultnum{underreporting80.ssiso.rpre.median}{1.94}
-\defresultnum{underreporting80.ssiso.rpre.upper}{4.21}
-\defresultnum{underreporting80.ssiso.rst.final}{0.001}
+\defresultnum{underreporting80.ssiso.rpost.interval}{0.24 (0.08--0.70)}
+\defresultnum{underreporting80.ssiso.rpost.lower}{0.08}
+\defresultnum{underreporting80.ssiso.rpost.median}{0.24}
+\defresultnum{underreporting80.ssiso.rpost.upper}{0.70}
+\defresultnum{underreporting80.ssiso.rpre.interval}{1.93 (0.97--4.27)}
+\defresultnum{underreporting80.ssiso.rpre.lower}{0.97}
+\defresultnum{underreporting80.ssiso.rpre.median}{1.93}
+\defresultnum{underreporting80.ssiso.rpre.upper}{4.27}
+\defresultnum{underreporting80.ssiso.rst.final}{0.000}
 \defresultnum{underreporting80.ssiso.rst.mcse}{0.0038}
 \defresultnum{underreporting80.ssiso.rst.mcselate}{0.0021}
 \defresultnum{underreporting80.ssiso.rst.reference}{0.014}
+\defresultnum{underreporting80.ssiso.rst.withdrawal}{0.001}
 \defresultnum{underreporting80.ssiso.rst01.date}{7 July 2018}
 \defresultnum{underreporting80.ssiso.rst01.day}{93}
 \defresultnum{underreporting80.ssiso.rst05.date}{25 June 2018}
@@ -988,3 +1497,8 @@
 \defresultnum{underreporting80.switchday}{33}
 \defresultnum{underreporting80.targetaccept}{0.90}
 \defresultnum{underreporting80.tune}{4000}
+\defresultnum{variants.diagnostics.divergences}{34}
+\defresultnum{variants.diagnostics.fits}{1300}
+\defresultnum{variants.diagnostics.maxrhat}{1.010}
+\defresultnum{variants.diagnostics.minbulkess}{920}
+\defresultnum{variants.diagnostics.sampledfits}{1164}
